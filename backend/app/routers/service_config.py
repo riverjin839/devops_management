@@ -67,7 +67,11 @@ def collect_static_pods(
     """컨트롤 플레인 정적 파드(etcd·kube-apiserver·kube-controller-manager·kube-scheduler) 플래그를 노드별로 수집 — K8S API, 노드는 그대로."""
     from app.services.service_config import collect as CL
 
-    out = CL.collect_static_pods(db, _cluster(db, cluster_id))
+    from app.services.service_config import watch as W
+
+    cluster = _cluster(db, cluster_id)
+    out = CL.collect_static_pods(db, cluster)
+    W.sync_drift(db, cluster, ("etcd", "kube-apiserver", "kube-controller-manager", "kube-scheduler"))
     audit_logger.record(db, action="service_config.collect.static_pods", actor=user, target_type="cluster",
                         target_id=str(cluster_id), details={"changed": out["changed"], "errors": out["errors"][:5]},
                         request=request)
@@ -510,4 +514,38 @@ def update_settings(
         _raise(exc)
     audit_logger.record(db, action="service_config.settings.update", actor=user, target_type="app_setting",
                         target_id=A.SETTINGS_KEY, details={"fields": sorted(patch)}, request=request)
+    return out
+
+
+# ── 감시 설정(변경 감지·알람) ────────────────────────────────────────────────
+
+class WatchSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    interval_min: Optional[int] = Field(default=None, ge=1, le=1440)
+    change_alert: Optional[bool] = None
+    change_severity: Optional[str] = Field(default=None, pattern="^(info|warning|critical)$")
+    drift_alert: Optional[bool] = None
+    drift_severity: Optional[str] = Field(default=None, pattern="^(info|warning|critical)$")
+
+
+@router.get("/watch-settings")
+def read_watch_settings(db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> dict[str, Any]:
+    from app.services.service_config import watch as W
+
+    return W.get_settings(db)
+
+
+@router.put("/watch-settings")
+def update_watch_settings(
+    body: WatchSettingsUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> dict[str, Any]:
+    from app.services.service_config import watch as W
+
+    patch = body.model_dump(exclude_unset=True)
+    out = W.set_settings(db, patch)
+    audit_logger.record(db, action="service_config.watch_settings.update", actor=user, target_type="app_setting",
+                        target_id=W.SETTINGS_KEY, details={"fields": sorted(patch)}, request=request)
     return out

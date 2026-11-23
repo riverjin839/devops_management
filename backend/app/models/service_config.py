@@ -130,3 +130,25 @@ class ServiceConfigApplyRun(Base):
     started_by = Column(String(128), nullable=True)
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     finished_at = Column(DateTime, nullable=True)
+
+
+class ServiceConfigChange(Base):
+    """노드 설정 값 변경 1건 = 1행(로그성, 400일) — 같은 컴포넌트의 직전 스냅샷과 비교해 관리 대상 키가 바뀌었을 때 남는다.
+
+    ``source``: agent(노드 파라미터 에이전트 파일 보고) · k8s_api(주기·수동 K8S API 수집) · ssh(수동 SSH 수집) · apply(PEP 적용).
+    LINUX 커널 파라미터는 기존 ``os_param_changes`` 가 맡고, 나머지 서비스(etcd·containerd·cilium·정적 파드·kubelet)는 여기에 남는다.
+    """
+    __tablename__ = "service_config_changes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cluster_id = Column(UUID(as_uuid=True), ForeignKey("clusters.id", ondelete="CASCADE"), nullable=False, index=True)
+    service = Column(String(32), nullable=False)
+    node = Column(String(253), nullable=False)
+    key = Column(String(300), nullable=False)
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+    source = Column(String(16), nullable=False, default="k8s_api")
+    component = Column(String(300), nullable=True)
+    # 비교한 스냅샷(새 쪽) — 같은 스냅샷을 두 번 기록하지 않게 하는 키.
+    to_snapshot_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    detected_at = Column(DateTime, default=datetime.utcnow, nullable=False)

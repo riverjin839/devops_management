@@ -8,7 +8,9 @@
 2. 영구 설정 값을 sysctl 설정 파일에서 계산한다 — systemd-sysctl 과 같은 우선순위
    (``/etc`` > ``/run`` > ``/usr/local/lib`` > ``/usr/lib`` > ``/lib`` 의 ``sysctl.d/*.conf``, 파일 이름 순, 뒤에 적힌 값이 이김)
    + 마지막에 ``/etc/sysctl.conf``.
-3. ``POST {PEP_API_URL}/node-params/agent/report`` — 응답의 ``params``·``interval_sec`` 로 다음 주기를 정한다.
+3. 서비스 구성 설정 파일(응답의 ``files`` — containerd ``config.toml``·kubelet ``config.yaml`` 경로, PEP 적용 설정에서 바꿈)을
+   ``HOST_ROOT`` 아래에서 읽어 해시가 바뀐 것만 내용을 함께 보낸다(변경 감지·알람용, 256 KB 상한).
+4. ``POST {PEP_API_URL}/node-params/agent/report`` — 응답의 ``params``·``files``·``interval_sec`` 로 다음 주기를 정한다.
    감시 대상은 PEP 화면에서 편집한다(첫 보고는 빈 목록 → 응답으로 목록을 받고 바로 다시 보고).
 
 환경 변수: ``PEP_API_URL``(…/api/v1) · ``NODE_PARAM_INGEST_TOKEN`` · ``PEP_CLUSTER``(UUID 또는 이름) ·
@@ -35,7 +37,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.1.0"
+FILE_MAX = 256 * 1024
 
 # systemd-sysctl 우선순위 — 같은 파일 이름이면 앞 디렉터리가 이긴다.
 SYSCTL_D_DIRS = ("etc/sysctl.d", "run/sysctl.d", "usr/local/lib/sysctl.d", "usr/lib/sysctl.d", "lib/sysctl.d")
@@ -141,6 +144,35 @@ def read_persistent(params: list[str], host_root: Path) -> dict[str, dict[str, s
     return result
 
 
+def read_files(targets: list[dict[str, str]], host_root: Path, sent: dict[str, str]) -> dict[str, dict[str, Any]]:
+    """설정 파일 읽기 — {id: {path, sha256, content?}} 또는 {id: {path, error}}. ``sent``(id → 마지막으로 보낸 해시)와 같으면 내용은 빼고 해시만."""
+    import hashlib
+
+    out: dict[str, dict[str, Any]] = {}
+    for t in targets:
+        fid, path = str(t.get("id") or ""), str(t.get("path") or "")
+        if not fid or not path.startswith("/"):
+            continue
+        p = _host_path(host_root / path.lstrip("/"), host_root)
+        try:
+            if not p.is_file():
+                out[fid] = {"path": path, "error": "파일 없음(마운트 확인)"}
+                continue
+            raw = p.read_bytes()[:FILE_MAX + 1]
+            if len(raw) > FILE_MAX:
+                out[fid] = {"path": path, "error": f"{FILE_MAX} 바이트 초과"}
+                continue
+            text = raw.decode("utf-8", errors="replace")
+            sha = hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()
+            entry: dict[str, Any] = {"path": path, "sha256": sha}
+            if sent.get(fid) != sha:
+                entry["content"] = text
+            out[fid] = entry
+        except OSError as exc:
+            out[fid] = {"path": path, "error": f"{type(exc).__name__}: {exc}"}
+    return out
+
+
 def _ssl_context(verify: bool, ca_file: Optional[str]) -> ssl.SSLContext:
     if not verify:
         ctx = ssl.create_default_context()
@@ -192,15 +224,18 @@ def run(once: bool = False) -> int:
     url = f"{api}/node-params/agent/report"
     log("INFO", f"시작 v{AGENT_VERSION} node={node} host_ip={host_ip or '-'} cluster={cluster} → {url} (TLS 검증 {'켬' if verify else '끔'})")
     params: list[str] = []
+    file_targets: list[dict[str, str]] = []
+    sent_hashes: dict[str, str] = {}
     interval = 60
     failures = 0
     while not _stop:
         runtime, errors = read_runtime(params, proc_sys)
         persistent = read_persistent(params, host_root) if params else {}
+        files = read_files(file_targets, host_root, sent_hashes)
         payload = {
             "cluster": cluster, "node": node, "host_ip": host_ip, "agent_version": AGENT_VERSION,
             "collected_at": datetime.now(timezone.utc).isoformat(),
-            "runtime": runtime, "persistent": persistent, "errors": errors,
+            "runtime": runtime, "persistent": persistent, "errors": errors, "files": files,
         }
         first_list = False
         try:
@@ -211,14 +246,28 @@ def run(once: bool = False) -> int:
             if set(new_params) != set(params):
                 log("INFO", f"감시 목록 갱신 {len(params)} → {len(new_params)}개")
             params = new_params
+            for fid, f in files.items():  # 보낸 내용은 서버가 받았다 — 다음엔 해시만
+                if f.get("sha256") and "content" in f:
+                    sent_hashes[fid] = f["sha256"]
+            new_targets = [t for t in (resp.get("files") or []) if isinstance(t, dict)]
+            if new_targets != file_targets:
+                first_list = first_list or (not file_targets and bool(new_targets))
+                file_targets = new_targets
+                sent_hashes = {}
             interval = int(resp.get("interval_sec") or interval)
             log("INFO", (
                 f"보고 완료 파라미터 {len(runtime)}개 · 영구 설정 {len(persistent)}개 · 변경 {resp.get('changes', 0)}건 · "
                 f"기준 위반 {resp.get('violations', 0)} · 영구 설정 불일치 {resp.get('mismatches', 0)} · "
-                f"알람 열림 {resp.get('alerts_opened', 0)}/닫힘 {resp.get('alerts_resolved', 0)} · 다음 {interval}초 뒤"
+                f"알람 열림 {resp.get('alerts_opened', 0)}/닫힘 {resp.get('alerts_resolved', 0)} · "
+                f"설정 파일 {len(files)}개(저장 {len(resp.get('files_stored') or [])}) · 다음 {interval}초 뒤"
             ))
             for e in errors:
                 log("WARN", f"읽기 오류 {e}")
+            for fid, f in files.items():
+                if f.get("error"):
+                    log("WARN", f"설정 파일 {fid} {f.get('path')}: {f['error']}")
+            for e in resp.get("file_errors") or []:
+                log("WARN", f"설정 파일 처리 오류(서버) {e}")
         except urllib.error.HTTPError as exc:
             failures += 1
             detail = ""

@@ -11,6 +11,17 @@ import { RUN_STATUS } from './runStatus';
 const TH = 'text-left px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border';
 const TD = 'px-3 py-2 border-b border-border align-top text-sm';
 const BASELINE_LABEL: Record<string, string> = { imported: '가져옴', applied: '적용됨' };
+const SOURCE_LABEL: Record<string, string> = { agent: '노드 에이전트', k8s_api: 'K8S API 수집', ssh: 'SSH 수집', apply: 'PEP 적용' };
+/** 서비스별 자동 감시 경로(툴팁). */
+const WATCH_SOURCE_HINT: Record<string, string> = {
+  etcd: '정적 파드는 K8S API 로 주기 수집(감시 설정 주기), systemd 는 SSH 수동 수집 때 감지한다.',
+  containerd: '노드 파라미터 에이전트가 config.toml 을 읽어 보고한다.',
+  cilium: 'cilium-config 를 K8S API 로 주기 수집한다.',
+  'kube-apiserver': '정적 파드를 K8S API 로 주기 수집한다.',
+  'kube-controller-manager': '정적 파드를 K8S API 로 주기 수집한다.',
+  'kube-scheduler': '정적 파드를 K8S API 로 주기 수집한다.',
+  kubelet: '노드 파라미터 에이전트가 kubelet 설정 파일을 읽어 보고한다.',
+};
 
 interface Props {
   status: ServiceConfigStatus;
@@ -104,15 +115,16 @@ export function ServiceSummary({ status, clusterId, hasAgentData, canApply, appl
         })}
       </MacCard>
 
-      {isLinux && (
+      {(
         <MacCard title="열린 알람" titleExtra={(
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">{status.alerts.length}건
-            <InfoHint label="열린 알람" text={hasAgentData ? '노드 파라미터 에이전트가 만든 알람 중 확인(ack)하지 않은 것. 값이 기준으로 돌아오면 위반 알람은 다음 보고 때 닫힌다.' : 'OS 파라미터 감시 화면의 설치 안내대로 노드 파라미터 에이전트를 배포하면 변경·위반 알람이 여기에 모인다.'} />
+            <InfoHint label="열린 알람" text={!isLinux ? `${WATCH_SOURCE_HINT[status.service] ?? ''} 바뀐 값은 변경 알람, 기준 버전과 다른 값은 드리프트 알람으로 열리고, 값이 기준으로 돌아오면 드리프트 알람은 닫힌다. 확인(ack)한 알람은 빠진다.`
+              : hasAgentData ? '노드 파라미터 에이전트가 만든 알람 중 확인(ack)하지 않은 것. 값이 기준으로 돌아오면 위반 알람은 다음 보고 때 닫힌다.' : 'OS 파라미터 감시 화면의 설치 안내대로 노드 파라미터 에이전트를 배포하면 변경·위반 알람이 여기에 모인다.'} />
           </span>
         )}
           actions={<Link to={`/alerts?cluster=${clusterId}`} className="text-xs text-primary hover:underline">알람 인박스</Link>} bodyPadding="p-0">
           {status.alerts.length === 0 ? (
-            <EmptyState compact title={hasAgentData ? '열린 알람 없음' : '노드 파라미터 에이전트 보고 없음'} />
+            <EmptyState compact title={!isLinux || hasAgentData ? '열린 알람 없음' : '노드 파라미터 에이전트 보고 없음'} />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px]">
@@ -135,20 +147,21 @@ export function ServiceSummary({ status, clusterId, hasAgentData, canApply, appl
         </MacCard>
       )}
 
-      {isLinux && (
+      {(
         <MacCard title="최근 변경" titleExtra={<span className="text-xs text-muted-foreground">24시간 · {status.recentChanges.length}건</span>}
-          actions={<Link to={changesHref()} className="text-xs text-primary hover:underline">변경 이력 전체</Link>} bodyPadding="p-0">
+          actions={isLinux ? <Link to={changesHref()} className="text-xs text-primary hover:underline">변경 이력 전체</Link> : undefined} bodyPadding="p-0">
           {status.recentChanges.length === 0 ? <EmptyState compact title="24시간 안 변경 없음" /> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px]">
-                <thead><tr><th className={TH}>시각</th><th className={TH}>노드</th><th className={TH}>키</th><th className={TH}>전 → 후</th></tr></thead>
+                <thead><tr><th className={TH}>시각</th><th className={TH}>노드</th><th className={TH}>키</th><th className={TH}>전 → 후</th>{!isLinux && <th className={TH}>감지</th>}</tr></thead>
                 <tbody>
                   {status.recentChanges.map((c, i) => (
                     <tr key={`${c.node}|${c.key}|${i}`}>
                       <td className={`${TD} text-xs text-muted-foreground whitespace-nowrap`}>{c.detectedAt ? formatDateTime(c.detectedAt) : '—'}</td>
                       <td className={`${TD} text-xs`}>{c.node}</td>
-                      <td className={`${TD} font-mono text-xs break-all`}><Link to={changesHref(c.key)} className="text-primary hover:underline">{c.key}</Link></td>
+                      <td className={`${TD} font-mono text-xs break-all`}>{isLinux ? <Link to={changesHref(c.key)} className="text-primary hover:underline">{c.key}</Link> : c.key}</td>
                       <td className={`${TD} font-mono text-xs break-all`}>{c.oldValue ?? '없음'} → {c.newValue ?? '없음'}</td>
+                      {!isLinux && <td className={`${TD} text-xs text-muted-foreground whitespace-nowrap`}>{SOURCE_LABEL[c.source ?? ''] ?? c.source ?? '—'}</td>}
                     </tr>
                   ))}
                 </tbody>

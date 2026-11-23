@@ -67,6 +67,8 @@ class AgentReport(BaseModel):
     runtime: dict[str, Optional[str]] = Field(default_factory=dict)
     persistent: dict[str, dict[str, Any]] = Field(default_factory=dict)
     errors: list[str] = Field(default_factory=list, max_length=200)
+    # 서비스 구성 설정 파일(containerd·kubelet) — {id: {sha256, path, content?(바뀐 때만), error?}}. 에이전트 1.1.0+
+    files: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 @ingest_router.post("/agent/report")
@@ -80,13 +82,34 @@ def agent_report(
     if cluster is None:
         raise HTTPException(status_code=404, detail=f"클러스터 '{body.cluster}' 를 찾을 수 없습니다.")
     try:
-        return svc.handle_report(db, cluster, body.model_dump())
+        out = svc.handle_report(db, cluster, body.model_dump(exclude={"files"}))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         db.rollback()
         logger.exception("node-param report 처리 실패 (%s/%s)", body.cluster, body.node)
         raise HTTPException(status_code=500, detail=f"보고 처리 실패: {exc}") from exc
+    # 서비스 구성 — 설정 파일 보고(containerd·kubelet)는 변경 감지·알람으로, 실패해도 커널 파라미터 보고는 성공으로 둔다.
+    from app.services.service_config import watch as W
+
+    try:
+        fres = W.ingest_agent_files(db, cluster, body.node, body.host_ip, body.files)
+        out["files_stored"] = fres["stored"]
+        out["file_errors"] = fres["errors"]
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.warning("service-config 파일 보고 처리 실패 (%s/%s): %s", body.cluster, body.node, exc)
+    out["files"] = W.agent_file_targets(db)
+    return out
+
+
+def _service_config_dirs(db: Session) -> list[str]:
+    """서비스 구성 변경 감지용으로 에이전트가 읽는 설정 파일 디렉터리(적용 설정의 containerd·kubelet 경로)."""
+    import posixpath
+
+    from app.services.service_config import watch as W
+
+    return [posixpath.dirname(t["path"]) for t in W.agent_file_targets(db)]
 
 
 # ── 설정 ─────────────────────────────────────────────────────────────────────
@@ -363,6 +386,7 @@ def agent_manifest(
     yaml_text = render_manifest(
         cluster_id=str(cluster.id), cluster_name=cluster.name, api_base_url=base,
         image=cfg["agent_image"], namespace=cfg["agent_namespace"], tls_verify=cfg["tls_verify"],
+        config_dirs=_service_config_dirs(db),
     )
     return {
         "yaml": yaml_text,

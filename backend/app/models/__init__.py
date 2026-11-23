@@ -63,6 +63,7 @@ from app.models.os_param_change import OsParamChange
 from app.models.node_param_watch import NodeParamAgent, NodeParamWatchRule
 from app.models.service_config import (
     ServiceConfigApplyRun,
+    ServiceConfigChange,
     ServiceConfigGroup,
     ServiceConfigItem,
     ServiceConfigRule,
@@ -178,6 +179,7 @@ __all__ = [
     "ServiceConfigRule",
     "ServiceConfigGroup",
     "ServiceConfigApplyRun",
+    "ServiceConfigChange",
     "Sprint",
     "Project",
     "ServiceTopologyLink",

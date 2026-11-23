@@ -10,6 +10,9 @@
 
 1.97.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **서비스 구성 — ETCD·CONTAINERD·CILIUM·컨트롤 플레인·KUBELET 변경 감지·알람**: LINUX 처럼 나머지 7개 서비스도 노드에서 값이 직접 바뀌면 변경 이력과 알람이 남는다. CILIUM·정적 파드(ETCD·APISERVER·CONTROLLER·SCHEDULER)는 백엔드가 감시 주기(기본 5분)마다 K8S API 로 읽고(설정 버전이 있는 클러스터만), CONTAINERD·KUBELET 은 노드 파라미터 에이전트(1.1.0)가 설정 파일을 읽어 보고한다(해시가 바뀐 때만 내용 전송, 에이전트 DaemonSet 재배포 필요 — `/etc/containerd`·`/var/lib/kubelet` 읽기 전용 마운트 추가). 바뀐 값은 변경 이력(감지 경로 포함) + 변경 알람, 기준 버전과 다른 값은 드리프트 알람으로 열리고 맞아지면 닫힌다(PEP 적용에 의한 변경은 변경 알람 없음). 서비스 구성 요약 탭의 열린 알람·최근 변경과 행 배지·레일 점이 8개 서비스 모두에서 동작하고, 감시 켜기·주기·알람·심각도는 설정 대화상자에서 바꾼다. Backend: `services/service_config/watch.py`, `ServiceConfigChange`, Celery Beat `service-config-watch-dispatcher`, `GET|PUT /service-config/watch-settings`, 에이전트 보고 `files`. Frontend: `ServiceSummary`·`ApplySettingsDialog`.
+
 ## [1.97.0] - 2026-11-23
 
 ### Added

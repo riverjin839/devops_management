@@ -6816,6 +6816,8 @@ export interface ServiceConfigParamChange {
   oldValue: string | null;
   newValue: string | null;
   changeType: string;
+  /** 감지 경로 — agent · k8s_api · ssh · apply. */
+  source?: string;
   detectedAt: string | null;
 }
 /** 서비스 상태 — 드리프트(기준 버전과 다른 노드 값)·열린 알람·최근 변경·미적용·최근 적용. */
@@ -6848,6 +6850,14 @@ export interface ServiceConfigStatus {
 }
 export interface ServiceConfigStatusAll {
   services: Record<string, { level: ServiceConfigLevel; reasons: string[]; error?: string }>;
+}
+export interface ServiceConfigWatchSettings {
+  enabled: boolean;
+  intervalMin: number;
+  changeAlert: boolean;
+  changeSeverity: 'info' | 'warning' | 'critical';
+  driftAlert: boolean;
+  driftSeverity: 'info' | 'warning' | 'critical';
 }
 export interface ServiceConfigApplySettings {
   sysctlFile: string;

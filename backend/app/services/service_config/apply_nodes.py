@@ -31,6 +31,7 @@ from app.services import ssh_runner
 from app.services.service_config import apply as A
 from app.services.service_config import current as C
 from app.services.service_config import view as V
+from app.services.service_config import watch as W
 from app.services.ssh_runner import SSHTarget
 
 _PLAIN_ITEM = re.compile(r"^[A-Za-z0-9_.:/,+=\-]+$")
@@ -775,7 +776,6 @@ def _containerd_node(t: dict[str, str], values: dict[str, str], items: dict[str,
 
 async def run_containerd(db: Session, cluster: Cluster, run: ServiceConfigApplyRun, plan: dict[str, Any],
                          opts: dict[str, Any], creds: dict[str, Any], log: A.RunLog) -> dict[str, Any]:
-    from app.services.config_snapshot import store_if_changed
 
     cfg = A.get_settings(db)
     values = A.validate_pairs(plan["values"])
@@ -809,8 +809,8 @@ async def run_containerd(db: Session, cluster: Cluster, run: ServiceConfigApplyR
             flat = r.pop("_flat", None)
             if flat:
                 data = {"source": "ssh", "host": r["host"], "source_label": "containerd config dump (적용 후)", "flat": flat}
-                changed |= store_if_changed(db, cluster.id, f"containerd_config:{r['host']}", "runtime",
-                                            str(flat.get("version") or "") or None, data, now)
+                changed |= W.store_and_watch(db, cluster, f"containerd_config:{r['host']}", "runtime",
+                                             str(flat.get("version") or "") or None, data, now, "apply")
         if changed:
             db.commit()
 
@@ -1115,7 +1115,6 @@ def _kubelet_node(t: dict[str, str], values: dict[str, str], items: dict[str, An
 async def run_kubelet(db: Session, cluster: Cluster, run: ServiceConfigApplyRun, plan: dict[str, Any],
                       opts: dict[str, Any], creds: dict[str, Any], log: A.RunLog) -> dict[str, Any]:
     from app.models import ClusterConfigSnapshot
-    from app.services.config_snapshot import store_if_changed
 
     cfg = A.get_settings(db)
     values = A.validate_pairs(plan["values"])
@@ -1153,7 +1152,7 @@ async def run_kubelet(db: Session, cluster: Cluster, run: ServiceConfigApplyRun,
                     .order_by(ClusterConfigSnapshot.collected_at.desc()).first())
             data = {**((last.data or {}) if last else {"source": "ssh", "host": r["host"], "config_file": cfg["kubelet_config"]}),
                     "config_content": content, "collected_at": now.isoformat()}
-            changed |= store_if_changed(db, cluster.id, comp, "kubelet", None, data, now)
+            changed |= W.store_and_watch(db, cluster, comp, "kubelet", None, data, now, "apply")
         if changed:
             db.commit()
 

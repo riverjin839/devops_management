@@ -4,9 +4,11 @@ import type { ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { LoadingState, useToast } from '@/components/common';
-import { useServiceConfigSettings, useUpdateServiceConfigSettings } from '@/hooks/useServiceConfig';
+import {
+  useServiceConfigSettings, useServiceConfigWatchSettings, useUpdateServiceConfigSettings, useUpdateServiceConfigWatchSettings,
+} from '@/hooks/useServiceConfig';
 import { formatApiError } from '@/lib/utils';
-import type { ServiceConfigApplySettings } from '@/types';
+import type { ServiceConfigApplySettings, ServiceConfigWatchSettings } from '@/types';
 
 const INPUT = 'w-full px-2.5 py-1.5 rounded-xl border border-border bg-card text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60';
 
@@ -27,11 +29,17 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
   const [form, setForm] = useState<ServiceConfigApplySettings | null>(null);
   useEffect(() => { if (open && q.data) setForm(q.data); }, [open, q.data]);
   const set = (p: Partial<ServiceConfigApplySettings>) => setForm((f) => (f ? { ...f, ...p } : f));
+  const wq = useServiceConfigWatchSettings(open);
+  const wsave = useUpdateServiceConfigWatchSettings();
+  const [watch, setWatch] = useState<ServiceConfigWatchSettings | null>(null);
+  useEffect(() => { if (open && wq.data) setWatch(wq.data); }, [open, wq.data]);
+  const setW = (p: Partial<ServiceConfigWatchSettings>) => setWatch((w) => (w ? { ...w, ...p } : w));
 
   const onSave = async () => {
     if (!form) return;
     try {
       await save.mutateAsync(form);
+      if (watch) await wsave.mutateAsync(watch);
       toast.success('적용 설정을 저장했습니다');
       onClose();
     } catch (e) {
@@ -49,6 +57,42 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
         <div className="max-h-[64vh] overflow-y-auto space-y-3 px-5 pb-3">
           {!form ? <LoadingState /> : (
             <>
+              {watch && (
+                <>
+                  <p className="text-xs font-semibold text-foreground">변경 감지</p>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" disabled={!isAdmin} checked={watch.enabled} onChange={(e) => setW({ enabled: e.target.checked })} />
+                    주기 수집 켜기 — V1 이 있는 클러스터의 정적 파드·cilium-config 를 K8S API 로 읽는다(containerd·kubelet 은 노드 파라미터 에이전트가 보고)
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Field label="수집 주기(분)">
+                      <input type="number" min={1} max={1440} className={INPUT} disabled={!isAdmin || !watch.enabled} value={watch.intervalMin}
+                        onChange={(e) => setW({ intervalMin: Number(e.target.value) || 5 })} aria-label="변경 감지 수집 주기(분)" />
+                    </Field>
+                    <Field label="변경 알람 심각도">
+                      <select className={INPUT} disabled={!isAdmin || !watch.changeAlert} value={watch.changeSeverity}
+                        onChange={(e) => setW({ changeSeverity: e.target.value as ServiceConfigWatchSettings['changeSeverity'] })} aria-label="변경 알람 심각도">
+                        <option value="info">info</option><option value="warning">warning</option><option value="critical">critical</option>
+                      </select>
+                    </Field>
+                    <Field label="드리프트 알람 심각도">
+                      <select className={INPUT} disabled={!isAdmin || !watch.driftAlert} value={watch.driftSeverity}
+                        onChange={(e) => setW({ driftSeverity: e.target.value as ServiceConfigWatchSettings['driftSeverity'] })} aria-label="드리프트 알람 심각도">
+                        <option value="info">info</option><option value="warning">warning</option><option value="critical">critical</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" disabled={!isAdmin} checked={watch.changeAlert} onChange={(e) => setW({ changeAlert: e.target.checked })} />
+                    변경 알람 — PEP 적용이 아닌 값 변경을 감지하면 알람
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" disabled={!isAdmin} checked={watch.driftAlert} onChange={(e) => setW({ driftAlert: e.target.checked })} />
+                    드리프트 알람 — 노드 값이 기준 버전과 다르면 열고, 맞아지면 닫는다
+                  </label>
+                  <p className="pt-2 text-xs font-semibold text-foreground">적용</p>
+                </>
+              )}
               <Field label="LINUX 관리 sysctl 파일" help="PEP 가 통째로 쓰는 파일. /etc/sysctl.d/99-sysctl.conf 보다 뒤에 읽히는 이름이어야 부팅 때 덮이지 않는다.">
                 <input className={INPUT} disabled={!isAdmin} value={form.sysctlFile} onChange={(e) => set({ sysctlFile: e.target.value })} aria-label="관리 sysctl 파일" />
               </Field>
@@ -124,7 +168,7 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={save.isPending}>닫기</Button>
-          {isAdmin && <Button onClick={() => { void onSave(); }} disabled={!form || save.isPending}>{save.isPending ? '저장 중…' : '저장'}</Button>}
+          {isAdmin && <Button onClick={() => { void onSave(); }} disabled={!form || save.isPending || wsave.isPending}>{save.isPending || wsave.isPending ? '저장 중…' : '저장'}</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
