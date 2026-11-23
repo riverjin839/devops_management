@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   LayoutGrid, Boxes, Gauge, TrendingUp, Activity, Bell, ScrollText, Zap, ClipboardCheck,
-  KeyRound, Tags, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers,
+  KeyRound, Tags, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks,
 } from 'lucide-react';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
@@ -12,6 +12,7 @@ import { K8sEventsPage } from '@/pages/K8sEventsPage';
 import { K8sLogsPage } from '@/pages/K8sLogsPage';
 import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { DailyCheckReviewPage } from '@/pages/DailyCheckReview';
+import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sRbacPage } from '@/pages/K8sRbacPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { NodeImagesPage } from '@/pages/NodeImagesPage';
@@ -65,7 +66,8 @@ export interface HubView {
  * 2단계(2026-10-23)로 구성(RBAC·노드 라벨·노드 이미지·버전)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을 더했다.
  * 노드 라벨은 단독 화면(`/node-labels`, 전체 클러스터 모드)도 유지한다 — 허브 뷰는 선택 클러스터만.
  * k9s·노드 SSH 는 전체 높이 웹 터미널이라 임베드하지 않고 `HubTerminalsView` 가 단독 화면으로 연다.
- * 3단계(2026-10-23)로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더했다. 새 뷰를 넣을 땐 이 목록에 항목을 더하고
+ * 3단계(2026-10-23)로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더했다. 2026-11-23 개요에 있던 점검 카탈로그를
+ * 점검 ▸ 점검 항목(`checks`, 옛 `/ops-checks`)으로 옮겼다 — 개요는 상태 + 「전체 점검」만 남는다(D-242). 새 뷰를 넣을 땐 이 목록에 항목을 더하고
  * App.tsx 의 옛 라우트를 `RedirectToHub` 로, `navConfig.ts` `HUB_ABSORBED_PATHS` 에 옛 경로를 더한다(메뉴에서 숨김).
  */
 export const HUB_VIEWS: readonly HubView[] = [
@@ -77,6 +79,7 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'events', category: 'observe', label: '실시간 이벤트', icon: Bell, navKey: '/k8s-events', component: K8sEventsPage },
   { id: 'logs', category: 'logs', label: '파드 로그', icon: ScrollText, navKey: '/k8s-logs', component: K8sLogsPage },
   { id: 'incident', category: 'logs', label: 'AI 장애 분석', icon: Zap, navKey: '/incident-analysis', component: IncidentAnalysisPage },
+  { id: 'checks', category: 'checks', label: '점검 항목', icon: ListChecks, navKey: '/ops-checks', component: OpsCheckConsolePage },
   { id: 'review', category: 'checks', label: '점검 결과 리뷰', icon: ClipboardCheck, navKey: '/daily-check/review', component: DailyCheckReviewPage },
   { id: 'os-param-watch', category: 'checks', label: 'OS 파라미터 감시', icon: ShieldCheck, navKey: '/os-param-watch', component: NodeParamWatchPage },
   { id: 'bottleneck', category: 'diagnose', label: '파드 병목 진단', icon: Activity, navKey: '/pod-bottleneck', component: PodBottleneckPage },
