@@ -8,6 +8,7 @@ export { useModalA11y } from './useModalA11y';
 export { useModalHistory } from './useModalHistory';
 export { LogViewer } from './LogViewer';
 export { RunLogPanel } from './RunLogPanel';
+export { PopoutWindow } from './PopoutWindow';
 export { ExecOutputTabs } from './ExecOutputTabs';
 export { CommandTraceList } from './CommandTraceList';
 export { ClusterSidebar } from './ClusterSidebar';

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
-import { SidePane } from '@/components/common';
+import { PopoutWindow, SidePane } from '@/components/common';
+import { useLogWindowStore } from '@/stores/logWindowStore';
 import { checkMatrixKeys, useCheckMatrixRuns } from '@/hooks/useCheckMatrix';
 import { useCheckMatrixLogStore } from '@/stores/checkMatrixLogStore';
 import type { CheckMatrixTrigger } from '@/types';
@@ -64,20 +65,16 @@ function PanelBody({
     }
   }, [batchDone, batchId, qc]);
 
+  // 로그 표시 위치(전역 설정) — 기본은 우측 상단 새 창, 팝업이 차단되면 우측 패널로 폴백한다.
+  const windowMode = useLogWindowStore((s) => s.mode) === 'window';
+  const [blocked, setBlocked] = useState(false);
+
   const title = runId
     ? `실행 로그 — ${target?.label ?? '셀 실행'}`
     : batchId ? `실행 로그 — ${target?.label ?? '일괄 실행'}` : '점검 수행 로그';
 
-  return (
-    <SidePane
-      open
-      onClose={onClose}
-      title={title}
-      width="720px"
-      resizable
-      widthStorageKey="pep:checkMatrixRunLogWidth"
-    >
-      <div className="space-y-4 pb-4">
+  const content = (
+      <div className={windowMode && !blocked ? 'flex-1 min-h-0 overflow-auto space-y-4 p-2' : 'space-y-4 pb-4'}>
         {runId ? null : batchId ? (
           <div className="flex flex-wrap items-center justify-between gap-2">
           <p className={`text-xs flex items-center gap-1.5 ${
@@ -135,6 +132,27 @@ function PanelBody({
           </div>
         )}
       </div>
+  );
+
+  if (windowMode && !blocked) {
+    return (
+      <PopoutWindow name="check-matrix-run-log" title={title} width={820} height={720} onClose={onClose} onBlocked={() => setBlocked(true)}>
+        <p className="text-sm font-semibold px-2">{title}</p>
+        {content}
+      </PopoutWindow>
+    );
+  }
+
+  return (
+    <SidePane
+      open
+      onClose={onClose}
+      title={title}
+      width="720px"
+      resizable
+      widthStorageKey="pep:checkMatrixRunLogWidth"
+    >
+      {content}
     </SidePane>
   );
 }

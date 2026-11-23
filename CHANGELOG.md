@@ -10,6 +10,9 @@
 
 1.102.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **실행 로그 새 창 표시(기본값)** — 모든 화면의 "로그 보기" 실행 로그가 화면 안이 아니라 브라우저 우측 상단의 별도 창(팝업)에 뜨고 실시간으로 따라간다. Settings → 화면 UI 설정 → **실행 로그 표시**(새 창/화면 안) 또는 각 로그 패널 헤더의 창 전환 버튼으로 바꿀 수 있고, 팝업이 차단되면 화면 안 표시로 자동 폴백한다. 창을 닫으면 다음 실행 때 다시 열린다. `LogViewer` 툴바에도 "새 창으로 열기" 버튼을 추가했다. Frontend: `PopoutWindow`(portal + 스타일·테마 동기화), `stores/logWindowStore`, `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 적용.
+
 ## [1.102.0] - 2026-11-23
 
 ### Added

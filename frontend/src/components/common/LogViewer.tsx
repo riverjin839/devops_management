@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Check, Search, WrapText } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Copy, Check, ExternalLink, Search, WrapText } from 'lucide-react';
 import { useLogTheme } from '@/hooks/useTerminalAppearance';
 import { LogThemeButton } from './LogThemeButton';
+import { PopoutWindow } from './PopoutWindow';
 import { classifyLine, stripAnsi, tokenize } from './logLine';
 
 type LogFormat = 'json' | 'journal' | 'table' | 'plain';
@@ -15,6 +16,8 @@ interface LogViewerProps {
   filterOverride?: string;    // 외부에서 강제 필터 (상위 페이지의 global filter)
   hideToolbar?: boolean;      // 툴바 감춤 (상위가 직접 관리할 때)
   follow?: boolean;           // 새 줄이 추가되면 맨 아래로 따라간다 (실시간 로그 중심 화면)
+  allowPopout?: boolean;      // 툴바에 "새 창으로 열기" (기본 true — 우측 상단 새 창, 같은 텍스트를 실시간으로 따라간다)
+  popoutTitle?: string;       // 새 창 제목
 }
 
 // ── 포맷 자동 감지 ──────────────────────────────────────────────────────────
@@ -178,8 +181,10 @@ function PlainView({ text }: { text: string }) {
 
 export function LogViewer({
   text, maxHeight = 'max-h-96', asError = false, collapsible = false, className = '',
-  filterOverride, hideToolbar = false, follow = false,
+  filterOverride, hideToolbar = false, follow = false, allowPopout = true, popoutTitle = '로그',
 }: LogViewerProps) {
+  const [popped, setPopped] = useState(false);
+  const popupName = useId().replace(/[^a-zA-Z0-9]/g, '');
   const preRef = useRef<HTMLPreElement>(null);
   const [wrap, setWrap] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -270,6 +275,17 @@ export function LogViewer({
             {copied ? <Check className="w-3 h-3 text-status-healthy" /> : <Copy className="w-3 h-3" />}
           </button>
           <LogThemeButton />
+          {allowPopout && (
+            <button
+              type="button"
+              onClick={() => setPopped(true)}
+              title="새 창으로 열기"
+              aria-label="새 창으로 열기"
+              className="p-1 rounded hover:bg-secondary text-muted-foreground"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
           {collapsible && (
             <button
               onClick={() => setCollapsed((v) => !v)}
@@ -296,6 +312,19 @@ export function LogViewer({
           : fmt === 'table'   ? <TableView   text={filtered} />
           :                     <PlainView   text={filtered} />}
         </pre>
+      )}
+
+      {popped && (
+        <PopoutWindow name={popupName} title={popoutTitle} onClose={() => setPopped(false)} onBlocked={() => setPopped(false)}>
+          <LogViewer
+            text={text}
+            asError={asError}
+            maxHeight="flex-1 min-h-0"
+            className="flex flex-col flex-1 min-h-0"
+            follow
+            allowPopout={false}
+          />
+        </PopoutWindow>
       )}
     </div>
   );

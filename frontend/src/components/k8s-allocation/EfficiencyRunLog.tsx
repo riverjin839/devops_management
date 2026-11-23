@@ -1,8 +1,9 @@
 // 실행 로그 패널 — run 을 폴링해 단계 타임라인 + LogViewer 로 실시간 표시(CLAUDE.md "실행 버튼 = 실시간 로그").
 // "로그 보기" 토글로 접고 펼칠 수 있고 선택은 localStorage 에 기억한다.
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2, RotateCcw, X } from 'lucide-react';
-import { ConfirmDialog, ErrorState, LoadingState, LogViewer } from '@/components/common';
+import { ChevronDown, ChevronRight, ExternalLink, Loader2, RotateCcw, X } from 'lucide-react';
+import { ConfirmDialog, ErrorState, LoadingState, LogViewer, PopoutWindow } from '@/components/common';
+import { useLogWindowStore } from '@/stores/logWindowStore';
 import { MacCard } from '@/components/ui/MacCard';
 import { ExecutionStepsTimeline } from '@/components/daily-check';
 import { useCanOperate } from '@/hooks/useCanOperate';
@@ -75,6 +76,9 @@ export function EfficiencyRunLog({ runId, onClose, onRollback, rollbackPending, 
   const [showLog, setShowLog] = useState<boolean>(() => readLogPref());
   const [confirmRollback, setConfirmRollback] = useState(false);
   useEffect(() => { writeLogPref(showLog); }, [showLog]);
+  // 로그 표시 위치(전역 설정) — 기본은 우측 상단 새 창. 차단되면 화면 안으로 폴백, 닫으면 이 실행에선 다시 열지 않는다.
+  const windowMode = useLogWindowStore((s) => s.mode) === 'window';
+  const [popupState, setPopupState] = useState<'open' | 'closed' | 'blocked'>('open');
 
   if (isLoading && !run) return <LoadingState label="실행 로그 불러오는 중…" compact />;
   if (isError || !run) return <ErrorState error={error} title="실행 로그를 불러오지 못했습니다" onRetry={() => void refetch()} compact />;
@@ -124,10 +128,28 @@ export function EfficiencyRunLog({ runId, onClose, onRollback, rollbackPending, 
           <ExecutionStepsTimeline stepPlan={plan} steps={steps} />
         </div>
       )}
-      {showLog && (
+      {showLog && (!windowMode || popupState === 'blocked') && (
         <div className="p-2">
           <LogViewer text={run.logLines || '(아직 로그가 없습니다)'} maxHeight="max-h-72" />
         </div>
+      )}
+      {showLog && windowMode && popupState === 'closed' && (
+        <button type="button" onClick={() => setPopupState('open')}
+          className="m-2 text-xs inline-flex items-center gap-1 px-2 py-1 rounded-xl border border-border bg-card hover:bg-secondary">
+          <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" /> 로그 새 창 다시 열기
+        </button>
+      )}
+      {showLog && windowMode && popupState === 'open' && (
+        <PopoutWindow name={`eff-${run.id.replace(/[^a-zA-Z0-9]/g, '')}`} title={`${RUN_TYPE_LABEL[run.runType] ?? run.runType} — 실행 로그`}
+          onClose={() => setPopupState('closed')} onBlocked={() => setPopupState('blocked')}>
+          <div className="flex items-center gap-2 px-1">
+            <RunStatePill state={run.runState} />
+            <span className="text-sm font-medium">{RUN_TYPE_LABEL[run.runType] ?? run.runType}</span>
+          </div>
+          {plan.length > 0 && <ExecutionStepsTimeline stepPlan={plan} steps={steps} />}
+          <LogViewer text={run.logLines || '(아직 로그가 없습니다)'} maxHeight="flex-1 min-h-0"
+            className="flex flex-col flex-1 min-h-0" follow allowPopout={false} />
+        </PopoutWindow>
       )}
     </>
   );
