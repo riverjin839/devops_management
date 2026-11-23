@@ -1,10 +1,11 @@
-// 설정 탭 본문 — 섹션별 카드(접기) 안에 항목 표. 설정 값(편집) · 현재 노드 값 · 반영 방식 · 상태.
+// 설정 탭 본문 — 섹션별 카드(접기) 안에 항목 표. 키 · VALUE(편집 입력 + 다를 때만 노드 현재 값) · 반영 방식 · 상태.
+// 설명 문장(항목 도움말·기본값·재정의)은 ⓘ 툴팁으로 — 본문엔 값·상태·결과만.
 // 바뀐 행은 강조 + "이전 → 새" + 되돌리기, 의존 규칙 결과는 해당 행 아래에 붙인다(제안 적용 버튼 포함).
 // 정상(같음)은 중립색, 버전과 다름·노드 간 다름·값 없음·조건 위반만 상태색(DESIGN_SYSTEM §12.12-3).
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Info, Lightbulb, RotateCcw, ShieldAlert } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge } from '@/components/common';
+import { InfoHint, StatusBadge } from '@/components/common';
 import { KeySignal } from './KeySignal';
 import type { StatusVariant } from '@/components/common';
 import type {
@@ -30,24 +31,27 @@ const STATUS: Record<ServiceConfigItemStatus, { variant: StatusVariant; label: s
   unknown: { variant: 'pending', label: '값 없음' },
 };
 
-function CurrentCell({ row, nodeCount }: { row: ServiceConfigRow; nodeCount: number }) {
+/** VALUE 칸 아래 줄 — 노드 현재 값. 입력(비교) 값과 같으면 아무것도 그리지 않고(같은 노드 수는 ⓘ), 다르면 노드 값을, 노드마다 다르면 값별 노드 목록(펼침). */
+function NodeValueLine({ row, compare }: { row: ServiceConfigRow; compare: string }) {
   const [open, setOpen] = useState(false);
   const c = row.current;
-  if (c.groups.length === 0) return <span className="text-xs text-muted-foreground">수집된 값 없음</span>;
+  if (c.groups.length === 0) return <span className="block text-xs text-muted-foreground mt-1">노드 값 없음</span>;
   if (c.uniform) {
+    if ((c.value ?? '') === compare) return null;
     return (
-      <span>
-        <span className="font-mono text-xs break-all">{c.value}</span>
-        {nodeCount > 1 && <span className="block text-xs text-muted-foreground">노드 {c.nodeCount}개 같음</span>}
+      <span className="block text-xs mt-1 break-all">
+        <span className="text-muted-foreground">노드 </span>
+        <span className="font-mono text-status-warning">{c.value}</span>
+        {c.nodeCount > 1 && <span className="text-muted-foreground"> · {c.nodeCount}개</span>}
       </span>
     );
   }
   return (
-    <div>
+    <div className="mt-1">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-        className="inline-flex items-center gap-1 text-xs text-foreground hover:underline">
+        className="inline-flex items-center gap-1 text-xs text-status-warning hover:underline">
         {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-        {c.groups.length}가지 값 · 노드 {c.nodeCount}개
+        노드 {c.groups.length}가지 값 · {c.nodeCount}개
       </button>
       {open && (
         <ul className="mt-1 space-y-1">
@@ -61,6 +65,18 @@ function CurrentCell({ row, nodeCount }: { row: ServiceConfigRow; nodeCount: num
       )}
     </div>
   );
+}
+
+/** VALUE 입력 옆 ⓘ — 노드 값 요약·기본값·재정의 등 보조 정보(설명은 본문 대신 툴팁). */
+function valueInfo(row: ServiceConfigRow, groupMode: boolean): string {
+  const parts: string[] = [];
+  const c = row.current;
+  if (c.groups.length === 0) parts.push('노드에서 수집된 값이 없다');
+  else if (c.uniform) parts.push(`노드 ${c.nodeCount}개 현재 값 ${c.value}`);
+  else parts.push(`노드 ${c.nodeCount}개가 ${c.groups.length}가지 값`);
+  if (groupMode) parts.push(row.overrideValue ? `기본 ${row.baseValue ?? '없음'} 을(를) 이 그룹에서 재정의` : `기본 그룹 값 ${row.baseValue ?? '없음'} 을(를) 상속`);
+  if (row.defaultValue) parts.push(`커널·제품 기본값 ${row.defaultValue}`);
+  return parts.join('\n');
 }
 
 function ValueInput({ row, value, placeholder, disabled, changed, onChange }: {
@@ -124,7 +140,6 @@ interface Props {
   /** 그룹 화면이면 값 입력 = 재정의, 비우면 기본 값 상속. */
   groupMode: boolean;
   versionLabel: string;
-  nodeCount: number;
   /** 편집 가능(최신 버전·operator). false 면 입력이 잠긴다. */
   editable: boolean;
   lockReason?: string;
@@ -140,7 +155,7 @@ interface Props {
 }
 
 export function ServiceConfigSections({
-  sections, groupMode, versionLabel, nodeCount, editable, lockReason, initial, draft, onChange, hints, signals, signalHref,
+  sections, groupMode, versionLabel, editable, lockReason, initial, draft, onChange, hints, signals, signalHref,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggle = (name: string) => setCollapsed((s) => {
@@ -153,7 +168,7 @@ export function ServiceConfigSections({
     <div className="space-y-3">
       {sections.map((sec) => {
         const isOpen = !collapsed.has(sec.name);
-        const flagged = sec.items.filter((r) => r.status !== 'same').length;
+        const flagged = sec.items.filter((r) => r.status === 'differs' || r.status === 'mixed' || (hints[r.key]?.length ?? 0) > 0).length;
         const edited = sec.items.filter((r) => (draft[r.key] ?? '') !== (initial[r.key] ?? '')).length;
         return (
           <MacCard
@@ -178,9 +193,8 @@ export function ServiceConfigSections({
                 <table className="w-full text-sm min-w-[860px] table-fixed">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className={`${TH} w-[30%]`}>키</th>
-                      <th className={`${TH} w-[24%]`}>{groupMode ? `재정의 값 (${versionLabel})` : `설정 값 (${versionLabel})`}</th>
-                      <th className={`${TH} w-[22%]`}>현재 노드 값</th>
+                      <th className={`${TH} w-[34%]`}>키</th>
+                      <th className={`${TH} w-[42%]`}>{groupMode ? `VALUE · 재정의 (${versionLabel})` : `VALUE (${versionLabel})`}</th>
                       <th className={`${TH} w-[13%]`}>반영 방식</th>
                       <th className={`${TH} w-[11%]`}>상태</th>
                     </tr>
@@ -196,9 +210,11 @@ export function ServiceConfigSections({
                       return (
                         <tr key={r.id} className={`border-b border-border last:border-0 ${changed ? 'bg-primary/5' : ''}`}>
                           <td className={TD}>
-                            <span className="font-mono text-xs break-all">{r.key}</span>
+                            <span className="inline-flex items-center gap-0.5 max-w-full">
+                              <span className="font-mono text-xs break-all">{r.key}</span>
+                              {r.help && <InfoHint text={r.help} label={`${r.key} 도움말`} side="right" />}
+                            </span>
                             {r.label && <span className="block text-xs text-muted-foreground">{r.label}{r.unit ? ` (${r.unit})` : ''}</span>}
-                            {r.help && <span className="block text-xs text-muted-foreground mt-0.5">{r.help}</span>}
                             <RuleHints hints={rowHints} editable={editable} onApply={onChange} />
                           </td>
                           <td className={TD}>
@@ -207,6 +223,7 @@ export function ServiceConfigSections({
                                 <ValueInput row={r} value={now} placeholder={placeholder} disabled={!editable}
                                   changed={changed} onChange={(v) => onChange(r.key, v)} />
                               </div>
+                              <InfoHint text={valueInfo(r, groupMode)} label={`${r.key} 값 정보`} />
                               {changed && (
                                 <button type="button" onClick={() => onChange(r.key, before)} title="되돌리기" aria-label={`${r.key} 되돌리기`}
                                   className="inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-xl border border-border bg-card hover:bg-secondary">
@@ -218,13 +235,9 @@ export function ServiceConfigSections({
                               <span className="block text-xs text-primary mt-1 break-all">
                                 {before || (groupMode ? '상속' : '없음')} → {now || (groupMode ? '상속' : '없음')}
                               </span>
-                            ) : groupMode && r.overrideValue ? (
-                              <span className="block text-xs text-muted-foreground mt-1">기본 {r.baseValue ?? '없음'} 을(를) 재정의</span>
-                            ) : r.defaultValue ? (
-                              <span className="block text-xs text-muted-foreground mt-1">커널·제품 기본값 {r.defaultValue}</span>
                             ) : null}
+                            <NodeValueLine row={r} compare={groupMode ? (now || (r.baseValue ?? '')) : now} />
                           </td>
-                          <td className={TD}><CurrentCell row={r} nodeCount={nodeCount} /></td>
                           <td className={`${TD} text-xs text-muted-foreground`}>{RESTART_LABEL[r.restartScope] ?? r.restartScope}</td>
                           <td className={TD}>
                             {st ? <StatusBadge variant={st.variant} label={st.label} /> : <span className="text-xs text-muted-foreground">일치</span>}

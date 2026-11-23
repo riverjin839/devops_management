@@ -2,6 +2,7 @@
 // "다시 적용" 은 기준 버전으로 적용 대화상자를 열고 다른 노드만 미리 골라 둔다.
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
+import { InfoHint } from '@/components/common';
 import type { ServiceConfigStatus } from '@/types';
 
 const BASELINE_LABEL: Record<string, string> = { imported: '가져옴', applied: '적용됨' };
@@ -26,7 +27,8 @@ export function DriftBanner({ status, groupId, canApply, applyHint, onShowSummar
   return (
     <MacCard
       title={`노드 값이 V${base}${label ? `(${label})` : ''} 와(과) 다름`}
-      description={`노드 ${nodes.length}개 · 키 ${keys.length}개 — 노드에서 직접 바뀌었거나 적용이 일부만 됐다`}
+      titleExtra={<InfoHint label="드리프트" text={`노드에서 직접 바뀌었거나 적용이 일부만 된 값이다. 기준은 마지막으로 가져오거나 적용한 버전(V${base}). '다시 적용' 은 그 버전 값으로 다른 노드만 되돌린다.`} />}
+      description={`노드 ${nodes.length}개 · 키 ${keys.length}개`}
       actions={(
         <>
           <Button size="sm" variant="outline" onClick={onShowSummary}>요약에서 보기</Button>

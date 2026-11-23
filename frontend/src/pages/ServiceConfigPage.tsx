@@ -21,7 +21,7 @@ import {
   useServiceConfigView, useServiceConfigApplyRun, useStopServiceConfigApply,
 } from '@/hooks/useServiceConfig';
 import {
-  ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, LoadingState, PageShell, RunLogPanel, SegTabs,
+  ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, InfoHint, LoadingState, PageShell, RunLogPanel, SegTabs,
   SelectClusterEmptyState, useToast,
 } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -37,7 +37,7 @@ import { RUN_STATUS } from '@/components/service-config/runStatus';
 import { ContainerdConfigCollectModal, EtcdSystemdModal, KernelParamsCollectModal } from '@/components/versions';
 import { camelizeKeys, serviceConfigApi, versionsApi } from '@/services/api';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
-import type { ServiceConfigApplyRun, ServiceConfigCollectKind, ServiceConfigRuleResult, ServiceConfigView } from '@/types';
+import type { ServiceConfigApplyRun, ServiceConfigCollectKind, ServiceConfigRow, ServiceConfigRuleResult, ServiceConfigView } from '@/types';
 
 const COLLECT_LABEL: Record<ServiceConfigCollectKind, string> = {
   versions: 'K8S API 로 수집',
@@ -318,12 +318,22 @@ export function ServiceConfigPage() {
     }
   };
 
+  // '확인 필요' = 노드 값이 버전과 다르거나 노드마다 다르거나 의존 규칙 결과가 붙은 항목. '값 없음'만인 항목은 빼고 집계에만 센다.
+  const filterCounts = useMemo(() => {
+    const all = (view?.sections ?? []).flatMap((sec) => sec.items);
+    return {
+      all: all.length,
+      flagged: all.filter((r) => r.status === 'differs' || r.status === 'mixed' || (hints[r.key]?.length ?? 0) > 0).length,
+      edited: all.filter((r) => (draft[r.key] ?? '') !== (initial[r.key] ?? '')).length,
+    };
+  }, [view, hints, draft, initial]);
   const sections = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const isFlagged = (r: ServiceConfigRow) => r.status === 'differs' || r.status === 'mixed' || (hints[r.key]?.length ?? 0) > 0;
     return (view?.sections ?? []).map((s) => ({
       ...s,
       items: s.items.filter((r) => (filter === 'all'
-          || (filter === 'flagged' && (r.status !== 'same' || (hints[r.key]?.length ?? 0) > 0))
+          || (filter === 'flagged' && isFlagged(r))
           || (filter === 'edited' && (draft[r.key] ?? '') !== (initial[r.key] ?? '')))
         && (!q || r.key.toLowerCase().includes(q) || (r.label ?? '').toLowerCase().includes(q))),
     })).filter((s) => s.items.length > 0);
@@ -360,7 +370,10 @@ export function ServiceConfigPage() {
                 onSelect={(key) => guard(() => { setParams({ service: key, version: '', group: '' }); setQuery(''); })} />
               <main className="flex-1 min-w-0 p-4 pb-0 space-y-3 flex flex-col">
                 <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-lg font-semibold text-foreground">{meta?.label ?? service}</h2>
+                  <h2 className="inline-flex items-center gap-1 text-lg font-semibold text-foreground">
+                    {meta?.label ?? service}
+                    {meta?.description && <InfoHint text={meta.description} label={`${meta.label} 설명`} side="bottom" />}
+                  </h2>
                   <SegTabs mode="tabs" label="서비스 보기" value={tab} onChange={setTab}
                     options={[['config', '설정'], ['summary', '요약']] as const} />
                   <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -401,7 +414,6 @@ export function ServiceConfigPage() {
                     ))}
                   </div>
                 </div>
-                {meta?.description && <p className="text-xs text-muted-foreground">{meta.description}</p>}
 
                 {runLog.lines.length > 0 && (
                   <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} maxHeight="max-h-56" />
@@ -431,7 +443,9 @@ export function ServiceConfigPage() {
 
                     {groupOptions && (
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-muted-foreground">노드 그룹</span>
+                        <span className="inline-flex items-center text-xs text-muted-foreground">노드 그룹
+                          <InfoHint text="노드는 위쪽 그룹부터 처음 일치한 그룹 하나에만 속한다. 어느 그룹에도 없으면 기본 그룹. 그룹 화면에서는 재정의할 값만 저장하고 나머지는 기본 그룹 값을 따른다." label="노드 그룹" />
+                        </span>
                         <SegTabs label="노드 그룹" value={groupId ?? ''} options={groupOptions}
                           onChange={(g) => guard(() => setParams({ group: g, version: '' }))} />
                         <Button size="sm" variant="outline" disabled={!canOperate} onClick={() => setGroupDialog('new')}
@@ -458,7 +472,7 @@ export function ServiceConfigPage() {
                       <MacCard
                         title="설정 버전이 아직 없습니다"
                         icon={Database}
-                        description="현재 노드 값으로 V1 을 만들면 이후 변경·적용의 기준이 된다(DB 에 저장만, 노드는 그대로)"
+                        titleExtra={<InfoHint text={'현재 노드 값으로 V1 을 만들면 이후 변경·적용의 기준이 된다(DB 에 저장만, 노드는 그대로).\n노드마다 값이 다른 항목은 가장 많은 노드의 값을 V1 에 넣고, 화면에는 계속 \'노드 간 다름\' 으로 표시한다.'} label="V1 만들기" />}
                         actions={(
                           <Button size="sm" disabled={!canOperate || view.sources.length === 0} onClick={() => setConfirmImport(true)}
                             title={view.sources.length === 0 ? '먼저 현재 값을 수집하세요' : withHint('현재 값으로 V1 만들기')}
@@ -467,9 +481,7 @@ export function ServiceConfigPage() {
                           </Button>
                         )}
                       >
-                        <p className="text-sm text-muted-foreground">
-                          노드 {view.allNodes.length}개에서 값을 읽었다. 노드마다 값이 다른 항목은 가장 많은 노드의 값을 V1 에 넣고, 화면에는 계속 &lsquo;노드 간 다름&rsquo; 으로 표시한다.
-                        </p>
+                        <p className="text-sm text-muted-foreground">수집된 노드 {view.allNodes.length}개</p>
                       </MacCard>
                     )}
 
@@ -483,7 +495,7 @@ export function ServiceConfigPage() {
                     {view.pending && view.pending.count > 0 && (
                       <MacCard
                         title={`저장됨 · 미적용 ${view.pending.count}건`}
-                        description={`V${view.pending.versionNo}${view.pending.createdBy ? ` · ${view.pending.createdBy}` : ''}${view.pending.createdAt ? ` · ${formatRelativeTime(view.pending.createdAt)}` : ''}${view.pending.note ? ` · ${view.pending.note}` : ''}`}
+                        titleExtra={<InfoHint label="미적용" text={`저장된 값은 아직 노드에 반영되지 않았다. 노드 상태는 '버전과 다름' 으로 보이고, 적용으로 노드에 반영한다.${!APPLY_SUPPORTED.has(service) ? ` ${meta?.label ?? service} 은(는) 적용을 지원하지 않는다.` : ''}`} />}
                         actions={(
                           <>
                             <Button size="sm" variant="outline" onClick={() => setCompareOpen(true)}>변경 보기</Button>
@@ -495,7 +507,7 @@ export function ServiceConfigPage() {
                         )}
                       >
                         <p className="text-sm text-muted-foreground">
-                          저장된 값은 아직 노드에 반영되지 않았다. 노드 상태는 &lsquo;버전과 다름&rsquo; 으로 보인다.{!APPLY_SUPPORTED.has(service) && ` ${meta?.label ?? service} 은(는) 적용을 지원하지 않는다.`}
+                          V{view.pending.versionNo}{view.pending.createdBy ? ` · ${view.pending.createdBy}` : ''}{view.pending.createdAt ? ` · ${formatRelativeTime(view.pending.createdAt)}` : ''}{view.pending.note ? ` · ${view.pending.note}` : ''}
                         </p>
                       </MacCard>
                     )}
@@ -511,7 +523,13 @@ export function ServiceConfigPage() {
                           className="pl-8 pr-2.5 py-1 text-sm rounded-xl border border-border bg-card focus:outline-none focus:ring-1 focus:ring-primary" />
                       </div>
                       <SegTabs label="표시 범위" value={filter} onChange={setFilter}
-                        options={[['all', '전체'], ['flagged', '확인 필요만'], ['edited', '편집한 것만']] as const} />
+                        options={[
+                          ['all', `전체 ${filterCounts.all}`, '이 범위의 관리 대상 설정 전부.'],
+                          ['flagged', filterCounts.flagged ? `확인 필요 ${filterCounts.flagged}` : '확인 필요',
+                            "노드 값이 버전과 다르거나 노드마다 다르거나, 의존 규칙(권장·필수·영향)이 걸린 항목. 아무 노드도 보고하지 않은 '값 없음' 은 오른쪽 집계에만 센다."],
+                          ['edited', filterCounts.edited ? `편집 항목 ${filterCounts.edited}` : '편집 항목',
+                            '아직 저장하지 않은 초안에서 값을 바꾼 항목. 저장하거나 변경을 취소하면 비워진다.'],
+                        ] as const} />
                       {counts && (
                         <span className="text-xs text-muted-foreground">
                           항목 {counts.items} · 노드 간 다름 {counts.mixed} · 버전과 다름 {counts.differs} · 값 없음 {counts.unknown}
@@ -526,10 +544,10 @@ export function ServiceConfigPage() {
                     )}
 
                     {sections.length === 0 ? (
-                      <EmptyState compact title={filter === 'all' ? '조건에 맞는 설정이 없습니다' : '해당하는 항목이 없습니다'} />
+                      <EmptyState compact title={filter === 'flagged' ? '확인 필요 항목 없음' : filter === 'edited' ? '편집 항목 없음' : '조건에 맞는 설정 없음'} />
                     ) : (
                       <ServiceConfigSections sections={sections} groupMode={groupMode}
-                        versionLabel={view.version ? `V${view.version.versionNo}` : '버전 없음'} nodeCount={view.nodes.length}
+                        versionLabel={view.version ? `V${view.version.versionNo}` : '버전 없음'}
                         editable={editable} lockReason={lockReason} initial={initial} draft={draft} hints={hints}
                         onChange={(k, v) => setDraft((d) => ({ ...d, [k]: v }))}
                         signals={signalMap} signalHref={service === 'linux' ? (k) => changesHref(k) : undefined} />
@@ -547,9 +565,11 @@ export function ServiceConfigPage() {
                             title={withHint('저장 전 확인')} aria-label={ariaWithHint('저장')}>저장…</Button>
                         </>
                       ) : (
-                        <span className="text-xs text-muted-foreground">
-                          {editable ? '값을 바꾸면 여기서 저장한다. 저장은 새 버전을 만들 뿐 노드는 그대로다.' : (lockReason ?? '')}
-                        </span>
+                        editable ? (
+                          <span className="inline-flex items-center text-xs text-muted-foreground">저장
+                            <InfoHint label="저장" text="값을 바꾸면 여기에 변경 건수와 저장 버튼이 나온다. 저장은 새 설정 버전을 만들 뿐 노드는 그대로이고, 노드 반영은 적용으로 따로 한다." />
+                          </span>
+                        ) : <span className="text-xs text-muted-foreground">{lockReason ?? ''}</span>
                       )}
                     </div>
                   </>
