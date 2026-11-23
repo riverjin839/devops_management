@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ShipWheel, Key, Play, ShieldAlert, ExternalLink, RotateCw } from 'lucide-react';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
+import { useClusterSwitchGuard } from '@/stores/clusterSwitchGuardStore';
+import { useK8sHub } from '@/lib/k8sHub';
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, ConfirmDialog, ErrorState, PageShell, RunLogPanel, SelectClusterEmptyState,
@@ -167,6 +169,14 @@ export function K9sPage() {
     if (session && termStatus !== 'closed' && termStatus !== 'error') setPendingCluster({ id });
     else resetForCluster(id);
   };
+
+  // 허브의 클러스터 목록(사이드바 flyout·「클러스터 전환」)으로 바꿀 때도 같은 확인을 거친다(D-244).
+  const hub = useK8sHub();
+  useClusterSwitchGuard((id) => {
+    if (id === clusterId || !session || termStatus === 'closed' || termStatus === 'error') return false;
+    setPendingCluster({ id });
+    return true;
+  }, !!hub);
 
   const onTerminalEvent = (e: SshTerminalEvent) => {
     if (abortedRef.current) return;
