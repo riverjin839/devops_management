@@ -105,7 +105,7 @@ def agent_report(
     # NIC 상태 — 실패해도 커널 파라미터 보고는 성공으로 둔다. 응답의 nic 설정으로 다음 주기 수집 대상을 정한다.
     from app.services.nic_watch import service as nic_svc
     from app.services.nic_watch.settings import agent_config as nic_agent_config
-    from app.services.nic_watch.settings import get_settings as nic_settings
+    from app.services.nic_watch.settings import get_effective as nic_effective
 
     if body.nic is not None:
         try:
@@ -114,7 +114,7 @@ def agent_report(
         except Exception as exc:  # noqa: BLE001
             db.rollback()
             logger.warning("nic 보고 처리 실패 (%s/%s): %s", body.cluster, body.node, exc)
-    out["nic"] = nic_agent_config(nic_settings(db))
+    out["nic"] = nic_agent_config(nic_effective(db, cluster.id))  # 클러스터별 수집 대상(재정의 반영)
     return out
 
 

@@ -21,7 +21,20 @@ from app.models.user import User
 from app.services import audit_logger
 from app.services.nic_watch import service as svc
 from app.services.nic_watch.analyze import FEATURE_LABELS
-from app.services.nic_watch.settings import BOND_MODES, HASH_POLICIES, KINDS, LACP_RATES, get_settings, set_settings
+from app.services.nic_watch import learn
+from app.services.nic_watch.settings import (
+    BOND_MODES,
+    DEFAULTS,
+    HASH_POLICIES,
+    KINDS,
+    LACP_RATES,
+    clear_cluster_override,
+    get_cluster_settings,
+    get_settings,
+    override_summary,
+    set_cluster_override,
+    set_settings,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +60,32 @@ class SettingsUpdate(BaseModel):
     stale_minutes: Optional[int] = None
 
 
-def _settings_out(db: Session) -> dict[str, Any]:
-    cfg = get_settings(db)
-    return {**cfg, "offload_expect": [{"name": k, "on": v} for k, v in sorted(cfg["offload_expect"].items())], "options": {
+class ClusterSettingsUpdate(SettingsUpdate):
+    """클러스터 재정의 — 보낸 필드만 재정의로 저장하고, ``reset_fields`` 의 필드는 공통을 따르게 되돌린다."""
+    reset_fields: Optional[list[str]] = Field(default=None, max_length=40)
+
+
+def _options() -> dict[str, Any]:
+    return {
         "kinds": list(KINDS), "bond_modes": list(BOND_MODES), "hash_policies": list(HASH_POLICIES),
         "lacp_rates": list(LACP_RATES),
         "features": [{"name": k, "label": v} for k, v in FEATURE_LABELS.items()],
-    }}
+    }
+
+
+def _with_offload_list(cfg: dict[str, Any]) -> dict[str, Any]:
+    return {**cfg, "offload_expect": [{"name": k, "on": v} for k, v in sorted(cfg["offload_expect"].items())]}
+
+
+def _cluster_settings_out(db: Session, cluster_id: UUID) -> dict[str, Any]:
+    cs = get_cluster_settings(db, cluster_id)
+    return {"effective": _with_offload_list(cs["effective"]), "global": _with_offload_list(cs["global"]),
+            "overridden": cs["overridden"], "options": _options()}
+
+
+def _settings_out(db: Session) -> dict[str, Any]:
+    cfg = get_settings(db)
+    return {**_with_offload_list(cfg), "options": _options()}
 
 
 @router.get("/settings")
@@ -94,3 +126,92 @@ def cluster_nic(cluster_id: UUID, db: Session = Depends(get_db), _: User = Depen
         db.rollback()
         logger.exception("nic-watch 조회 실패 (%s)", cluster_id)
         raise HTTPException(status_code=500, detail=f"NIC 상태 조회 실패: {exc}") from exc
+
+
+# ── 클러스터별 판정 기준(공통 기준 위의 재정의) ──────────────────────────────
+
+def _get_cluster(db: Session, cluster_id: UUID) -> Cluster:
+    cluster = db.query(Cluster).filter(Cluster.id == cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="클러스터를 찾을 수 없습니다.")
+    return cluster
+
+
+@router.get("/overrides")
+def list_overrides(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[dict[str, Any]]:
+    """클러스터별 재정의 현황 — 공통 기준 화면의 '재정의한 클러스터'. 읽기 권한이 없는 클러스터는 이름을 내보내지 않는다."""
+    from app.services.cluster_access import has_cluster_access
+
+    summary = override_summary(db)
+    out: list[dict[str, Any]] = []
+    for cid, fields in sorted(summary.items()):
+        try:
+            cluster = db.query(Cluster).filter(Cluster.id == UUID(cid)).first()
+            if cluster is not None and has_cluster_access(db, user, cluster.id, "read"):
+                out.append({"cluster_id": cid, "cluster_name": cluster.name, "fields": fields})
+        except Exception:  # noqa: BLE001 — 한 클러스터의 판정 실패가 목록 전체를 막지 않는다
+            db.rollback()
+    return out
+
+
+@router.get("/clusters/{cluster_id}/settings")
+def read_cluster_settings(cluster_id: UUID, db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> dict[str, Any]:
+    _get_cluster(db, cluster_id)
+    return _cluster_settings_out(db, cluster_id)
+
+
+@router.put("/clusters/{cluster_id}/settings")
+def update_cluster_settings(
+    cluster_id: UUID,
+    body: ClusterSettingsUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> dict[str, Any]:
+    _get_cluster(db, cluster_id)
+    patch = body.model_dump(exclude_unset=True, exclude={"reset_fields"})
+    reset = [k for k in (body.reset_fields or []) if k in DEFAULTS]
+    try:
+        set_cluster_override(db, cluster_id, patch, reset)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.exception("nic-watch 클러스터 설정 저장 실패 (%s)", cluster_id)
+        raise HTTPException(status_code=500, detail=f"NIC 클러스터 설정 저장 실패: {exc}") from exc
+    audit_logger.record(db, action="nic_watch.cluster_settings.update", actor=user, target_type="cluster",
+                        target_id=str(cluster_id), details={"fields": sorted(patch), "reset": sorted(reset)}, request=request)
+    return _cluster_settings_out(db, cluster_id)
+
+
+@router.delete("/clusters/{cluster_id}/settings")
+def clear_cluster_settings(
+    cluster_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """이 클러스터의 재정의를 모두 지워 공통 기준을 따르게 한다."""
+    _get_cluster(db, cluster_id)
+    try:
+        clear_cluster_override(db, cluster_id)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.exception("nic-watch 클러스터 설정 초기화 실패 (%s)", cluster_id)
+        raise HTTPException(status_code=500, detail=f"NIC 클러스터 설정 초기화 실패: {exc}") from exc
+    audit_logger.record(db, action="nic_watch.cluster_settings.clear", actor=user, target_type="cluster",
+                        target_id=str(cluster_id), details={}, request=request)
+    return _cluster_settings_out(db, cluster_id)
+
+
+@router.get("/clusters/{cluster_id}/observed")
+def cluster_observed(cluster_id: UUID, db: Session = Depends(get_db), _: User = Depends(get_current_user)) -> dict[str, Any]:
+    """에이전트가 보고한 구성에서 뽑은 기준 제안(읽기 전용) — 화면의 '관측 값으로 채우기'."""
+    from app.models.node_nic import NodeNicState
+
+    _get_cluster(db, cluster_id)
+    try:
+        rows = db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster_id).all()
+        return learn.observe([{"node": r.node, "interfaces": r.interfaces or []} for r in rows])
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.exception("nic-watch 관측 값 조회 실패 (%s)", cluster_id)
+        raise HTTPException(status_code=500, detail=f"NIC 관측 값 조회 실패: {exc}") from exc
