@@ -1,0 +1,115 @@
+"""NIC 상태 감시 설정 — AppSetting ``nic_watch.settings`` (UI-First, 모든 클러스터 공통).
+
+인터페이스 이름·본딩 기대 값·임계치는 설치마다 다르므로 코드 상수가 아니라 화면(서비스 구성 ▸ NIC ▸ 설정)에서 고친다.
+수집 대상(``enabled``·``include_*``·``exclude_names``)은 에이전트 보고 응답으로 전달돼 다음 주기부터 반영되고,
+나머지 판정 기준은 조회할 때 적용되므로 저장 즉시 화면에 반영된다. 저장값이 손상돼 있어도 기본값으로 되돌린다(fail-safe).
+"""
+from __future__ import annotations
+
+import re
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+SETTINGS_KEY = "nic_watch.settings"
+
+KINDS = ("physical", "bond", "vlan", "tunnel", "bridge", "virtual")
+BOND_MODES = ("", "balance-rr", "active-backup", "balance-xor", "broadcast", "802.3ad", "balance-tlb", "balance-alb")
+HASH_POLICIES = ("", "layer2", "layer2+3", "layer3+4", "encap2+3", "encap3+4", "vlan+srcmac")
+LACP_RATES = ("", "slow", "fast")
+
+DEFAULTS: dict[str, Any] = {
+    # ── 수집(에이전트에 전달) ──
+    "enabled": True,
+    "include_kinds": ["physical", "bond", "vlan", "tunnel"],
+    "include_names": ["cilium_host", "cilium_vxlan", "cilium_geneve"],
+    "exclude_names": ["lo", "lxc*", "veth*", "docker*", "cni*", "flannel*", "kube-ipvs*", "nodelocaldns", "tunl*"],
+    # ── 판정 기준(빈 값 = 검사 안 함) ──
+    "expected_bond_mode": "802.3ad",
+    "expected_hash_policy": "layer3+4",
+    "expected_lacp_rate": "fast",
+    "min_speed_mbps": 0,
+    # 노드 간 값 비교(같은 인터페이스 이름) — MTU·속도·본딩 설정·offload
+    "cross_node_check": True,
+    # 증가율 계산 창(분)과 임계치
+    "rate_window_minutes": 15,
+    "drop_warn_per_min": 10,
+    "crc_warn_count": 1,
+    "flap_warn_count": 1,
+    # offload 기대 값 — 커널 기능 이름: true/false. 포워딩하는 K8S 노드는 LRO 를 꺼야 한다.
+    "offload_expect": {"rx-lro": False},
+    # 마지막 보고 뒤 이 시간(분)이 지나면 '보고 끊김'
+    "stale_minutes": 10,
+}
+
+_INT_LIMITS = {"min_speed_mbps": (0, 800000), "rate_window_minutes": (5, 60), "drop_warn_per_min": (0, 10_000_000),
+               "crc_warn_count": (0, 1_000_000), "flap_warn_count": (0, 1000), "stale_minutes": (1, 1440)}
+_GLOB_RE = re.compile(r"^[A-Za-z0-9_.:@*?\[\]-]{1,64}$")
+_FEATURE_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
+
+
+def _globs(v: Any) -> list[str]:
+    items = v if isinstance(v, list) else str(v or "").replace("\n", ",").split(",")
+    out: list[str] = []
+    for x in items:
+        s = str(x).strip()
+        if s and _GLOB_RE.match(s) and s not in out:
+            out.append(s)
+    return out[:50]
+
+
+def normalize(stored: Any) -> dict[str, Any]:
+    merged = {**DEFAULTS, **(stored if isinstance(stored, dict) else {})}
+    out: dict[str, Any] = {}
+    out["enabled"] = bool(merged.get("enabled"))
+    out["cross_node_check"] = bool(merged.get("cross_node_check"))
+    kinds = [k for k in (merged.get("include_kinds") or []) if k in KINDS] if isinstance(merged.get("include_kinds"), list) else []
+    out["include_kinds"] = kinds
+    out["include_names"] = _globs(merged.get("include_names"))
+    out["exclude_names"] = _globs(merged.get("exclude_names"))
+    for key, allowed in (("expected_bond_mode", BOND_MODES), ("expected_hash_policy", HASH_POLICIES),
+                         ("expected_lacp_rate", LACP_RATES)):
+        v = str(merged.get(key) or "").strip()
+        out[key] = v if v in allowed else DEFAULTS[key]
+    for key, (lo, hi) in _INT_LIMITS.items():
+        try:
+            v = int(merged.get(key))
+        except (TypeError, ValueError):
+            v = DEFAULTS[key]
+        out[key] = v if lo <= v <= hi else DEFAULTS[key]
+    exp = merged.get("offload_expect")
+    if isinstance(exp, list):  # 화면 형식 [{name, on}]
+        exp = {str(x.get("name")): bool(x.get("on")) for x in exp if isinstance(x, dict) and x.get("name")}
+    out["offload_expect"] = ({str(k): bool(v) for k, v in exp.items() if _FEATURE_RE.match(str(k))}
+                             if isinstance(exp, dict) else dict(DEFAULTS["offload_expect"]))
+    return out
+
+
+def agent_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    """에이전트 보고 응답의 ``nic`` — 수집 대상만."""
+    return {k: cfg[k] for k in ("enabled", "include_kinds", "include_names", "exclude_names")}
+
+
+def get_settings(db: Session) -> dict[str, Any]:
+    from app.models.app_setting import AppSetting
+
+    try:
+        row = db.query(AppSetting).filter(AppSetting.key == SETTINGS_KEY).first()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        return normalize(None)
+    return normalize(row.value if row else None)
+
+
+def set_settings(db: Session, patch: dict[str, Any]) -> dict[str, Any]:
+    from app.models.app_setting import AppSetting
+
+    row = db.query(AppSetting).filter(AppSetting.key == SETTINGS_KEY).first()
+    prev = row.value if row and isinstance(row.value, dict) else {}
+    merged = normalize({**prev, **{k: v for k, v in patch.items() if v is not None}})
+    if row:
+        row.value = merged
+    else:
+        db.add(AppSetting(key=SETTINGS_KEY, value=merged))
+    db.commit()
+    return get_settings(db)

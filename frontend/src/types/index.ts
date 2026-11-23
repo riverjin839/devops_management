@@ -6924,3 +6924,112 @@ export interface ServiceConfigApplySettings {
   kubeletService: string;
   kubeletRestartCmd: string;
 }
+
+// ── NIC 상태(서비스 구성 ▸ NIC, `/nic-watch`) ──
+export type NicLevel = 'ok' | 'info' | 'warning' | 'critical';
+export interface NicFinding {
+  level: Exclude<NicLevel, 'ok'>;
+  code: string;
+  node: string;
+  iface: string | null;
+  title: string;
+  detail: string;
+  hint: string;
+  /** 표에서 같은 판정을 함께 표시하는 하위 인터페이스. */
+  related: string[];
+}
+export interface NicSlaveState {
+  name?: string;
+  miiStatus: string | null;
+  speed: number | null;
+  duplex: string | null;
+  linkFailures: number | null;
+  aggregatorId: number | null;
+  partnerMac: string | null;
+  partnerKey: number | null;
+}
+export interface NicBond {
+  mode: string | null;
+  xmitHashPolicy: string | null;
+  lacpRate: string | null;
+  miimon: number | null;
+  updelay: number | null;
+  downdelay: number | null;
+  slaves: string[];
+  active: { aggregatorId?: number | null; ports?: number | null; partnerMac?: string | null; actorKey?: number | null; partnerKey?: number | null };
+  slaveState: NicSlaveState[];
+}
+export interface NicRates {
+  windowMinutes: number;
+  drops: number;
+  dropsPerMin: number;
+  dropCounter: string | null;
+  rxDropped: number;
+  crc: number;
+  flaps: number;
+  bondLinkFailures: number;
+}
+export interface NicInterfaceRow {
+  node: string;
+  name: string;
+  kind: 'physical' | 'bond' | 'vlan' | 'tunnel' | 'bridge' | 'virtual' | string;
+  operstate: string | null;
+  carrier: number | null;
+  speed: number | null;
+  duplex: string | null;
+  autoneg: boolean | null;
+  mtu: number | null;
+  master: string | null;
+  lowers: string[];
+  vlanId: number | null;
+  driver: { driver: string | null; version: string | null; firmware: string | null; bus: string | null } | null;
+  ring: { rx: number | null; rxMax: number | null; tx: number | null; txMax: number | null } | null;
+  bond: NicBond | null;
+  lacp: NicSlaveState | null;
+  offload: { name: string; label: string; on: boolean }[];
+  features: { name: string; label: string; on: boolean; fixed: boolean }[];
+  counters: { name: string; value: number }[];
+  rates: NicRates | null;
+  findings: NicFinding[];
+  level: NicLevel;
+}
+export interface NicNodeInfo {
+  node: string;
+  hostIp: string | null;
+  agentVersion: string | null;
+  collectedAt: string | null;
+  receivedAt: string | null;
+  stale: boolean;
+  interfaceCount: number;
+  rateReady: boolean;
+  level: NicLevel;
+}
+export interface NicWatchSettings {
+  enabled: boolean;
+  includeKinds: string[];
+  includeNames: string[];
+  excludeNames: string[];
+  expectedBondMode: string;
+  expectedHashPolicy: string;
+  expectedLacpRate: string;
+  minSpeedMbps: number;
+  crossNodeCheck: boolean;
+  rateWindowMinutes: number;
+  dropWarnPerMin: number;
+  crcWarnCount: number;
+  flapWarnCount: number;
+  offloadExpect: { name: string; on: boolean }[];
+  staleMinutes: number;
+}
+export interface NicWatchSettingsOut extends NicWatchSettings {
+  options: { kinds: string[]; bondModes: string[]; hashPolicies: string[]; lacpRates: string[]; features: { name: string; label: string }[] };
+}
+export interface NicClusterView {
+  nodes: NicNodeInfo[];
+  interfaces: NicInterfaceRow[];
+  findings: NicFinding[];
+  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel };
+  pendingAgents: { node: string; agentVersion: string | null; reason: string }[];
+  agentCount: number;
+  settings: NicWatchSettings;
+}

@@ -65,6 +65,7 @@ from app.routers.k8s_resources import router as k8s_resources_router
 from app.routers.k8s_allocation import router as k8s_allocation_router
 from app.routers.k8s_efficiency import router as k8s_efficiency_router
 from app.routers.service_config import router as service_config_router
+from app.routers.nic_watch import router as nic_watch_router
 from app.routers.node_param_watch import (
     ingest_router as node_param_ingest_router,
     router as node_param_watch_router,
@@ -108,6 +109,7 @@ __all__ = [
     "k8s_allocation_router",
     "k8s_efficiency_router",
     "node_param_watch_router",
+    "nic_watch_router",
     "node_param_ingest_router",
     "service_config_router",
     "ns_migration_router",

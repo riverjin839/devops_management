@@ -12,3 +12,5 @@ export { ApplySettingsDialog } from './ApplySettingsDialog';
 export { DriftBanner } from './DriftBanner';
 export { KeySignal } from './KeySignal';
 export { ServiceSummary } from './ServiceSummary';
+export { NicStatusView } from './NicStatusView';
+export { NicSettingsDialog } from './NicSettingsDialog';

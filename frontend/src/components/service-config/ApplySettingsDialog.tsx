@@ -1,4 +1,5 @@
 // 적용 설정(admin, 모든 클러스터 공통) — 환경마다 다른 경로·리소스 이름·확인 명령을 코드가 아니라 화면에서 고친다(UI-First).
+// 지금 보고 있는 서비스(`service`)의 구역만 보여준다 — 변경 감지는 서비스 공통이라 항상 함께 둔다.
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -22,7 +23,19 @@ function Field({ label, help, children }: { label: string; help?: string; childr
   );
 }
 
-export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean; isAdmin: boolean; onClose: () => void }) {
+const CONTROL_PLANE = new Set(['kube-apiserver', 'kube-controller-manager', 'kube-scheduler']);
+
+interface Props {
+  open: boolean;
+  isAdmin: boolean;
+  /** 지금 화면의 서비스 키 — 이 서비스의 적용 설정만 보여준다. */
+  service: string;
+  /** 서비스 표시 이름(제목용). */
+  serviceLabel: string;
+  onClose: () => void;
+}
+
+export function ApplySettingsDialog({ open, isAdmin, service, serviceLabel, onClose }: Props) {
   const toast = useToast();
   const q = useServiceConfigSettings(open);
   const save = useUpdateServiceConfigSettings();
@@ -51,15 +64,15 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
     <Dialog open={open} onOpenChange={(next) => { if (!next && !save.isPending) onClose(); }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>적용 설정</DialogTitle>
-          <DialogDescription>모든 클러스터 공통 · {isAdmin ? '관리자만 바꿀 수 있다' : '관리자만 바꿀 수 있습니다(읽기 전용)'}</DialogDescription>
+          <DialogTitle>{serviceLabel} 적용 설정</DialogTitle>
+          <DialogDescription>모든 클러스터 공통 · {isAdmin ? '관리자만 바꿀 수 있습니다' : '관리자만 바꿀 수 있습니다(읽기 전용)'}</DialogDescription>
         </DialogHeader>
         <div className="max-h-[64vh] overflow-y-auto space-y-3 px-5 pb-3">
           {!form ? <LoadingState /> : (
             <>
               {watch && (
                 <>
-                  <p className="text-xs font-semibold text-foreground">변경 감지</p>
+                  <p className="text-xs font-semibold text-foreground">변경 감지 <span className="font-normal text-muted-foreground">· 모든 서비스 공통</span></p>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" disabled={!isAdmin} checked={watch.enabled} onChange={(e) => setW({ enabled: e.target.checked })} />
                     주기 수집 켜기 — V1 이 있는 클러스터의 정적 파드·cilium-config 를 K8S API 로 읽는다(containerd·kubelet 은 노드 파라미터 에이전트가 보고)
@@ -90,12 +103,15 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
                     <input type="checkbox" disabled={!isAdmin} checked={watch.driftAlert} onChange={(e) => setW({ driftAlert: e.target.checked })} />
                     드리프트 알람 — 노드 값이 기준 버전과 다르면 열고, 맞아지면 닫는다
                   </label>
-                  <p className="pt-2 text-xs font-semibold text-foreground">적용</p>
+                  <p className="pt-2 text-xs font-semibold text-foreground">{serviceLabel} 적용</p>
                 </>
               )}
+              {service === 'linux' && (
               <Field label="LINUX 관리 sysctl 파일" help="PEP 가 통째로 쓰는 파일. /etc/sysctl.d/99-sysctl.conf 보다 뒤에 읽히는 이름이어야 부팅 때 덮이지 않는다.">
                 <input className={INPUT} disabled={!isAdmin} value={form.sysctlFile} onChange={(e) => set({ sysctlFile: e.target.value })} aria-label="관리 sysctl 파일" />
               </Field>
+              )}
+              {service === 'cilium' && (<>
               <div className="grid grid-cols-3 gap-2">
                 <Field label="CILIUM 네임스페이스"><input className={INPUT} disabled={!isAdmin} value={form.ciliumNamespace} onChange={(e) => set({ ciliumNamespace: e.target.value })} aria-label="cilium 네임스페이스" /></Field>
                 <Field label="ConfigMap"><input className={INPUT} disabled={!isAdmin} value={form.ciliumConfigmap} onChange={(e) => set({ ciliumConfigmap: e.target.value })} aria-label="cilium ConfigMap" /></Field>
@@ -105,7 +121,8 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
                 <input type="number" min={30} max={3600} className={INPUT} disabled={!isAdmin} value={form.rolloutTimeoutSec}
                   onChange={(e) => set({ rolloutTimeoutSec: Number(e.target.value) || 600 })} aria-label="롤아웃 제한 시간" />
               </Field>
-              <p className="pt-2 text-xs font-semibold text-foreground">ETCD</p>
+              </>)}
+              {service === 'etcd' && (<>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="실행 방식" help="auto = 노드에 매니페스트가 있으면 정적 파드, 없으면 systemd.">
                   <select className={INPUT} disabled={!isAdmin} value={form.etcdMode} onChange={(e) => set({ etcdMode: e.target.value as ServiceConfigApplySettings['etcdMode'] })} aria-label="etcd 실행 방식">
@@ -131,13 +148,23 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
                     onChange={(e) => set({ etcdHealthTimeoutSec: Number(e.target.value) || 180 })} aria-label="etcd health 대기 시간" />
                 </Field>
               </div>
-              <p className="pt-2 text-xs font-semibold text-foreground">컨트롤 플레인 정적 파드 (KUBE-APISERVER · CONTROLLER-MANAGER · SCHEDULER)</p>
-              <Field label="매니페스트 디렉터리" help="<디렉터리>/<서비스>.yaml 을 고친다. 백업은 위 ETCD 백업 디렉터리를 같이 쓴다.">
+              </>)}
+              {CONTROL_PLANE.has(service) && (<>
+              <Field label="매니페스트 디렉터리" help="<디렉터리>/<서비스>.yaml 을 고친다. 세 컨트롤 플레인 서비스가 같은 값을 쓴다.">
                 <input className={INPUT} disabled={!isAdmin} value={form.staticPodManifestDir} onChange={(e) => set({ staticPodManifestDir: e.target.value })} aria-label="정적 파드 매니페스트 디렉터리" />
               </Field>
+              <Field label="백업 디렉터리(정적 파드 공용)" help="ETCD 와 같은 값을 쓴다. 매니페스트 디렉터리 밖이어야 한다 — 안에 두면 kubelet 이 백업본을 정적 파드로 띄운다.">
+                <input className={INPUT} disabled={!isAdmin} value={form.etcdBackupDir} onChange={(e) => set({ etcdBackupDir: e.target.value })} aria-label="정적 파드 백업 디렉터리" />
+              </Field>
+              {service === 'kube-apiserver' && (
               <Field label="API 서버 health 명령"><input className={INPUT} disabled={!isAdmin} value={form.apiserverHealthCmd} onChange={(e) => set({ apiserverHealthCmd: e.target.value })} aria-label="API 서버 health 명령" /></Field>
+              )}
+              {service === 'kube-controller-manager' && (
               <Field label="컨트롤러 매니저 health 명령"><input className={INPUT} disabled={!isAdmin} value={form.controllerManagerHealthCmd} onChange={(e) => set({ controllerManagerHealthCmd: e.target.value })} aria-label="컨트롤러 매니저 health 명령" /></Field>
+              )}
+              {service === 'kube-scheduler' && (
               <Field label="스케줄러 health 명령"><input className={INPUT} disabled={!isAdmin} value={form.schedulerHealthCmd} onChange={(e) => set({ schedulerHealthCmd: e.target.value })} aria-label="스케줄러 health 명령" /></Field>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <Field label="정상 판정 문자열"><input className={INPUT} disabled={!isAdmin} value={form.controlPlaneHealthExpect} onChange={(e) => set({ controlPlaneHealthExpect: e.target.value })} aria-label="컨트롤 플레인 health 정상 문자열" /></Field>
                 <Field label="정상 기동 대기 기본값(초)">
@@ -145,13 +172,19 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
                     onChange={(e) => set({ controlPlaneHealthTimeoutSec: Number(e.target.value) || 300 })} aria-label="컨트롤 플레인 health 대기 시간" />
                 </Field>
               </div>
-              <p className="pt-2 text-xs font-semibold text-foreground">KUBELET</p>
+              </>)}
+              {service === 'kubelet' && (<>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="설정 파일"><input className={INPUT} disabled={!isAdmin} value={form.kubeletConfig} onChange={(e) => set({ kubeletConfig: e.target.value })} aria-label="kubelet 설정 파일" /></Field>
                 <Field label="systemd 유닛"><input className={INPUT} disabled={!isAdmin} value={form.kubeletService} onChange={(e) => set({ kubeletService: e.target.value })} aria-label="kubelet systemd 유닛" /></Field>
               </div>
               <Field label="재시작 명령"><input className={INPUT} disabled={!isAdmin} value={form.kubeletRestartCmd} onChange={(e) => set({ kubeletRestartCmd: e.target.value })} aria-label="kubelet 재시작 명령" /></Field>
-              <p className="pt-2 text-xs font-semibold text-foreground">CONTAINERD</p>
+              <Field label="노드 Ready 대기 기본값(초)" help="CONTAINERD 와 같은 값을 쓴다.">
+                <input type="number" min={30} max={1800} className={INPUT} disabled={!isAdmin} value={form.nodeReadyTimeoutSec}
+                  onChange={(e) => set({ nodeReadyTimeoutSec: Number(e.target.value) || 300 })} aria-label="노드 Ready 대기 시간" />
+              </Field>
+              </>)}
+              {service === 'containerd' && (<>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="설정 파일"><input className={INPUT} disabled={!isAdmin} value={form.containerdConfig} onChange={(e) => set({ containerdConfig: e.target.value })} aria-label="containerd 설정 파일" /></Field>
                 <Field label="systemd 유닛"><input className={INPUT} disabled={!isAdmin} value={form.containerdService} onChange={(e) => set({ containerdService: e.target.value })} aria-label="containerd systemd 유닛" /></Field>
@@ -163,6 +196,7 @@ export function ApplySettingsDialog({ open, isAdmin, onClose }: { open: boolean;
                     onChange={(e) => set({ nodeReadyTimeoutSec: Number(e.target.value) || 300 })} aria-label="노드 Ready 대기 시간" />
                 </Field>
               </div>
+              </>)}
             </>
           )}
         </div>
