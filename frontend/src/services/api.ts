@@ -2728,6 +2728,31 @@ export const nicWatchApi = {
     api.put<import('@/types').NicWatchSettingsOut>('/nic-watch/settings', body),
 };
 
+/** 공통 서비스(/common-services) — 인스턴스 등록·K8S 에서 가져오기·수집(SSE)·설정·변경·실행 이력·감시 설정. */
+export const commonServicesApi = {
+  catalog: () => api.get<{ services: import('@/types').CommonServiceDef[]; hostKinds: string[] }>('/common-services/catalog'),
+  status: () => api.get<import('@/types').CommonServiceStatusMap>('/common-services/status'),
+  instances: (serviceType?: string) =>
+    api.get<{ items: import('@/types').CommonServiceInstance[] }>('/common-services/instances',
+      { params: serviceType ? { service_type: serviceType } : {} }),
+  create: (body: import('@/types').CommonServiceInstanceInput) =>
+    api.post<import('@/types').CommonServiceInstance>('/common-services/instances', body),
+  update: (id: string, body: import('@/types').CommonServiceInstanceInput) =>
+    api.put<import('@/types').CommonServiceInstance>(`/common-services/instances/${id}`, body),
+  remove: (id: string) => api.delete<{ deleted: boolean }>(`/common-services/instances/${id}`),
+  discover: (body: { clusterId: string; namespace?: string | null; serviceType?: string | null }) =>
+    api.post<{ items: import('@/types').CommonServiceCandidate[] }>('/common-services/discover', body),
+  config: (id: string) => api.get<import('@/types').CommonServiceConfig>(`/common-services/instances/${id}/config`),
+  changes: (id: string) => api.get<{ items: import('@/types').CommonServiceChange[] }>(`/common-services/instances/${id}/changes`),
+  runs: (id: string) => api.get<{ items: import('@/types').CommonServiceRun[] }>(`/common-services/instances/${id}/runs`),
+  run: (id: string, runId: string) => api.get<import('@/types').CommonServiceRun>(`/common-services/instances/${id}/runs/${runId}`),
+  /** 지금 수집(collect) / 접속 테스트(test, 저장 없음) — SSE 실시간 로그. */
+  runStreamUrl: (id: string, kind: 'collect' | 'test') => `/api/v1/common-services/instances/${id}/run/stream?kind=${kind}`,
+  watchSettings: () => api.get<import('@/types').CommonServiceWatchSettings>('/common-services/watch-settings'),
+  updateWatchSettings: (body: Partial<import('@/types').CommonServiceWatchSettings>) =>
+    api.put<import('@/types').CommonServiceWatchSettings>('/common-services/watch-settings', body),
+};
+
 export const serviceConfigApi = {
   services: () => api.get<{ items: import('@/types').ServiceConfigServiceDef[] }>('/service-config/services'),
   /** 서비스별 수준·사유(레일 상태 점). 아래 status 는 한 서비스 전체. */

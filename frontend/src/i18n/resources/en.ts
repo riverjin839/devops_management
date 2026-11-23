@@ -21,6 +21,7 @@ export const en: TranslationResource = {
       dailyCheckReview: 'Check Results Review',
       dailyCheckSettings: 'Check Items',
       lakeServices: 'LAKE Services',
+      commonServices: 'Common Services',
       podBottleneck: 'Pod Bottleneck Diagnosis',
       docs: 'Knowledge Hub',
       playbooks: 'Playbooks',

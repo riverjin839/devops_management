@@ -44,6 +44,7 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/daily-check/review': { labelKey: 'dailyCheckReview', defaultLabel: '점검 결과 리뷰',  icon: ClipboardCheck },
   '/daily-check/settings':{ labelKey: 'dailyCheckSettings', defaultLabel: '점검 항목 관리',  icon: ListChecks },
   '/lake-services':      { labelKey: 'lakeServices', defaultLabel: 'LAKE 서비스',     icon: Droplets },
+  '/common-services':    { labelKey: 'commonServices', defaultLabel: '공통 서비스',     icon: Network },
   '/pod-bottleneck':     { labelKey: 'podBottleneck', defaultLabel: '파드 병목 진단',   icon: Hourglass },
   '/docs':               { labelKey: 'docs', defaultLabel: '지식 허브 홈',    icon: Library },
   '/playbooks':          { labelKey: 'playbooks', defaultLabel: '플레이북',        icon: BookOpen },
@@ -170,7 +171,7 @@ export const GROUPS: NavGroup[] = [
   { id: 'operate',   label: '운영 조작', labelKey: 'operate', descriptionKey: 'operate', icon: Terminal,    description: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
     paths: ['/ns-migration', '/bulk-exec', '/mc'] },
   { id: 'configure', label: '구성·자산', labelKey: 'configure', descriptionKey: 'configure', icon: Layers,      description: '클러스터 등록·자원·권한·노드 자산을 관리한다', domain: 'platform',
-    paths: ['/cluster-manage', '/node-specs', '/dc-inventory', '/links'] },
+    paths: ['/cluster-manage', '/common-services', '/node-specs', '/dc-inventory', '/links'] },
   { id: 'topology',  label: '토폴로지', labelKey: 'topology', descriptionKey: 'topology', icon: Map,     description: '인프라·서비스 구조를 지도로 본다', domain: 'platform',
     paths: ['/infra-topology', '/service-topology', '/service-architecture', '/architecture'] },
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로

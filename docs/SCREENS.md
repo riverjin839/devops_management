@@ -1085,6 +1085,29 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 공통 서비스 (`/common-services`)
+
+- **파일**: `frontend/src/pages/CommonServicesPage.tsx` (+ `components/common-services/{InstanceDialog,WatchSettingsDialog,InstanceViews,labels}`, 레일은 `components/service-config/ServiceConfigRail` 재사용)
+- **목적 / UX**: 여러 K8S 클러스터가 함께 쓰는 서비스(LDAP AD · KEYCLOAK · JENKINS · ARGOCD · NEXUS)를 인스턴스로 등록하고, **설정값을 가져와 보고(배포 수준 + 앱 설정), 바뀌면 감지(변경 이력·알람)하고, 수집 실행 로그를 남긴다.** 1단계는 읽기 전용 — 버전 관리·편집·적용은 없다. 서비스는 등록 클러스터 안 워크로드(**K8S 에서 가져오기**), 일반 노드의 Podman 컨테이너(SSH), 클러스터 밖 외부 시스템(AD 등)일 수 있다.
+- **UI 구성**: `PageShell density="hub"` + `PageHeader`(우측 **감시 설정**). 테두리 컨테이너 안 좌측 서비스 레일(상태 점 — 수집 실패 critical·일부 실패 warning) + 우측:
+  - 서비스 이름(ⓘ 설명) · 인스턴스 `SegTabs` · **+ 등록**(operator). 인스턴스가 없으면 `EmptyState`.
+  - 인스턴스 헤더: 상태 배지(정상은 중립색) · 호스팅 위치(K8S 클러스터·NS/워크로드 / Podman 호스트·컨테이너 / 외부) · 엔드포인트 · 사용 클러스터 배지 · 마지막 수집 · 마지막 오류. 버튼 **접속 테스트**(저장 없이 같은 단계 실행) · **지금 수집** · 편집 · 삭제(danger 확인) — 모두 `useCanOperate`(K8S 호스팅이면 그 클러스터 operate) 비활성 + 사유.
+  - 실행하면 그 자리에 `RunLogPanel`(SSE 실시간 log·step, **로그 보기 토글 `useLogPref('common-services-collect')`**), 끝나면 토스트 1회(변경 N건) + 화면 무효화.
+  - `SegTabs mode="tabs"` **설정**(검색 · 컴포넌트별 `MacCard` 표 키·값, 24시간 안 바뀐 키는 "N분 전 변경 · 전 → 후") / **변경 이력**(감지 시각·컴포넌트·키·전 → 후·경로(주기/수동)) / **수집 로그**(실행 목록 → 단계 배지 + 저장된 실행 로그 `LogViewer`).
+  - `InstanceDialog`: 이름·설명 → 호스팅 위치 `SegTabs`(서비스가 지원하는 것만) → K8S: 클러스터·NS·워크로드 종류·이름 + **K8S 에서 가져오기**(카탈로그 이미지·이름 패턴으로 후보 워크로드 + 같은 셀렉터 Service 주소) / Podman: SSH 호스트·포트·컨테이너 → 엔드포인트·TLS 검증 → 서비스별 설정(카탈로그 `param_fields`, label·ⓘ help) → 접속 정보(목적별 fieldset, 쓰기 전용 — "저장됨, 비우면 유지", 삭제 토글) → 사용 클러스터 칩 → 주기 수집 토글.
+  - `WatchSettingsDialog`(admin 편집, 그 외 읽기): 주기 수집 켜기·주기(분)·설정 변경 알람·수집 실패 알람(연속 N회, 복구 시 닫힘)·심각도.
+  - URL `?service=&instance=&tab=config|changes|runs`.
+- **Frontend**: `hooks/useCommonServices.ts`(`useCommonServiceCatalog`·`useCommonServiceStatus`·`useCommonServiceInstances`·`useCommonServiceConfig`·`useCommonServiceChanges`·`useCommonServiceRuns`·`useCommonServiceRun`·`useSaveCommonService`·`useDeleteCommonService`·`useDiscoverCommonServices`·watch-settings 훅 — 60초 다시 읽기), api.ts `commonServicesApi`, SSE 는 `streamLogged` + `commonServicesApi.runStreamUrl`. `params` 는 `[{key, value}]` 목록으로 주고받는다(응답 camelCase 변환이 `auth_realm` 같은 키를 바꾸지 않게).
+- **Backend**: 라우터 `backend/app/routers/common_services.py`(`/api/v1/common-services`, `_auth`, feature `/common-services`):
+  - `GET /catalog` · `GET /status` · `GET|POST /instances` · `GET|PUT|DELETE /instances/{id}`(쓰기 operator + 호스팅 클러스터 operate, 감사 `common_service.create|update|delete` — 자격증명은 변경 여부만) · `POST /discover`(operator + 클러스터 read).
+  - `POST /instances/{id}/run/stream?kind=collect|test`(operator, SSE — 첫 이벤트 `{type:"run", run_id}`, 같은 인스턴스 실행 중이면 409, 감사 `common_service.collect|test`) · `GET /instances/{id}/config|changes|runs|runs/{run_id}` · `GET|PUT /watch-settings`(PUT admin, AppSetting `common_services.watch`).
+  - 숨김 클러스터(`hidden_cluster_ids`)에 호스팅된 인스턴스는 목록·조회에서 빠진다.
+  - 서비스 `services/common_services/`: `catalog`(서비스·호스팅·param/자격증명 필드 — UI-First) · `flatten`(평탄화 — 이름 있는 객체 목록은 이름 경로, 비밀처럼 보이는 키는 `(숨김 · 해시)`로 값 대신 저장해 변경만 감지, 해시·diff, 순수 함수) · `collectors`(배포: K8S 워크로드 spec·env(Secret 참조는 이름만)·마운트 ConfigMap / Podman `podman inspect`. 앱: Keycloak Admin API realm·클라이언트·IdP / Jenkins `/api/json`·플러그인·JCasC ConfigMap / ArgoCD `argocd-cm`류 ConfigMap + 토큰 있으면 클러스터·저장소 / Nexus 저장소·blob store·보안 realm·익명 + Podman 이면 `nexus.properties` / LDAP AD rootDSE·도메인 정책 속성(`ldap3` 읽기 전용 바인드) — 단계 실패는 다음 단계로(fail-safe)) · `service`(CRUD·실행 로그 `RunLog`(단계마다 커밋 + SSE)·스냅샷(해시가 바뀔 때만)·변경 이력·알람(`CommonServiceConfigChanged`, `CommonServiceUnreachable` — 세이브포인트로 격리)·주기 판정·후보 찾기).
+  - 모델 `models/common_service.py`: `CommonServiceInstance` · `CommonServiceCredential`(`secret` EncryptedText, 백업 기본 마스킹) · `CommonServiceLink` · `CommonServiceSnapshot`(로그성 400일) · `CommonServiceChange`(400일) · `CommonServiceRun`(365일).
+  - Celery Beat `common-services-watch-dispatcher`(매분) → `collect_common_service_one`(주기가 지난 `watch_enabled` 인스턴스).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### LAKE 서비스 (`/lake-services`)
 
 > **2026-10-14 (D-128)**: 목록 카드·상세의 "지금 점검" 이 실행 로그(상태·응답 ms·메시지·details 키·점검 시각, 비활성 409 는 경고)를 띄운다 — 공용 `components/lake-services/runLakeCheckLogged.ts`.
