@@ -75,15 +75,15 @@ def test_current_rows_survive_repeated_boots_unchanged(db, cleanup):
     from app.services.user_settings import set_user_setting
 
     u = _user(db, cleanup, "custom")
-    mine = ["/k9s", "/tasks-mgmt", "/wbs", "favorites"]
-    set_user_setting(db, u.id, "home_prefs", {"installed_apps": mine, "pinned_paths": ["/k9s"]})
+    mine = ["/bulk-exec", "/tasks-mgmt", "/wbs", "favorites"]
+    set_user_setting(db, u.id, "home_prefs", {"installed_apps": mine, "pinned_paths": ["/bulk-exec"]})
 
     for _ in range(3):
         _migrate_home_prefs_layout()
 
     value = _prefs(db, u.id)
     assert value["installed_apps"] == mine  # 상단바 항목(/wbs, favorites)도 지워지지 않는다
-    assert value["pinned_paths"] == ["/k9s"]
+    assert value["pinned_paths"] == ["/bulk-exec"]
     assert value["layout_version"] == HOME_PREFS_LAYOUT_VERSION
 
 
@@ -130,7 +130,7 @@ def test_pre_v1_row_without_key_gets_legacy_full_sidebar(db, cleanup):
 
     value = _prefs(db, u.id)
     assert value["default_home_tab"] == "work"
-    assert "/k9s" in value["installed_apps"] and "/settings" in value["installed_apps"]
+    assert "/bulk-exec" in value["installed_apps"] and "/settings" in value["installed_apps"]
     assert "back" in value["installed_apps"] and "/tasks-mgmt" in value["installed_apps"]
 
 
@@ -166,7 +166,7 @@ def test_put_on_unversioned_row_does_not_stamp_latest(db, cleanup):
 def test_put_on_new_row_stamps_latest(db, cleanup):
     u = _user(db, cleanup, "put-new")
 
-    res = home_prefs_router.update_home_prefs(HomePrefsUpdate(installed_apps=["/k9s"]), db=db, user=u)
+    res = home_prefs_router.update_home_prefs(HomePrefsUpdate(installed_apps=["/bulk-exec"]), db=db, user=u)
 
     assert res.layout_version == HOME_PREFS_LAYOUT_VERSION
     assert _prefs(db, u.id)["layout_version"] == HOME_PREFS_LAYOUT_VERSION

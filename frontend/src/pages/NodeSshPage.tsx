@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   TerminalSquare, Key, Play, ShieldAlert, ExternalLink, Search, Loader2,
   CheckCircle, XCircle, Wifi, Clock, Plug, RotateCw,
 } from 'lucide-react';
+import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { useClusters } from '@/hooks/useCluster';
 import {
   ClusterSidebar, ConfirmDialog, ErrorState, PageShell, SelectClusterEmptyState, EmptyState, LoadingState,
@@ -44,10 +44,10 @@ const HANDOFF_FAILED_MSG = '새 창에 접속 정보를 전달하지 못했습�
  * 보호 레벨(운영레벨 `guarded`) 클러스터는 연결 전에 대상·계정을 한 번 더 확인한다(정책 4).
  */
 export function NodeSshPage() {
-  const { clusterId = '' } = useParams<{ clusterId: string }>();
-  const navigate = useNavigate();
   const clustersQ = useClusters();
   const clusters = useMemo(() => clustersQ.data ?? [], [clustersQ.data]);
+  // K8s 허브 콘솔 ▸ 노드 SSH(`/k8s/:clusterId/node-ssh`, D-243)로 마운트된다 — 허브 안에서는 허브가 고른 클러스터.
+  const { clusterId, selectCluster } = useClusterRouteParam('/node-ssh', clusters);
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
   const { canOperate, hint, withHint, ariaWithHint } = useCanOperate(clusterId || null);
@@ -55,13 +55,6 @@ export function NodeSshPage() {
   const cluster = useMemo(() => clusters.find((c) => c.id === clusterId), [clusters, clusterId]);
   const guarded = isGuardedLevel(levels, cluster?.operationLevel);
   const levelText = levelLabel(levels, cluster?.operationLevel) || '미지정';
-
-  // clusterId 없으면 첫 클러스터로 이동
-  useEffect(() => {
-    if (!clusterId && clusters.length > 0) {
-      navigate(`/node-ssh/${clusters[0].id}`, { replace: true });
-    }
-  }, [clusterId, clusters, navigate]);
 
   // 선택한 클러스터의 운영등급에 따라 터미널 Appearance 활성 프로파일(개발/운영)을 결정.
   useTerminalEnvSync(clusters, clusterId || null);
@@ -197,7 +190,7 @@ export function NodeSshPage() {
   };
 
   const changeCluster = (id: string | null) => {
-    navigate(`/node-ssh/${id ?? ''}`);
+    selectCluster(id);
     setSession(null);
     setTermStatus(null);
   };

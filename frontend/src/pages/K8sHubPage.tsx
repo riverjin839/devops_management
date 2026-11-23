@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Lock, ShipWheel } from 'lucide-react';
-import { PageHeader, PageShell, EmptyState, LoadingState, SelectClusterEmptyState, StatusBadge, statusToVariant } from '@/components/common';
-import { ClusterSidebar } from '@/components/common/ClusterSidebar';
-import { HubTabs, HUB_VIEWS, DEFAULT_HUB_VIEW, findHubView, hubViewAllowed } from '@/components/k8s-hub';
+import { PageHeader, PageShell, EmptyState, ErrorState, LoadingState, SelectClusterEmptyState, StatusBadge, statusToVariant } from '@/components/common';
+import { HubTabs, HubClusterSwitcher, HUB_VIEWS, DEFAULT_HUB_VIEW, findHubView, hubViewAllowed } from '@/components/k8s-hub';
 import { useClusters } from '@/hooks/useCluster';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { K8sHubContext, type K8sHubEmbed } from '@/lib/k8sHub';
 
 /**
  * K8s 클러스터 허브 — `/k8s/:clusterId/:view?`.
+ *
+ * 클러스터 선택은 사이드바 레일 "K8s 클러스터" flyout 과 헤더 「클러스터 전환」(`HubClusterSwitcher`)이 맡는다 —
+ * 2026-11-23(D-243)에 허브 안의 클러스터 레일(`ClusterSidebar`)을 없앴다(같은 목록이 두 군데 보이던 중복).
  *
  * 흩어져 있던 per-cluster K8s 화면(클러스터 상세·K8s 상세 관리·자원 관리·추이·관측 지표·이벤트·
  * 파드 로그·AI 장애 분석·점검 결과 리뷰)을 **클러스터 레일 하나 + 카테고리 탭**으로 모은다.
@@ -48,6 +50,10 @@ export function K8sHubPage() {
 
   const embed = useMemo<K8sHubEmbed>(() => ({ clusterId, selectCluster }), [clusterId, selectCluster]);
 
+  // 옛 "터미널" 실행 카드 뷰(D-243 에서 k9s·노드 SSH 뷰로 대체) → k9s.
+  if (clusterId && viewId === 'terminals') {
+    return <Navigate to={`/k8s/${clusterId}/k9s${location.search}`} replace />;
+  }
   // 모르는 뷰 → 개요로.
   if (clusterId && !view) {
     return <Navigate to={`/k8s/${clusterId}/${DEFAULT_HUB_VIEW}`} replace />;
@@ -59,29 +65,25 @@ export function K8sHubPage() {
 
   return (
     <div className="app-min-h-screen bg-background">
-      <PageShell density="console" className="flex gap-3">
-        <ClusterSidebar
-          clusters={clusters}
-          selectedId={clusterId || null}
-          onSelect={selectCluster}
-          isLoading={isLoading}
-          error={isError ? error : undefined}
-          onRetry={() => { void refetch(); }}
-          iconOnly
-        />
-
+      <PageShell density="console">
         <div className="flex-1 min-w-0 space-y-3">
           <PageHeader
             icon={ShipWheel}
             title={cluster ? cluster.name : getLabel('/k8s')}
-            titleExtra={cluster ? <StatusBadge variant={statusToVariant(cluster.status)} size="sm" /> : undefined}
+            titleExtra={
+              <span className="inline-flex items-center gap-2">
+                {cluster && <StatusBadge variant={statusToVariant(cluster.status)} size="sm" />}
+                {clusters.length > 0 && <HubClusterSwitcher />}
+              </span>
+            }
             description={cluster ? `${getLabel('/k8s')} · ${activeView.label}` : undefined}
           />
 
           {clusterId && <HubTabs clusterId={clusterId} views={allowedViews} active={activeView} />}
 
           {!clusterId ? (
-            isLoading ? <LoadingState /> : <SelectClusterEmptyState description="등록된 클러스터가 없습니다. 클러스터 관리에서 먼저 등록해 주세요." />
+            isError ? <ErrorState error={error} onRetry={() => { void refetch(); }} />
+            : isLoading ? <LoadingState /> : <SelectClusterEmptyState description="등록된 클러스터가 없습니다. 클러스터 관리에서 먼저 등록해 주세요." />
           ) : !activeAllowed ? (
             <EmptyState
               icon={Lock}

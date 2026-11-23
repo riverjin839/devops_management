@@ -29,7 +29,7 @@ interface FlyoutProps {
   returnFocusTo?: HTMLElement | null;
 }
 
-const MENU_ITEM_SELECTOR = '[role="menuitem"]:not([disabled]),[role="menuitemradio"]:not([disabled])';
+const MENU_ITEM_SELECTOR = '[role="menuitem"]:not([disabled]),[role="menuitemradio"]:not([disabled]),[role="menuitemcheckbox"]:not([disabled])';
 
 export function FlyoutShell({
   title, anchorRect, placement = 'right', children, onClose, onMouseEnter, onMouseLeave,

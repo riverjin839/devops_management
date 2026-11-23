@@ -73,19 +73,19 @@ def test_get_without_prior_save_returns_defaults(db, me, cleanup):
 def test_put_then_get_roundtrips(db, me, cleanup):
     cleanup.append(me.id)
     home_prefs_router.update_home_prefs(
-        payload=HomePrefsUpdate(default_home_tab="platform", pinned_paths=["/k9s", "/tasks-mgmt"]),
+        payload=HomePrefsUpdate(default_home_tab="platform", pinned_paths=["/bulk-exec", "/tasks-mgmt"]),
         db=db, user=me,
     )
     prefs = home_prefs_router.get_home_prefs(db=db, user=me)
     assert prefs.default_home_tab == "platform"
-    assert prefs.pinned_paths == ["/k9s", "/tasks-mgmt"]
+    assert prefs.pinned_paths == ["/bulk-exec", "/tasks-mgmt"]
 
 
 def test_put_is_partial_and_preserves_unset_fields(db, me, cleanup):
     cleanup.append(me.id)
     home_prefs_router.update_home_prefs(
         # 허브에 흡수되지 않는 경로를 쓴다 — `/etcdctl` 같은 흡수 경로는 읽을 때 `/k8s` 로 접힌다(D-240, 별도 테스트).
-        payload=HomePrefsUpdate(default_home_tab="work", pinned_paths=["/k9s"]),
+        payload=HomePrefsUpdate(default_home_tab="work", pinned_paths=["/bulk-exec"]),
         db=db, user=me,
     )
     # pinned_paths 를 보내지 않은 업데이트 — default_home_tab 만 바뀌고 기존 pinned_paths 는 유지.
@@ -94,13 +94,13 @@ def test_put_is_partial_and_preserves_unset_fields(db, me, cleanup):
         db=db, user=me,
     )
     assert updated.default_home_tab == "platform"
-    assert updated.pinned_paths == ["/k9s"]
+    assert updated.pinned_paths == ["/bulk-exec"]
 
 
 def test_locale_partial_update_preserves_other_fields(db, me, cleanup):
     cleanup.append(me.id)
     home_prefs_router.update_home_prefs(
-        payload=HomePrefsUpdate(default_home_tab="platform", pinned_paths=["/k9s"]),
+        payload=HomePrefsUpdate(default_home_tab="platform", pinned_paths=["/bulk-exec"]),
         db=db, user=me,
     )
     updated = home_prefs_router.update_home_prefs(
@@ -109,7 +109,7 @@ def test_locale_partial_update_preserves_other_fields(db, me, cleanup):
     )
     assert updated.locale == "en"
     assert updated.default_home_tab == "platform"
-    assert updated.pinned_paths == ["/k9s"]
+    assert updated.pinned_paths == ["/bulk-exec"]
 
 
 def test_installed_apps_partial_update_preserves_other_fields(db, me, cleanup):
@@ -140,7 +140,7 @@ def test_prefs_are_isolated_per_user(db, me, other, cleanup):
     cleanup.append(me.id)
     cleanup.append(other.id)
     home_prefs_router.update_home_prefs(
-        payload=HomePrefsUpdate(default_home_tab="platform", pinned_paths=["/k9s"]),
+        payload=HomePrefsUpdate(default_home_tab="platform", pinned_paths=["/bulk-exec"]),
         db=db, user=me,
     )
     other_prefs = home_prefs_router.get_home_prefs(db=db, user=other)
@@ -175,17 +175,17 @@ def test_new_account_follows_org_default_until_it_customizes(db, me, cleanup, or
     assert prefs.installed_apps == ["/tasks-mgmt"]
 
     # admin 이 조직 기본값을 바꾸면 개인화 안 한 계정에 즉시 반영된다.
-    set_default_installed_apps(db, ["/tasks-mgmt", "/k9s"])
-    assert home_prefs_router.get_home_prefs(db=db, user=me).installed_apps == ["/tasks-mgmt", "/k9s"]
+    set_default_installed_apps(db, ["/tasks-mgmt", "/bulk-exec"])
+    assert home_prefs_router.get_home_prefs(db=db, user=me).installed_apps == ["/tasks-mgmt", "/bulk-exec"]
 
 
 def test_delta_ops_customize_from_effective_list(db, me, cleanup, org_defaults):
     from app.services.home_prefs import set_default_installed_apps
 
     cleanup.append(me.id)
-    set_default_installed_apps(db, ["/tasks-mgmt", "/k9s"])
+    set_default_installed_apps(db, ["/tasks-mgmt", "/bulk-exec"])
     updated = home_prefs_router.update_home_prefs(
-        payload=HomePrefsUpdate(installed_apps_add=["/wbs"], installed_apps_remove=["/k9s"]), db=db, user=me,
+        payload=HomePrefsUpdate(installed_apps_add=["/wbs"], installed_apps_remove=["/bulk-exec"]), db=db, user=me,
     )
     assert updated.installed_apps == ["/tasks-mgmt", "/wbs"]
     assert updated.installed_apps_customized is True
@@ -206,7 +206,7 @@ def test_concurrent_style_deltas_do_not_overwrite_each_other(db, me, cleanup, or
 
 def test_reset_returns_to_org_default(db, me, cleanup, org_defaults):
     cleanup.append(me.id)
-    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps=["/k9s"], locale="en"), db=db, user=me)
+    home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps=["/bulk-exec"], locale="en"), db=db, user=me)
     updated = home_prefs_router.update_home_prefs(
         payload=HomePrefsUpdate(installed_apps_reset=True), db=db, user=me,
     )
@@ -224,17 +224,17 @@ def test_org_default_update_is_admin_audited(db, cleanup, org_defaults):
     admin = User(id=f"u-admin-{uuid.uuid4().hex[:8]}", username=f"admin-{uuid.uuid4().hex[:8]}", role="admin")
     cleanup.append(admin.id)
     res = ui_settings.update_home_prefs_defaults(
-        payload=HomePrefsDefaults(installed_apps=["/tasks-mgmt", "/k9s", "/k9s"]),
+        payload=HomePrefsDefaults(installed_apps=["/tasks-mgmt", "/bulk-exec", "/bulk-exec"]),
         request=None, db=db, actor=admin,
     )
-    assert res.installed_apps == ["/tasks-mgmt", "/k9s"]
-    assert ui_settings.get_home_prefs_defaults(db=db, _=admin).installed_apps == ["/tasks-mgmt", "/k9s"]
+    assert res.installed_apps == ["/tasks-mgmt", "/bulk-exec"]
+    assert ui_settings.get_home_prefs_defaults(db=db, _=admin).installed_apps == ["/tasks-mgmt", "/bulk-exec"]
     log = (
         db.query(AuditLog)
         .filter(AuditLog.action == "settings.home_prefs_defaults.update", AuditLog.actor_username == admin.username)
         .first()
     )
-    assert log is not None and log.details["added"] == ["/k9s"]
+    assert log is not None and log.details["added"] == ["/bulk-exec"]
     db.query(AuditLog).filter(AuditLog.actor_username == admin.username).delete(synchronize_session=False)
     db.commit()
 
@@ -249,7 +249,7 @@ def test_deleting_user_removes_their_settings(db, cleanup):
     cleanup.extend([admin.id, victim.id])
     db.add_all([admin, victim])
     db.commit()
-    set_user_setting(db, victim.id, "home_prefs", {"installed_apps": ["/k9s"]})
+    set_user_setting(db, victim.id, "home_prefs", {"installed_apps": ["/bulk-exec"]})
 
     auth.delete_user(user_id=victim.id, request=None, db=db, actor=admin)
 
@@ -297,7 +297,7 @@ def test_export_then_import_moves_settings_to_another_account(db, cleanup):
 
     src = _user_row(db, cleanup, "exp-src")
     dst = _user_row(db, cleanup, "exp-dst")
-    set_user_setting(db, src.id, "home_prefs", {"installed_apps": ["/k9s"], "pinned_paths": ["/wbs"], "layout_version": 3})
+    set_user_setting(db, src.id, "home_prefs", {"installed_apps": ["/bulk-exec"], "pinned_paths": ["/wbs"], "layout_version": 3})
     set_user_setting(db, src.id, "mc_presets", {"presets": [{"alias": "x", "password": "secret"}]})
 
     doc = home_prefs_router.export_personal_settings(db=db, user=src)["document"]
@@ -311,7 +311,7 @@ def test_export_then_import_moves_settings_to_another_account(db, cleanup):
     )
     assert "home_prefs" in result["applied"]
     value = get_user_setting(db, dst.id, "home_prefs", None)
-    assert value["installed_apps"] == ["/k9s"] and value["pinned_paths"] == ["/wbs"]
+    assert value["installed_apps"] == ["/bulk-exec"] and value["pinned_paths"] == ["/wbs"]
 
 
 def test_import_ignores_unknown_keys_and_rejects_foreign_format(db, cleanup):
@@ -323,7 +323,7 @@ def test_import_ignores_unknown_keys_and_rejects_foreign_format(db, cleanup):
 
     u = _user_row(db, cleanup, "imp")
     doc = json.dumps({"format": "pep-personal-settings", "version": 1, "server": {
-        "mc_presets": {"presets": []}, "home_prefs": {"pinned_paths": ["/k9s"]},
+        "mc_presets": {"presets": []}, "home_prefs": {"pinned_paths": ["/bulk-exec"]},
     }})
     result = home_prefs_router.import_personal_settings(
         payload=home_prefs_router.SettingsImportRequest(document=doc), request=None, db=db, user=u,
@@ -369,9 +369,9 @@ def test_corrupt_stored_theme_does_not_break_read(db, me, cleanup):
     from app.services.user_settings import set_user_setting
 
     cleanup.append(me.id)
-    set_user_setting(db, me.id, "home_prefs", {"theme": "BAD THEME!", "accent": "pink", "pinned_paths": ["/k9s"]})
+    set_user_setting(db, me.id, "home_prefs", {"theme": "BAD THEME!", "accent": "pink", "pinned_paths": ["/bulk-exec"]})
     prefs = home_prefs_router.get_home_prefs(db=db, user=me)
-    assert prefs.theme is None and prefs.accent is None and prefs.pinned_paths == ["/k9s"]
+    assert prefs.theme is None and prefs.accent is None and prefs.pinned_paths == ["/bulk-exec"]
 
 
 def test_retired_cluster_overview_path_is_aliased_on_read():
@@ -379,11 +379,11 @@ def test_retired_cluster_overview_path_is_aliased_on_read():
     from app.services.home_prefs import _clean_ids, load_prefs
 
     prefs = load_prefs({
-        "installed_apps": ["/cluster-overview", "/k9s", "/clusters"],
+        "installed_apps": ["/cluster-overview", "/bulk-exec", "/clusters"],
         "pinned_paths": ["/cluster-overview"],
         "layout_version": 3,
     })
-    assert prefs.installed_apps == ["/k8s", "/k9s"]
+    assert prefs.installed_apps == ["/k8s", "/bulk-exec"]
     assert prefs.pinned_paths == ["/k8s"]
     assert _clean_ids(["/tasks-mgmt", "/cluster-overview"]) == ["/tasks-mgmt", "/k8s"]
     # 조직 기본값을 따르는(None) 행은 그대로 None 이다.
@@ -391,14 +391,15 @@ def test_retired_cluster_overview_path_is_aliased_on_read():
 
 
 def test_hub_absorbed_paths_fold_into_k8s_hub():
-    """K8s 클러스터 허브(D-240)에 흡수된 옛 화면은 레일·즐겨찾기에서 `/k8s` 하나로 접히고, 단독 화면은 그대로다."""
+    """K8s 클러스터 허브(D-240)에 흡수된 옛 화면은 레일·즐겨찾기에서 `/k8s` 하나로 접히고, 허브 밖 화면은 그대로다.
+    노드 라벨·k9s·노드 SSH 도 D-243 부터 허브 뷰라 접힌다."""
     from app.services.home_prefs import _clean_ids, load_prefs
 
     prefs = load_prefs({
-        "installed_apps": ["/k8s-manage", "/k8s-allocation", "/tasks-mgmt", "/etcdctl", "/node-labels", "/k9s", "/node-ssh"],
+        "installed_apps": ["/k8s-manage", "/k8s-allocation", "/tasks-mgmt", "/etcdctl", "/node-labels", "/k9s", "/node-ssh", "/bulk-exec"],
         "pinned_paths": ["/pod-bottleneck", "/ops-checks", "/observability"],
         "layout_version": 3,
     })
-    assert prefs.installed_apps == ["/k8s", "/tasks-mgmt", "/node-labels", "/k9s", "/node-ssh"]
+    assert prefs.installed_apps == ["/k8s", "/tasks-mgmt", "/bulk-exec"]
     assert prefs.pinned_paths == ["/k8s"]
     assert _clean_ids(["/k8s", "/versions", "/cilium-trace"]) == ["/k8s"]

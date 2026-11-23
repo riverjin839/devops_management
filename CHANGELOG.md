@@ -8,7 +8,22 @@
 
 ## [Unreleased]
 
-1.102.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.104.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.104.0] - 2026-11-23
+
+### Changed
+- **K8S 클러스터 허브 — 클러스터 목록 중복 정리 · k9s·노드 SSH·노드 라벨 흡수**: 사이드바 K8S 클러스터 아이콘의 클러스터 목록과 허브 안 클러스터 레일이 동시에 보이던 것을 정리했다. 허브 레일을 없애고 클러스터 이름 옆 **「클러스터 전환」**으로 같은 목록을 연다. 목록 상단에 「비정상 N개만 보기」 토글이 생겼다. 콘솔 탭의 "터미널" 실행 카드는 **k9s**·**노드 SSH** 탭이 돼 허브 안에서 바로 접속하고, 노드 라벨은 툴바의 「이 클러스터 / 전체 클러스터」로 전체 클러스터를 한 표로 본다. 옛 `/k9s`·`/node-ssh`·`/node-labels` 주소는 허브 탭으로 연결되고 메뉴·즐겨찾기에서는 K8S 클러스터 하나로 합쳐진다(터미널 새 창은 그대로). Frontend: `HubClusterSwitcher`, `K8sClusterFlyoutBody` 비정상 필터, `HubTerminalsView` 삭제. Backend: `home_prefs.RETIRED_PATH_ALIASES` 에 세 경로 추가.
+
+## [1.103.1] - 2026-11-23
+
+### Changed
+- **로그 중심 화면은 실행 로그를 화면 안에 유지** — `/etcdctl`·`/bulk-exec`·`/mc`·`/cilium-trace`·`/kernel-params`·`/isilon-nfs` 처럼 로그가 화면 중심인 실행 화면(`RunLogPanel fill`)은 "실행 로그 표시" 설정이 새 창이어도 화면 안에 그대로 표시한다(이 화면들에선 창 전환 버튼도 숨김). 필요하면 로그 툴바의 "새 창으로 열기" 로 따로 띄울 수 있다.
+
+## [1.103.0] - 2026-11-23
+
+### Added
+- **실행 로그 새 창 표시(기본값)** — 모든 화면의 "로그 보기" 실행 로그가 화면 안이 아니라 브라우저 우측 상단의 별도 창(팝업)에 뜨고 실시간으로 따라간다. Settings → 화면 UI 설정 → **실행 로그 표시**(새 창/화면 안) 또는 각 로그 패널 헤더의 창 전환 버튼으로 바꿀 수 있고, 팝업이 차단되면 화면 안 표시로 자동 폴백한다. 창을 닫으면 다음 실행 때 다시 열린다. `LogViewer` 툴바에도 "새 창으로 열기" 버튼을 추가했다. Frontend: `PopoutWindow`(portal + 스타일·테마 동기화), `stores/logWindowStore`, `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 적용.
 
 ### Added
 - **서비스 구성 ▸ NIC 설정 버전·드리프트 + SSH 현재 값 수집**: NIC 가 서비스 구성의 9번째 서비스가 됐다(탭: 설정·상태·요약). 본딩 하위 인터페이스의 ring buffer·채널 수·offload 6개와 본딩 해시 정책·LACP rate·링크 감시를 다른 서비스처럼 설정 버전으로 관리하고(V1 가져오기·비교·되돌리기·노드 그룹 재정의), 노드 값이 기준 버전과 다르면 드리프트 배너·알람, 값이 바뀌면 변경 이력·알람이 남는다. ring·채널은 숫자 또는 `max`(인터페이스별 최대값)로 적을 수 있고 노드 값은 `현재/최대` 로 보인다. 에이전트 없이도 쓰도록 **SSH 로 수집**(조회 명령만, 동시 20대, 실시간 실행 로그)을 추가했고, 에이전트가 있으면 1분마다 같은 경로로 들어온다. 상태 탭의 판정 기준(해시 정책·LACP rate·offload)은 설정 버전이 있으면 버전 값을 따른다. 노드 적용은 다음 단계. Backend: `services/nic_watch/{snapshot,ssh_collect}.py`, `POST /clusters/{id}/collect-nic(/stream)`, `current.same_value`, `node_nic_states.source`, 에이전트 1.3.0(채널 수). Frontend: `NicCollectModal`, NIC 탭 구성, `int_or_max` 입력.
