@@ -8,7 +8,13 @@
 
 ## [Unreleased]
 
-1.106.2 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.106.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.106.3] - 2026-11-24
+
+### Fixed
+- **사이드바 K8s 클러스터 목록 — 보던 화면 상태 유지** — 허브 화면(예: 서비스 `?service=`)에서 사이드바 목록으로 클러스터를 바꾸면 주소의 쿼리가 빠져 보던 선택이 풀리던 문제를 고쳤다. 허브의 클러스터 선택기처럼 쿼리를 그대로 넘긴다. Frontend: `components/layout/K8sClusterFlyoutBody.tsx`.
+- **실행 로그 — 실제로 나간 명령부터 표시(관리자 전용)**: 모든 "로그 보기"(실행 로그 패널)에서 관리자는 그 실행이 노드·클러스터에 실제로 날린 명령을 `CMD $ [ssh root@10.0.0.1:22] sysctl -e …` 줄로 먼저 본다(SSH·SFTP·kubectl/helm/ansible-playbook 등 로컬 프로세스·파드 exec). 비밀번호·토큰·Authorization·URL 자격증명은 가리고, kubeconfig 경로는 `<kubeconfig>`, heredoc 파일 내용은 앞 몇 줄만 남긴다. 실행 로그 헤더의 「명령」 토글로 숨길 수 있다(전 화면 공통, 관리자에게만 보임). 비관리자에게는 서버가 명령 줄을 보내지 않는다. Backend: `services/command_trace.py`(명령 길목 기록 — `ssh_runner`·`isilon_service`·`kubectl_exec`·`etcd_checker` + `subprocess.Popen` 감사 훅, `CommandTraceMiddleware` → 단건 응답 헤더 `X-PEP-Commands`, SSE `log{level:"cmd"}`, 이벤트 루프 기본 executor 가 contextvars 를 넘기게), DB 실행 로그(서비스 구성 적용·공통 서비스·플레이북·점검 매트릭스 수행)에 `cmd` 줄 저장 + 조회 시 비관리자 제외. Frontend: `lib/commandTrace.ts`(axios 인터셉터 → 진행 중 실행 로그), `RunLogLevel` `cmd`, `RunLogPanel` 「명령」 토글(`logWindowStore.showCommands`), `LogViewer` CMD 줄 색.
 
 ## [1.106.2] - 2026-11-24
 
@@ -21,13 +27,6 @@
 
 ### Removed
 - **K8S 허브 콘솔 ▸ 커널 파라미터 뷰 삭제**: 커널 파라미터(sysctl) 조회·관리는 구성 ▸ 서비스 구성 LINUX(OS)(현재 값 수집·노드별 비교·설정 버전·적용)로 대체됐다. 옛 `/kernel-params`·`/k8s/:id/kernel-params` 경로는 따로 이동시키지 않는다(허브의 모르는 뷰는 개요로). sysctl 이외의 ad-hoc 조회(ulimit·디스크/IO·커널 모듈 등)는 노드 일괄 실행(`/bulk-exec`)·노드 SSH 를 쓴다. Frontend: `KernelParamsPage` 와 허브 뷰·아일랜드 패널·메뉴 항목 제거(백엔드 SSH 수집 `collect-kernel-params` 는 서비스 구성이 계속 사용).
-
-### Fixed
-
-- **사이드바 K8s 클러스터 목록 — 보던 화면 상태 유지** — 허브 화면(예: 서비스 `?service=`)에서 사이드바 목록으로 클러스터를 바꾸면 주소의 쿼리가 빠져 보던 선택이 풀리던 문제를 고쳤다. 허브의 클러스터 선택기처럼 쿼리를 그대로 넘긴다. Frontend: `components/layout/K8sClusterFlyoutBody.tsx`.
-
-### Added
-- **실행 로그 — 실제로 나간 명령부터 표시(관리자 전용)**: 모든 "로그 보기"(실행 로그 패널)에서 관리자는 그 실행이 노드·클러스터에 실제로 날린 명령을 `CMD $ [ssh root@10.0.0.1:22] sysctl -e …` 줄로 먼저 본다(SSH·SFTP·kubectl/helm/ansible-playbook 등 로컬 프로세스·파드 exec). 비밀번호·토큰·Authorization·URL 자격증명은 가리고, kubeconfig 경로는 `<kubeconfig>`, heredoc 파일 내용은 앞 몇 줄만 남긴다. 실행 로그 헤더의 「명령」 토글로 숨길 수 있다(전 화면 공통, 관리자에게만 보임). 비관리자에게는 서버가 명령 줄을 보내지 않는다. Backend: `services/command_trace.py`(명령 길목 기록 — `ssh_runner`·`isilon_service`·`kubectl_exec`·`etcd_checker` + `subprocess.Popen` 감사 훅, `CommandTraceMiddleware` → 단건 응답 헤더 `X-PEP-Commands`, SSE `log{level:"cmd"}`, 이벤트 루프 기본 executor 가 contextvars 를 넘기게), DB 실행 로그(서비스 구성 적용·공통 서비스·플레이북·점검 매트릭스 수행)에 `cmd` 줄 저장 + 조회 시 비관리자 제외. Frontend: `lib/commandTrace.ts`(axios 인터셉터 → 진행 중 실행 로그), `RunLogLevel` `cmd`, `RunLogPanel` 「명령」 토글(`logWindowStore.showCommands`), `LogViewer` CMD 줄 색.
 
 ## [1.106.0] - 2026-11-24
 
