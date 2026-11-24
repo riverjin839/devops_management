@@ -445,34 +445,8 @@ export const workItemCustomFieldsApi = {
     api.get<{ data: import('@/types').WorkItemCustomField[] }>('/work-item-custom-fields'),
 };
 
-// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집 & 히스토리
-export interface ComponentSnapshot {
-  id: string;
-  component: string;
-  category: string | null;
-  version: string | null;
-  data: Record<string, unknown>;
-  contentHash?: string;
-  collectedAt: string;
-}
-
-export interface VersionGraphNode {
-  id: string;
-  label: string;
-  type: 'cluster' | 'category' | 'component' | 'flag';
-  category?: string;
-  version?: string | null;
-  value?: string;
-  collectedAt?: string;
-  /** component 노드만 — 수집된 플래그 전체 개수(그래프는 앞 6개만 leaf 로 그린다). */
-  flagTotal?: number;
-}
-
-export interface VersionGraphEdge {
-  source: string;
-  target: string;
-  type: 'contains' | 'param' | 'configures' | 'replaces';
-}
+// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집(서비스 구성 "현재 값 수집" 이 쓴다).
+// SSH 수집(etcd systemd·kubelet·커널 파라미터·containerd·kubeadm 인증서·노드 NIC)은 components/versions 모달이 스트림으로 부른다.
 
 /** `POST /collect-versions` 응답의 컴포넌트별 결과 — 실행 로그가 대상마다 한 줄씩 남긴다. */
 export interface VersionCollectComponent {
@@ -490,51 +464,6 @@ export const versionsApi = {
     }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal, timeout: SYNC_RUN_TIMEOUT },
     ),
-  collectMinio: (clusterId: string, signal?: AbortSignal) =>
-    api.post<import('@/types').MinioCollectResponse>(
-      `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
-    ),
-  /** 현재 스냅샷 CSV 내보내기. detail 로 컬럼 풍부도 조절. */
-  exportCsv: (
-    clusterId: string,
-    opts: { detail?: 'summary' | 'full' | 'none'; categories?: string[]; components?: string[] } = {},
-    signal?: AbortSignal,
-  ) => {
-    const q = new URLSearchParams();
-    if (opts.detail) q.set('detail', opts.detail);
-    if (opts.categories?.length) q.set('categories', opts.categories.join(','));
-    if (opts.components?.length) q.set('components', opts.components.join(','));
-    return api.get<Blob>(
-      `/clusters/${clusterId}/versions/export.csv?${q.toString()}`,
-      { signal, responseType: 'blob' },
-    );
-  },
-  current: (clusterId: string) =>
-    api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
-      `/clusters/${clusterId}/versions/current`,
-    ),
-  history: (clusterId: string, component?: string, limit = 200) => {
-    const q = new URLSearchParams();
-    if (component) q.set('component', component);
-    q.set('limit', String(limit));
-    return api.get<{ clusterId: string; component: string | null; snapshots: ComponentSnapshot[] }>(
-      `/clusters/${clusterId}/versions/history?${q.toString()}`,
-    );
-  },
-  diff: (clusterId: string, fromId: string, toId: string) =>
-    api.get<{
-      from: { id: string; component: string; version: string | null; collectedAt: string };
-      to: { id: string; component: string; version: string | null; collectedAt: string };
-      versionChanged: boolean;
-      changes: { key: string; from: unknown; to: unknown }[];
-    }>(`/clusters/${clusterId}/versions/diff?from=${fromId}&to=${toId}`),
-  graph: (clusterId: string) =>
-    api.get<{
-      clusterId: string;
-      clusterName: string;
-      nodes: VersionGraphNode[];
-      edges: VersionGraphEdge[];
-    }>(`/clusters/${clusterId}/versions/graph`),
 };
 
 // Bulk SSH/SCP API

@@ -158,7 +158,7 @@ def _deep_check_commands(check_type: str, params: dict[str, Any]) -> list[dict[s
         snap_cmds = [
             _cmd(KIND_DB,
                  "SELECT … FROM cluster_config_snapshots WHERE component LIKE 'kubeadm_certs:%'",
-                 "'버전 / 설정 관리(/versions)' 화면의 'K8s 인증서(kubeadm)' 버튼으로 SSH 수집해 둔 "
+                 "점검 매트릭스 셀 ▸ 실행 방식 탭의 'SSH 로 지금 수집'(K8s 인증서 kubeadm)으로 SSH 수집해 둔 "
                  "kubeadm certs check-expiration 출력 스냅샷(호스트별 최신)을 파싱한다. "
                  f"수집 시각이 {_p(params, 'snapshot_max_age_hours', 24)}시간보다 오래되면 대기 처리. "
                  "체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다."),
@@ -187,7 +187,7 @@ def _deep_check_commands(check_type: str, params: dict[str, Any]) -> list[dict[s
         snap_cmds = [
             _cmd(KIND_DB,
                  "SELECT … FROM cluster_config_snapshots WHERE component LIKE 'etcdctl_config:%'",
-                 "데몬(systemd) etcd — '버전 / 설정 관리(/versions)' 화면에서 SSH 로 수집해 둔 "
+                 "데몬(systemd) etcd — 수집 API `POST /api/v1/clusters/{id}/collect-etcdctl-config`로 SSH 수집해 둔 "
                  "endpoint status 스냅샷(호스트별 최신)으로 단편화율을 계산한다. "
                  f"수집 시각이 {_p(params, 'snapshot_max_age_hours', 24)}시간보다 오래되면 대기 처리. "
                  "체커가 직접 SSH 하지 않으므로 자격증명이 저장되지 않는다."),

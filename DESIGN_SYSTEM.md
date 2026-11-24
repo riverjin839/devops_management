@@ -608,9 +608,9 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 - `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
 
 **URL 동기화 — `hooks/useClusterRouteParam.ts`:** 선택을 `/<base>/:clusterId` 에 담는다(파라미터가 없으면 첫 클러스터로 replace).
-`useClusterRouteParam(base, clusters, { pathFor?, local? })` — `pathFor` 는 id 가 경로 가운데 오는 라우트(`/versions/:id/graph`)용,
+`useClusterRouteParam(base, clusters, { pathFor?, local? })` — `pathFor` 는 id 가 경로 가운데 오는 라우트(`/<base>/:id/<sub>`)용,
 `local` 은 허브 탭 안에 다시 마운트된 화면(지식 허브의 온톨로지)처럼 이동하면 안 되는 곳용이다. `pathFor` 는 모듈 스코프 함수로 넘긴다.
-예: `K8sLogsPage`·`IncidentAnalysisPage`(쿼리 `?namespace=&pod=` 병행)·`VersionGraphPage`·`OntologyPage`.
+예: `K8sLogsPage`·`IncidentAnalysisPage`(쿼리 `?namespace=&pod=` 병행)·`OntologyPage`.
 
 **K8s 클러스터 허브 임베드 — `lib/k8sHub.ts` (D-240):** per-cluster K8s 화면은 `/k8s/:clusterId/:view` 허브의 서브뷰로도 마운트된다.
 허브가 `K8sHubContext` 를 제공하면 ① `useClusterRouteParam()` 은 URL 을 건드리지 않고 허브의 `clusterId`/`selectCluster` 를 돌려주고
@@ -623,7 +623,7 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 
 **전체 높이 캔버스 페이지(PageShell 예외)**: 루트를 `app-h-screen flex overflow-hidden` 가로 행으로 두고
 `<div className="py-3 flex-shrink-0"><ClusterSidebar iconOnly … /></div>` + `<div className="flex-1 min-w-0 flex flex-col">`(툴바·캔버스)로 나눈다.
-캔버스는 ResizeObserver 로 줄어든 폭을 따라간다. 예: `VersionGraphPage`·`OntologyPage`.
+캔버스는 ResizeObserver 로 줄어든 폭을 따라간다. 예: `OntologyPage`.
 
 **금지:**
 - ❌ 와이드 폼 (`iconOnly` 없이 사용) — 신규 페이지에서 절대 사용 금지. 기존 페이지도 모두 iconOnly 로 마이그레이션됨.

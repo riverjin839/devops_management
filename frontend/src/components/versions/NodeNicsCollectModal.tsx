@@ -108,7 +108,7 @@ export function NodeNicsCollectModal({ open, clusterId, clusterName, onClose }: 
       queryClient.invalidateQueries({ queryKey: ['node-specs'] });
       // 자기 자신의 노드 목록도 수집 직후 새로고침 (집계 변동 가능).
       queryClient.invalidateQueries({ queryKey: ['node-nics-nodes', clusterId] });
-      // VersionsPage 가 node_nics:{host} 스냅샷을 history 로 표시 — 새 변경 감지 시 invalidation.
+      // node_nics:{host} 스냅샷을 읽는 쿼리(['versions', …] 키) 무효화 — 수집 직후 화면이 새 값을 읽게.
       queryClient.invalidateQueries({ queryKey: ['versions'] });
 
       const noNicCount = d.hosts.filter(

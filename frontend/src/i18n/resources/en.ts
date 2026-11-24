@@ -30,7 +30,6 @@ export const en: TranslationResource = {
       sprints: 'Sprints',
       members: 'Work by Member',
       clusterManage: 'Cluster Management',
-      versions: 'Versions / Config',
       bulkExec: 'Bulk Node Exec',
       nodeSsh: 'Node SSH Terminal',
       etcdctl: 'etcdctl Console',

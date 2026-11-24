@@ -5,7 +5,7 @@ import {
   Eye, FileCode2, FileSpreadsheet, FileText, Files, Gauge, GitBranch, GitFork, HardDrive, Home, Hourglass,
   KeyRound, Layers, LayoutGrid, Library, Link2, ListChecks, ListTodo, ListTree, Map, Network,
   NotebookText, Palmtree, Radar, Rocket, Route, Rss, ScrollText, Server, Settings, Share2, ShieldCheck,
-  ShipWheel, Siren, Tag, Tags, Terminal, TerminalSquare, TrendingUp, Users, UsersRound, Warehouse, Waves, Waypoints,
+  ShipWheel, Siren, Tags, Terminal, TerminalSquare, TrendingUp, Users, UsersRound, Warehouse, Waves, Waypoints,
   Workflow,
 } from 'lucide-react';
 import type { NavGroupDescKey, NavGroupKey, NavPageKey } from '@/i18n/resources/ko';
@@ -53,7 +53,6 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/sprints':            { labelKey: 'sprints', defaultLabel: '스프린트',        icon: Rocket },
   '/members':            { labelKey: 'members', defaultLabel: '멤버별 업무',    icon: UsersRound },
   '/cluster-manage':     { labelKey: 'clusterManage', defaultLabel: '클러스터 관리',  icon: Server },
-  '/versions':           { labelKey: 'versions', defaultLabel: '버전 / 설정',     icon: Tag },
   '/bulk-exec':          { labelKey: 'bulkExec', defaultLabel: '노드 일괄 실행', icon: Terminal },
   '/node-ssh':           { labelKey: 'nodeSsh', defaultLabel: '노드 SSH 터미널', icon: TerminalSquare },
   '/etcdctl':            { labelKey: 'etcdctl', defaultLabel: 'etcdctl 콘솔',   icon: Database },

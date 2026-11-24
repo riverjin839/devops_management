@@ -10,6 +10,9 @@
 
 1.106.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Removed
+- **K8S 클러스터 허브 — 구성 ▸ 「버전 / 설정」 화면 삭제**: 서비스 구성이 같은 수집(K8S API·SSH)과 현재 값 보기를 대체해 옛 화면을 지웠다. 컴포넌트 전체 이력·두 스냅샷 비교·CSV 내보내기·3D 관계 그래프(`/versions/:id/graph`)·MinIO 수집 버튼도 함께 없어졌다. 옛 주소(`/versions`, `/versions/:id/graph`, `/k8s/:id/versions`)는 서비스 구성으로 이동한다. Backend: 수집 API(`routers/versions.py` `collect-*`)는 서비스 구성·점검(인증서 만료·etcd defrag)이 계속 써서 유지. Frontend: `VersionsPage`·`VersionGraphPage`·`CsvExportModal` 삭제, 허브 `RETIRED_HUB_VIEWS` 로 옛 뷰 id 연결.
+
 ## [1.106.3] - 2026-11-24
 
 ### Fixed

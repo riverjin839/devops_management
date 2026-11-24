@@ -21,7 +21,7 @@ interface SshCollectModalProps { open: boolean; clusterId: string; onClose: () =
  *  파드 자체가 없는 경우 / "Internal error occurred" 류 클러스터별 exec 거부) 은
  *  SSH 로 수집한 스냅샷을 읽는 `source: auto|pod|snapshot` 경로가 있다. 여기 등록된
  *  sourceRef(=check_type)는 실행 방식 탭에서 "SSH 로 지금 수집" 액션을 인라인으로
- *  보여준다 — 실패를 본 화면에서 바로 고칠 수 있게(별도 /versions 탐색 불필요).
+ *  보여준다 — 실패를 본 화면에서 바로 고칠 수 있게(다른 화면을 찾아가지 않아도 되게).
  *  같은 패턴(체커의 params.source + SSH 수집 모달)을 쓰는 점검이 늘면 여기 추가한다. */
 const SSH_COLLECT_ACTIONS: Record<string, { label: string; hint: string; Modal: ComponentType<SshCollectModalProps> }> = {
   cert_expiry: {
@@ -373,7 +373,7 @@ export function CheckMatrixRunbookPanel({ runbook, isLoading, editTarget, latest
       </div>
 
       {/* pod exec 로는 구조적으로 실패하기 쉬운 점검용 — 실패 사유를 보고 있는 이 화면에서
-          바로 SSH 수집을 트리거한다(별도로 /versions 를 찾아가지 않아도 되게). */}
+          바로 SSH 수집을 트리거한다(다른 화면을 찾아가지 않아도 되게). */}
       {runbook.sourceRef && SSH_COLLECT_ACTIONS[runbook.sourceRef] && (
         <section className="rounded-md border border-status-warning/40 bg-status-warning-soft p-3 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
