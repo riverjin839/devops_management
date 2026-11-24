@@ -206,6 +206,7 @@ def build_view(db: Session, cluster: Cluster, service: str, version_no: Optional
         sections.setdefault(it.section, []).append({
             "id": str(it.id), "key": it.key, "label": it.label, "help": it.help, "value_type": it.value_type,
             "unit": it.unit, "options": it.options, "default_value": it.default_value,
+            "min_value": getattr(it, "min_value", None), "max_value": getattr(it, "max_value", None),
             "restart_scope": it.restart_scope, "version_value": vval,
             "base_value": C.norm(default_vals.get(it.key)) if it.key in default_vals else None,
             "override_value": C.norm(overrides.get(it.key)) if group and it.key in overrides else None,
