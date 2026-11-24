@@ -8,17 +8,18 @@
 
 ## [Unreleased]
 
-1.105.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.106.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.106.0] - 2026-11-24
+
+### Added
+- **NIC 클러스터별 판정 기준** — 클러스터마다 본딩 구성(bond0/bond1, bond0만, ens·eth0)과 속도가 달라 공통 기준 한 벌로는 오탐이 나던 문제. 설정 화면에 「이 클러스터 / 공통 기준」 탭을 두고, 이 클러스터에서 바꾼 항목만 재정의로 저장한다(나머지는 공통을 따름, 항목별 되돌리기·전체 지우기). "관측 값으로 채우기"가 보고된 구성에서 본딩 모드·해시·LACP·최소 속도를 제안하고 본딩이 없으면 본딩 기준을 비운다. 에이전트 수집 대상과 판정이 모두 클러스터 실효 기준을 따른다. Backend: `nic_watch/settings.py`(`nic_watch.cluster_overrides`, `merge_effective`), `learn.py`, `GET|PUT|DELETE /nic-watch/clusters/{id}/settings`·`/observed`·`/overrides`(감사 로그). Frontend: `NicSettingsDialog`.
+- **노드 에이전트 Rust 구현** — DaemonSet 에이전트(`node_param_agent`)를 정적 바이너리로 다시 구현하는 `agent-rs/` 크레이트 추가. sysctl 런타임·영구 설정 값, 서비스 설정 파일 해시/내용, 보고 루프를 Python 에이전트와 같은 환경 변수·보고 프로토콜로 처리한다(서버 무변경, `--dry-run` 출력이 Python 과 동일). NIC 상태 수집(본딩/LACP·링크·MTU·ring·offload·드롭 카운터, ethtool GET ioctl)도 같은 보고 계약으로 구현. 전용 이미지(`…/node-agent`, distroless·amd64/arm64)를 릴리스에서 빌드하고, 설치 매니페스트·`deploy/k8s/node-param-agent/` 가 이 이미지를 기본으로 쓴다(노드당 requests 48Mi → 8Mi). `agent_image` 를 backend 이미지로 둔 기존 설치는 Python 에이전트 방식으로 그대로 렌더된다. CI 에 `agent-rs` 잡(fmt·clippy·test·이미지 빌드) 추가. 서비스 구성 설정 파일(containerd·kubelet)과 sysctl.d 가 바뀌면 보고 주기를 기다리지 않고 inotify 로 바로 보고한다(대상 파일 이름만 깨우고 최소 5초 간격).
 
 ## [1.105.0] - 2026-11-24
 
 ### Added
 - **공통 서비스(`/common-services`) — 1단계: 등록 · 설정값 가져오기 · 변경 감지 · 실행 로그**: 여러 K8S 클러스터가 함께 쓰는 LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS 를 인스턴스로 등록한다(등록 클러스터 안 워크로드는 「K8S 에서 가져오기」, 일반 노드 Podman 컨테이너는 SSH, 클러스터 밖은 주소 직접 입력, 사용 클러스터 지정). 「지금 수집」·「접속 테스트」는 실시간 실행 로그(로그 보기 토글)로 배포 설정(워크로드 spec·env·ConfigMap / podman inspect)과 앱 설정(Keycloak realm·클라이언트·IdP, Jenkins 시스템·플러그인·JCasC, ArgoCD ConfigMap·클러스터·저장소, Nexus 저장소·보안·nexus.properties, AD rootDSE·도메인 정책)을 읽고, 직전 값과 다르면 변경 이력·알람으로 남긴다. 주기 수집(기본 30분)·알람은 「감시 설정」(admin). 비밀처럼 보이는 값은 해시로만 저장해 변경만 감지한다. Backend: `routers/common_services.py`, `services/common_services/`, `models/common_service.py`(접속 정보는 암호화 저장·백업 마스킹), Celery `common-services-watch-dispatcher`. Frontend: `CommonServicesPage`, `components/common-services/`, 서비스 레일은 서비스 구성 레일 재사용.
-
-### Added
-
-- **NIC 클러스터별 판정 기준** — 클러스터마다 본딩 구성(bond0/bond1, bond0만, ens·eth0)과 속도가 달라 공통 기준 한 벌로는 오탐이 나던 문제. 설정 화면에 「이 클러스터 / 공통 기준」 탭을 두고, 이 클러스터에서 바꾼 항목만 재정의로 저장한다(나머지는 공통을 따름, 항목별 되돌리기·전체 지우기). "관측 값으로 채우기"가 보고된 구성에서 본딩 모드·해시·LACP·최소 속도를 제안하고 본딩이 없으면 본딩 기준을 비운다. 에이전트 수집 대상과 판정이 모두 클러스터 실효 기준을 따른다. Backend: `nic_watch/settings.py`(`nic_watch.cluster_overrides`, `merge_effective`), `learn.py`, `GET|PUT|DELETE /nic-watch/clusters/{id}/settings`·`/observed`·`/overrides`(감사 로그). Frontend: `NicSettingsDialog`.
-- **노드 에이전트 Rust 구현** — DaemonSet 에이전트(`node_param_agent`)를 정적 바이너리로 다시 구현하는 `agent-rs/` 크레이트 추가. sysctl 런타임·영구 설정 값, 서비스 설정 파일 해시/내용, 보고 루프를 Python 에이전트와 같은 환경 변수·보고 프로토콜로 처리한다(서버 무변경, `--dry-run` 출력이 Python 과 동일). NIC 상태 수집(본딩/LACP·링크·MTU·ring·offload·드롭 카운터, ethtool GET ioctl)도 같은 보고 계약으로 구현. 전용 이미지(`…/node-agent`, distroless·amd64/arm64)를 릴리스에서 빌드하고, 설치 매니페스트·`deploy/k8s/node-param-agent/` 가 이 이미지를 기본으로 쓴다(노드당 requests 48Mi → 8Mi). `agent_image` 를 backend 이미지로 둔 기존 설치는 Python 에이전트 방식으로 그대로 렌더된다. CI 에 `agent-rs` 잡(fmt·clippy·test·이미지 빌드) 추가. 서비스 구성 설정 파일(containerd·kubelet)과 sysctl.d 가 바뀌면 보고 주기를 기다리지 않고 inotify 로 바로 보고한다(대상 파일 이름만 깨우고 최소 5초 간격).
 
 ## [1.104.0] - 2026-11-23
 
