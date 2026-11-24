@@ -117,15 +117,65 @@ select.s{border:1px solid hsl(var(--border));background:hsl(var(--card));border-
 .ico{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .ico svg{width:14px;height:14px}
 .banner{font-size:12px;padding:8px 24px;background:hsl(var(--secondary));color:hsl(var(--muted-foreground));border-bottom:1px solid hsl(var(--border))}
+
+/* v2 (Ambari 재검토) */
+.seg{display:inline-flex;border:1px solid hsl(var(--border));border-radius:.75rem;overflow:hidden}
+.seg button{border:0;background:hsl(var(--card));padding:4px 12px;font-size:13px;cursor:pointer;color:hsl(var(--muted-foreground))}
+.seg button[aria-pressed="true"]{background:hsl(var(--secondary));color:hsl(var(--foreground));font-weight:600}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid hsl(var(--border))}
+.chip{border:1px solid hsl(var(--border));background:hsl(var(--card));border-radius:999px;padding:2px 10px;font-size:12px;cursor:pointer}
+.chip[aria-pressed="true"]{border-color:hsl(var(--primary));color:hsl(var(--primary))}
+input.q{border:1px solid hsl(var(--border));background:hsl(var(--card));border-radius:.75rem;padding:3px 10px;font-size:13px;width:180px}
+.st{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+.st i{width:8px;height:8px;border-radius:999px;background:hsl(var(--border));display:inline-block}
+.st.done i{background:hsl(var(--muted-foreground))}
+.st.run i{background:hsl(var(--primary))}
+.st.fail{color:hsl(var(--crit-text))}
+.st.fail i{background:hsl(var(--crit))}
+.lnk{border:0;background:none;color:hsl(var(--primary));cursor:pointer;padding:0 4px;font-size:12px}
+.lnk:disabled{color:hsl(var(--muted-foreground));cursor:not-allowed}
+.summary-line{padding:10px 14px;font-size:13px;border-bottom:1px solid hsl(var(--border))}
+.issue-cat{border-bottom:1px solid hsl(var(--border))}
+.issue-cat:last-child{border-bottom:0}
+.issue-cat>summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 14px;font-weight:600;font-size:13px}
+.issue-cat>summary::-webkit-details-marker{display:none}
+.issue-cat>summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.issue-cat[open]>summary::before{transform:rotate(45deg)}
+.issue{padding:0 14px 10px 30px}
+.issue h4{margin:6px 0;font-size:13px;font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.empty{padding:16px 14px;font-size:13px}
+.drawer-bg{position:fixed;inset:0;background:hsl(var(--foreground) / .25);display:none;z-index:20}
+.drawer-bg.on{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:hsl(var(--card));border-left:1px solid hsl(var(--border));z-index:21;transform:translateX(100%);transition:transform .2s;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer header{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid hsl(var(--border))}
+.drawer .db{padding:12px 16px;overflow:auto;flex:1}
+.drawer h3{font-size:13px;margin:16px 0 6px;color:hsl(var(--muted-foreground));font-weight:600}
+.drawer .log{height:auto;max-height:220px;border-radius:var(--radius)}
+.drawer footer{padding:10px 16px;border-top:1px solid hsl(var(--border));display:flex;gap:8px;justify-content:flex-end}
+.rows{list-style:none;margin:0;padding:0}
+.rows li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid hsl(var(--border));font-size:13px}
+dialog{border:1px solid hsl(var(--border));border-radius:var(--radius);background:hsl(var(--card));color:hsl(var(--foreground));padding:0;width:min(720px,calc(100% - 32px))}
+dialog::backdrop{background:hsl(var(--foreground) / .3)}
+dialog header{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid hsl(var(--border))}
+dialog pre{margin:0;padding:12px 16px;max-height:60vh;overflow:auto;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
+dialog footer{padding:10px 16px;border-top:1px solid hsl(var(--border));display:flex;gap:8px;justify-content:flex-end}
+.runbar label{display:block;font-size:12px;margin-bottom:6px}
+.runbar select{width:100%;margin-bottom:8px}
+.opt td:first-child{white-space:normal}
+.src{font-size:11px}
+td.wrap{white-space:normal;min-width:110px}
+.st+.src{display:block;margin-top:2px}
 @media (max-width:900px){
   .nav,.cs{display:none}
   .run{flex-direction:column}.ctl{width:auto;min-height:0}
   .top,.tabs,.page{padding-left:16px;padding-right:16px}
+  input.q{width:100%}
 }
 </style>
 </head>
 <body>
-<div class="banner">설계 목업 — <code>docs/02-design/cdp-ds-hosts/cdp-ds-hosts-architecture.md</code> §8-5. 데이터는 예시 값이며 실제 API 와 연결되지 않는다. 테마
+<div class="banner">설계 목업 — <code>docs/02-design/cdp-ds-hosts/cdp-ds-hosts-architecture.md</code> §8-5 · v2(Apache Ambari 재검토 반영, §8-8). 데이터는 예시 값이며 실제 API 와 연결되지 않는다. 테마
   <select class="s" id="theme" aria-label="테마"><option value="">시스템</option><option value="light">라이트</option><option value="dark">다크</option></select>
 </div>
 <div class="app">
@@ -181,7 +231,7 @@ select.s{border:1px solid hsl(var(--border));background:hsl(var(--card));border-
       </div>
     </section>
 
-    <!-- 목업 2: 준비도 (로그 중심 패턴) -->
+    <!-- 목업 2: 준비도 (로그 중심 패턴 + Ambari Confirm Hosts / Host Checks 패턴) -->
     <section class="page" id="p2" role="tabpanel">
       <div class="run">
         <div class="card ctl">
@@ -202,27 +252,58 @@ select.s{border:1px solid hsl(var(--border));background:hsl(var(--card));border-
             <fieldset><legend>프로필</legend>
               <select class="s" aria-label="요구사항 프로필"><option>CDP DS 1.5.4 (기본)</option></select>
             </fieldset>
-            <p class="c sub">조회만 하므로 확인 없이 실행한다. SSH 자격증명은 저장하지 않는다.</p>
+            <fieldset><legend>수집 경로</legend>
+              <label><input type="checkbox" checked> 에이전트 보고가 10분 안이면 재사용</label>
+              <p class="c sub">에이전트가 없거나 오래된 호스트만 SSH 로 수집한다. 자격증명은 저장하지 않는다.</p>
+            </fieldset>
           </div>
-          <div class="runbar"><button class="btn pri op" id="runBtn">준비도 점검 실행</button></div>
+          <div class="runbar">
+            <label class="c" for="scope">다시 점검 범위</label>
+            <select class="s" id="scope"><option value="all">전체 호스트 (6)</option><option value="bad">실패 · 경고 · 미확인 호스트만 (3)</option></select>
+            <button class="btn pri op" id="runBtn">준비도 점검 실행</button>
+          </div>
         </div>
         <div class="right">
           <div class="card">
-            <header><b>실행 로그</b><span class="c sub" id="runState">대기</span><span class="spacer"></span>
+            <header><b>실행 로그</b><span class="c sub" id="runState">마지막 실행 10:02 · 완료</span><span class="spacer"></span>
               <label class="sub c" for="logMode">로그 보기</label>
               <select class="s" id="logMode"><option value="all">전체</option><option value="bad">실패 · 경고만</option><option value="off">접기</option></select>
             </header>
-            <div class="log" id="log" aria-live="polite"><span class="t">「준비도 점검 실행」을 누르면 호스트별 실시간 로그가 여기에 표시된다.</span></div>
+            <div class="log" id="log" aria-live="polite"></div>
           </div>
           <div class="card">
-            <header><b>결과</b><span class="c sub">호스트 × 항목 · 셀을 누르면 근거가 열린다</span><span class="spacer"></span>
-              <label class="sub c"><input type="checkbox" id="onlyBad"> 실패만</label>
-              <button class="btn">CSV</button></header>
-            <div class="tw"><table id="res">
-              <thead><tr><th>호스트</th><th>용량</th><th>스토리지</th><th>OS</th><th>네트워크</th><th>포트</th><th>GPU</th></tr></thead>
-              <tbody></tbody>
-            </table></div>
-            <div class="detail" id="detail"></div>
+            <header><b>결과</b>
+              <span class="seg" role="group" aria-label="결과 보기">
+                <button type="button" aria-pressed="true" data-view="host">호스트별</button><button type="button" aria-pressed="false" data-view="issue">문제별</button>
+              </span>
+              <span class="spacer"></span>
+              <button class="btn" id="reportBtn">텍스트 리포트</button><button class="btn">CSV</button>
+            </header>
+            <div class="summary-line" id="summary"></div>
+
+            <div id="hostView">
+              <div class="toolbar">
+                <span class="chips" id="chips" role="group" aria-label="판정 필터"></span>
+                <span class="spacer"></span>
+                <input class="q" id="q" type="search" placeholder="호스트 검색" aria-label="호스트 검색">
+              </div>
+              <div class="tw"><table id="res">
+                <thead><tr><th>호스트</th><th>역할</th><th>수집</th><th>용량</th><th>스토리지</th><th>OS</th><th>네트워크</th><th>포트</th><th>GPU</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table></div>
+              <div class="detail" id="detail"></div>
+            </div>
+
+            <div id="issueView" hidden>
+              <div class="toolbar">
+                <label class="sub c" for="issueHost">호스트</label>
+                <select class="s" id="issueHost"><option value="">전체 호스트</option></select>
+                <span class="spacer"></span>
+                <span class="c sub">고친 뒤 「다시 점검」으로 확인한다 — PEP 는 자동 조치하지 않는다.</span>
+              </div>
+              <div id="issues"></div>
+            </div>
+
             <div class="note legend">
               <span class="v pass">통과</span> 기준 충족(중립색)
               <span class="v warn">경고</span> 최소만 충족 · 권장 설정 위반
@@ -263,6 +344,19 @@ select.s{border:1px solid hsl(var(--border));background:hsl(var(--card));border-
         </dl></div>
       </div>
       <div class="card">
+        <header><b>선택 점검</b><span class="c sub">Apache Ambari 호스트 점검 관례 — Cloudera DS 1.5.4 원문에는 없는 항목이라 기본 꺼짐</span></header>
+        <div class="tw"><table class="opt">
+          <thead><tr><th>항목</th><th>기준</th><th>출처</th><th>사용</th></tr></thead>
+          <tbody>
+            <tr><td>Transparent Huge Pages</td><td><input class="f w" value="never" aria-label="THP 기준"></td><td class="src c">Ambari check_host.py transparentHugePage</td><td><input type="checkbox" class="op" aria-label="THP 점검 사용"></td></tr>
+            <tr><td>방화벽(firewalld · iptables)</td><td>중지 또는 위 포트 허용</td><td class="src c">Ambari HostInfo.checkFirewall</td><td><input type="checkbox" class="op" aria-label="방화벽 점검 사용"></td></tr>
+            <tr><td>umask</td><td><input class="f" value="0022" aria-label="umask 기준"></td><td class="src c">Ambari HostInfo.getUMask</td><td><input type="checkbox" class="op" aria-label="umask 점검 사용"></td></tr>
+            <tr><td>시간 동기 서비스 실행(chronyd · ntpd)</td><td>active</td><td class="src c">Ambari HostInfo 서비스 점검(ntpd)</td><td><input type="checkbox" class="op" aria-label="시간 동기 서비스 점검 사용"></td></tr>
+            <tr><td>이전 설치 흔적(패키지 · 사용자 · 디렉터리)</td><td><input class="f wide" value="rke2*, /var/lib/rancher, /docker" aria-label="이전 설치 흔적 목록"></td><td class="src c">Ambari 남은 파일·패키지·사용자 점검 · DS 원문 EcsCleanUpHostInspection 과 겹침</td><td><input type="checkbox" class="op" aria-label="이전 설치 흔적 점검 사용"></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div class="card">
         <header><b>포트</b></header>
         <div class="tw"><table>
           <thead><tr><th>대상</th><th>TCP</th><th>UDP</th></tr></thead>
@@ -277,6 +371,18 @@ select.s{border:1px solid hsl(var(--border));background:hsl(var(--card));border-
     </section>
   </div>
 </div>
+<div class="drawer-bg" id="drawerBg"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" aria-hidden="true">
+  <header><b id="drawerTitle">호스트</b><span class="c sub" id="drawerRole"></span><span class="spacer"></span>
+    <button class="btn ico" id="drawerClose" title="닫기" aria-label="닫기"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header>
+  <div class="db" id="drawerBody"></div>
+  <footer><button class="btn op" id="drawerRerun">이 호스트 다시 점검</button></footer>
+</aside>
+<dialog id="report" aria-labelledby="reportTitle">
+  <header><b id="reportTitle">호스트 점검 리포트</b><span class="spacer"></span><span class="c sub" id="copied" aria-live="polite"></span></header>
+  <pre id="reportText"></pre>
+  <footer><button class="btn" id="copyBtn">복사</button><button class="btn pri" id="reportClose">닫기</button></footer>
+</dialog>
 <script>
 (function(){
   var root=document.documentElement;
@@ -303,73 +409,165 @@ select.s{border:1px solid hsl(var(--border));background:hsl(var(--card));border-
   });
 
   var L={pass:'통과',warn:'경고',fail:'실패',unk:'미확인',na:'—'};
-  var cols=['용량','스토리지','OS','네트워크','포트','GPU'];
-  var rows=[
-    {h:'ecs-master1',r:['pass','pass','pass','pass','pass','na']},
-    {h:'ecs-master2',r:['pass','pass','pass','pass','pass','na']},
-    {h:'ecs-master3',r:['pass','pass','pass','pass','pass','na']},
-    {h:'ecs-agent01',r:['warn','fail','pass','pass','pass','na']},
-    {h:'ecs-agent05',r:['pass','pass','pass','warn','pass','pass']},
-    {h:'lb01',r:['unk','unk','unk','pass','pass','na']}
+  var COLS=[['cap','용량'],['stor','스토리지'],['os','OS'],['net','네트워크'],['port','포트'],['gpu','GPU']];
+  var DOC='https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/';
+  var hosts=[
+    {h:'ecs-master1',role:'ECS Server',os:'RHEL 9.2',kernel:'5.14.0-284',cpu:'64 vCPU',mem:'64GB',disk:'/var/lib 412GiB 여유',src:'agent',at:'2분 전',col:'done',r:{cap:'pass',stor:'pass',os:'pass',net:'pass',port:'pass',gpu:'na'}},
+    {h:'ecs-master2',role:'ECS Server',os:'RHEL 9.2',kernel:'5.14.0-284',cpu:'64 vCPU',mem:'64GB',disk:'/var/lib 398GiB 여유',src:'agent',at:'3분 전',col:'done',r:{cap:'pass',stor:'pass',os:'pass',net:'pass',port:'pass',gpu:'na'}},
+    {h:'ecs-master3',role:'ECS Server',os:'RHEL 9.2',kernel:'5.14.0-284',cpu:'64 vCPU',mem:'64GB',disk:'/var/lib 405GiB 여유',src:'ssh',at:'10:02',col:'done',r:{cap:'pass',stor:'pass',os:'pass',net:'pass',port:'pass',gpu:'na'}},
+    {h:'ecs-agent01',role:'ECS Agent · Data Warehouse',os:'RHEL 9.2',kernel:'5.14.0-284',cpu:'64 vCPU',mem:'384GB',disk:'/ecs/docker 188GiB 여유',src:'agent',at:'1분 전',col:'done',r:{cap:'warn',stor:'fail',os:'pass',net:'pass',port:'pass',gpu:'na'}},
+    {h:'ecs-agent05',role:'ECS Agent · GPU · Cloudera AI',os:'RHEL 9.2',kernel:'5.14.0-284',cpu:'96 vCPU',mem:'256GB',disk:'/var/lib 1.1TiB 여유',src:'agent',at:'2분 전',col:'done',r:{cap:'pass',stor:'pass',os:'pass',net:'warn',port:'pass',gpu:'pass'}},
+    {h:'lb01',role:'Load Balancer',os:'—',kernel:'—',cpu:'—',mem:'—',disk:'—',src:'ssh',at:'10:02',col:'fail',r:{cap:'unk',stor:'unk',os:'unk',net:'pass',port:'pass',gpu:'na'}}
   ];
-  var why={
-    'ecs-agent01|용량':['메모리 384GB · CPU 32코어','Data Warehouse 권장 384GB 충족, 로컬 NVMe 1.8TB 는 executor 3개 분량(600GB 단위)','node_server_specs','https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-standalone-cdw-requirements.html','권장 10노드 중 이 역할 4노드 — 노드 수가 권장에 못 미친다'],
-    'ecs-agent01|스토리지':['/ecs/docker 여유 188GiB','docker 데이터 디렉터리 여유 300GiB 이상','cdp_host_storage_paths (SSH 수집)','https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-ecs-software-requirements.html','설치 전 디스크를 늘리거나 docker 경로를 다른 디스크로 지정한다'],
-    'ecs-agent05|네트워크':['/etc/resolv.conf nameserver 3개','nameserver 3개 미만 (EcsHostDnsInspection)','cdp_host_network (SSH 수집)','https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-ecs-steps.html','nameserver 를 2개 이하로 줄인다'],
-    'lb01|용량':['수집 실패 — SSH 연결 시간 초과','—','cdp_host_capacity','','LB 호스트는 ECS 노드가 아니면 대상에서 빼거나 자격증명을 다시 입력한다']
+  /* 문제별 보기 — Ambari Host Checks 처럼 범주 → 문제 → 호스트 */
+  var issues=[
+    {cat:'스토리지 경로',col:'stor',sev:'fail',title:'docker 데이터 디렉터리 여유 부족',req:'여유 300GiB 이상 (StorageInspection)',doc:DOC+'cdppvc-installation-ecs-software-requirements.html',hosts:[['ecs-agent01','/ecs/docker 188GiB','에이전트 · 1분 전']],fix:'디스크를 늘리거나 docker 경로를 여유 있는 디스크로 지정한다'},
+    {cat:'용량',col:'cap',sev:'warn',title:'Data Warehouse 노드 수가 권장보다 적음',req:'권장 10대 (최소 4대)',doc:DOC+'cdppvc-installation-standalone-cdw-requirements.html',hosts:[['ecs-agent01','이 역할 4대','node_server_specs']],fix:'워커를 늘리거나 executor 수를 줄여 사이징을 다시 잡는다'},
+    {cat:'네트워크 · DNS',col:'net',sev:'warn',title:'/etc/resolv.conf nameserver 3개 이상',req:'3개 미만 (EcsHostDnsInspection)',doc:DOC+'cdppvc-installation-ecs-steps.html',hosts:[['ecs-agent05','nameserver 3개','에이전트 · 2분 전']],fix:'nameserver 를 2개 이하로 줄인다'},
+    {cat:'수집 실패',col:'cap',sev:'unk',title:'SSH 연결 시간 초과 — 용량 · 스토리지 · OS 판정 못 함',req:'수집 성공',doc:'',hosts:[['lb01','연결 시간 초과(10s)','SSH · 10:02']],fix:'ECS 노드가 아니면 대상에서 빼고, 맞으면 자격증명·접속 주소를 확인한 뒤 실패 호스트만 다시 점검한다'}
+  ];
+  var hostLog={
+    'ecs-agent01':[['','에이전트 보고 재사용(1분 전) — SSH 생략'],['','CPUInspection 가상 코어 64 ≥ 16 … 통과'],['warn','Data Warehouse 노드 4대 — 권장 10대 미만 … 경고'],['fail','docker_dir=/ecs/docker 여유 188GiB < 300GiB … 실패']],
+    'ecs-agent05':[['','에이전트 보고 재사용(2분 전) — SSH 생략'],['','nvidia-smi 정상 · nvidia-container-toolkit 설치됨 … 통과'],['warn','/etc/resolv.conf nameserver 3개 (3개 미만 필요) … 경고'],['','*.apps.ecs.corp.local → 10.20.0.10 (LB) 조회 … 통과']],
+    'lb01':[['','에이전트 보고 없음 — SSH 수집 시작(10.20.0.10:22)'],['fail','SSH 연결 시간 초과 (10s) — 용량 · 스토리지 · OS 미확인']],
+    'ecs-master3':[['','에이전트 보고 없음 — SSH 수집 시작'],['','StorageInspection /var/lib 여유 405GiB ≥ 300GiB … 통과'],['','포트 9345·6443·2379–2381 사용 가능 … 통과']]
   };
-  var tbody=document.querySelector('#res tbody');
-  var detail=document.getElementById('detail');
+  var COLLECT={pending:['','대기'],run:['run','수집 중'],done:['done','수집됨'],fail:['fail','수집 실패']};
+  function esc(s){return String(s).replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});}
+  function worst(h){var o=['fail','unk','warn','pass'];for(var i=0;i<o.length;i++){for(var k in h.r){if(h.r[k]===o[i])return o[i];}}return 'pass';}
+
+  /* 요약 문장 — Ambari "All host checks passed on N registered hosts" 처럼 문장으로 */
+  function summary(){
+    var c={fail:0,warn:0,unk:0,pass:0};hosts.forEach(function(h){c[worst(h)]++;});
+    var cf=hosts.filter(function(h){return h.col==='fail';}).length;
+    document.getElementById('summary').innerHTML='호스트 '+hosts.length+'대 중 '+c.pass+'대 통과 · '+
+      (c.fail?'<b>실패 '+c.fail+'대</b> · ':'')+(c.warn?'경고 '+c.warn+'대 · ':'')+(c.unk?'미확인 '+c.unk+'대':'')+
+      (cf?' — 수집 실패 '+cf+'대는 판정하지 못했다.':'');
+  }
+
+  /* 호스트별 */
+  var filter='all',q='';
+  var chipsEl=document.getElementById('chips');
+  function chips(){
+    var c={all:hosts.length,fail:0,warn:0,unk:0,pass:0};hosts.forEach(function(h){c[worst(h)]++;});
+    var names={all:'전체',fail:'실패',warn:'경고',unk:'미확인',pass:'통과'};
+    chipsEl.innerHTML=Object.keys(names).map(function(k){return '<button type="button" class="chip" data-f="'+k+'" aria-pressed="'+(filter===k)+'">'+names[k]+' '+c[k]+'</button>';}).join('');
+  }
+  chipsEl.addEventListener('click',function(e){var b=e.target.closest('[data-f]');if(!b)return;filter=b.dataset.f;chips();render();});
+  document.getElementById('q').addEventListener('input',function(e){q=e.target.value.trim().toLowerCase();render();});
+  var tbody=document.querySelector('#res tbody'),detail=document.getElementById('detail');
   function render(){
-    var only=document.getElementById('onlyBad').checked;
     tbody.innerHTML='';
-    rows.forEach(function(row){
-      var bad=row.r.some(function(v){return v==='fail'||v==='warn'||v==='unk';});
-      if(only&&!bad)return;
+    var list=hosts.filter(function(h){return (filter==='all'||worst(h)===filter)&&(!q||h.h.toLowerCase().indexOf(q)>=0);});
+    if(!list.length){tbody.innerHTML='<tr><td colspan="10" class="c">조건에 맞는 호스트가 없다.</td></tr>';return;}
+    list.forEach(function(h){
+      var st=COLLECT[h.col];
       var tr=document.createElement('tr');
-      var td=document.createElement('td');td.textContent=row.h;tr.appendChild(td);
-      row.r.forEach(function(v,i){
-        var c=document.createElement('td');
-        var b=document.createElement(v==='na'?'span':'button');
-        b.className='v '+v;b.textContent=L[v];
-        if(v!=='na'){b.type='button';b.setAttribute('aria-label',row.h+' '+cols[i]+' '+L[v]);b.addEventListener('click',function(){show(row.h,cols[i],v);});}
-        c.appendChild(b);tr.appendChild(c);
+      tr.innerHTML='<td>'+esc(h.h)+'</td><td class="c wrap">'+esc(h.role)+'</td><td><span class="st '+st[0]+'"><i></i>'+st[1]+'</span><span class="c src">'+(h.src==='agent'?'에이전트':'SSH')+' · '+esc(h.at)+'</span></td>';
+      COLS.forEach(function(c){
+        var v=h.r[c[0]],td=document.createElement('td');
+        if(v==='na'){td.innerHTML='<span class="v na">—</span>';}
+        else{var b=document.createElement('button');b.type='button';b.className='v '+v;b.textContent=L[v];b.setAttribute('aria-label',h.h+' '+c[1]+' '+L[v]);b.addEventListener('click',function(){showCell(h,c,v);});td.appendChild(b);}
+        tr.appendChild(td);
       });
-      tbody.appendChild(tr);
+      var act=document.createElement('td');
+      act.innerHTML='<button type="button" class="lnk" data-log="'+esc(h.h)+'">로그</button><button type="button" class="lnk" data-open="'+esc(h.h)+'">상세</button>';
+      tr.appendChild(act);tbody.appendChild(tr);
     });
   }
-  function esc(s){return String(s).replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});}
-  function show(h,col,v){
-    var d=why[h+'|'+col]||['수집 값이 기준을 충족','프로필 기준값','점검 매트릭스 deep check','',''];
-    detail.innerHTML='<h3>'+esc(h)+' · '+esc(col)+' — <span class="v '+v+'">'+L[v]+'</span></h3><div class="grid2">'+
-      '<span class="c">수집 값</span><span>'+esc(d[0])+'</span>'+
-      '<span class="c">요구값</span><span>'+esc(d[1])+'</span>'+
-      '<span class="c">수집 경로</span><span>'+esc(d[2])+'</span>'+
-      (d[4]?'<span class="c">조치 안내</span><span>'+esc(d[4])+' (PEP 는 자동 조치하지 않는다)</span>':'')+
-      (d[3]?'<span class="c">원문</span><span><a href="'+d[3]+'" target="_blank" rel="noopener">Cloudera 1.5.4 문서</a></span>':'')+
-      '</div>';
+  tbody.addEventListener('click',function(e){var b=e.target.closest('[data-open],[data-log]');if(!b)return;openDrawer(b.dataset.open||b.dataset.log,!!b.dataset.log);});
+  function showCell(h,c,v){
+    var it=issues.filter(function(x){return x.col===c[0]&&x.hosts.some(function(y){return y[0]===h.h;});})[0];
+    var hv=it?it.hosts.filter(function(y){return y[0]===h.h;})[0]:null;
+    detail.innerHTML='<h3>'+esc(h.h)+' · '+esc(c[1])+' — <span class="v '+v+'">'+L[v]+'</span></h3><div class="grid2">'+
+      '<span class="c">수집 값</span><span>'+esc(hv?hv[1]:'기준 충족')+'</span>'+
+      '<span class="c">요구값</span><span>'+esc(it?it.req:'프로필 기준값')+'</span>'+
+      '<span class="c">수집 시각 · 출처</span><span>'+esc(hv?hv[2]:(h.src==='agent'?'에이전트 · ':'SSH · ')+h.at)+'</span>'+
+      (it&&it.fix?'<span class="c">조치 안내</span><span>'+esc(it.fix)+' (PEP 는 자동 조치하지 않는다)</span>':'')+
+      (it&&it.doc?'<span class="c">원문</span><span><a href="'+it.doc+'" target="_blank" rel="noopener">Cloudera 1.5.4 문서</a></span>':'')+'</div>';
     detail.classList.add('on');
   }
-  document.getElementById('onlyBad').addEventListener('change',render);
-  render();
 
+  /* 문제별 */
+  var issueHost=document.getElementById('issueHost');
+  hosts.forEach(function(h){var o=document.createElement('option');o.value=h.h;o.textContent=h.h;issueHost.appendChild(o);});
+  issueHost.addEventListener('change',renderIssues);
+  function renderIssues(){
+    var sel=issueHost.value,box=document.getElementById('issues');
+    var list=issues.map(function(i){return Object.assign({},i,{hosts:i.hosts.filter(function(y){return !sel||y[0]===sel;})});}).filter(function(i){return i.hosts.length;});
+    if(!list.length){box.innerHTML='<p class="empty c">'+(sel?esc(sel)+' 에서 찾은 문제가 없다.':'찾은 문제가 없다 — 모든 호스트가 기준을 충족한다.')+'</p>';return;}
+    var cats=[];list.forEach(function(i){if(cats.indexOf(i.cat)<0)cats.push(i.cat);});
+    box.innerHTML=cats.map(function(cat){
+      var its=list.filter(function(i){return i.cat===cat;});
+      var n=its.reduce(function(a,i){return a+i.hosts.length;},0);
+      return '<details class="issue-cat" open><summary>'+esc(cat)+' <span class="c sub">문제 '+its.length+'건 · 호스트 '+n+'대</span></summary>'+
+        its.map(function(i){
+          return '<div class="issue"><h4><span class="v '+i.sev+'">'+L[i.sev]+'</span>'+esc(i.title)+' <span class="c sub">— '+i.hosts.length+'대</span></h4>'+
+          '<div class="tw"><table><thead><tr><th>호스트</th><th>수집 값</th><th>요구값</th><th>수집 시각 · 출처</th></tr></thead><tbody>'+
+          i.hosts.map(function(y){return '<tr><td><button type="button" class="lnk" data-open="'+esc(y[0])+'">'+esc(y[0])+'</button></td><td>'+esc(y[1])+'</td><td class="c">'+esc(i.req)+'</td><td class="c">'+esc(y[2])+'</td></tr>';}).join('')+
+          '</tbody></table></div><p class="c sub">조치: '+esc(i.fix)+(i.doc?' · <a href="'+i.doc+'" target="_blank" rel="noopener">원문</a>':'')+'</p></div>';
+        }).join('')+'</details>';
+    }).join('');
+  }
+  document.getElementById('issues').addEventListener('click',function(e){var b=e.target.closest('[data-open]');if(b)openDrawer(b.dataset.open,false);});
+  document.querySelectorAll('.seg [data-view]').forEach(function(b){
+    b.addEventListener('click',function(){
+      document.querySelectorAll('.seg [data-view]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});
+      document.getElementById('hostView').hidden=b.dataset.view!=='host';
+      document.getElementById('issueView').hidden=b.dataset.view!=='issue';
+    });
+  });
+
+  /* 호스트 상세 드로어 — Ambari Host 요약 + Check host */
+  var drawer=document.getElementById('drawer'),bg=document.getElementById('drawerBg'),lastFocus=null,curHost=null;
+  function openDrawer(name,logFirst){
+    var h=hosts.filter(function(x){return x.h===name;})[0];if(!h)return;curHost=h;lastFocus=document.activeElement;
+    document.getElementById('drawerTitle').textContent=h.h;
+    document.getElementById('drawerRole').textContent=h.role;
+    var st=COLLECT[h.col];
+    var lg=(hostLog[h.h]||[['','에이전트 보고 재사용 — 모든 항목 기준 충족']]).map(function(l){return '<div class="'+l[0]+'">'+esc(l[1])+'</div>';}).join('');
+    var logHtml='<h3>이 호스트 로그</h3><div class="log">'+lg+'</div>';
+    var body='<h3>요약</h3><dl class="grid2"><dt class="c">수집</dt><dd><span class="st '+st[0]+'"><i></i>'+st[1]+'</span> · '+(h.src==='agent'?'에이전트 보고':'SSH 일회 수집')+' · '+esc(h.at)+'</dd>'+
+      '<dt class="c">OS · 커널</dt><dd>'+esc(h.os)+' · '+esc(h.kernel)+'</dd><dt class="c">CPU · 메모리</dt><dd>'+esc(h.cpu)+' · '+esc(h.mem)+'</dd><dt class="c">디스크</dt><dd>'+esc(h.disk)+'</dd></dl>'+
+      '<h3>항목 결과</h3><ul class="rows">'+COLS.map(function(c){var v=h.r[c[0]];return '<li><span>'+c[1]+'</span><span class="v '+v+'">'+L[v]+'</span></li>';}).join('')+'</ul>';
+    document.getElementById('drawerBody').innerHTML=logFirst?logHtml+body:body+logHtml;
+    drawer.classList.add('on');bg.classList.add('on');drawer.setAttribute('aria-hidden','false');
+    document.getElementById('drawerClose').focus();
+  }
+  function closeDrawer(){drawer.classList.remove('on');bg.classList.remove('on');drawer.setAttribute('aria-hidden','true');if(lastFocus)lastFocus.focus();}
+  document.getElementById('drawerClose').addEventListener('click',closeDrawer);
+  bg.addEventListener('click',closeDrawer);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&drawer.classList.contains('on'))closeDrawer();});
+  document.getElementById('drawerRerun').addEventListener('click',function(){if(curHost){var n=curHost.h;closeDrawer();run([n]);}});
+
+  /* 텍스트 리포트 — Ambari Show Report */
+  var dlg=document.getElementById('report');
+  document.getElementById('reportBtn').addEventListener('click',function(){
+    var t='########################################\n# CDP 호스트 준비도 리포트\n# 클러스터 ecs-prod · 프로필 CDP DS 1.5.4\n# 생성 '+new Date().toLocaleString('ko-KR')+'\n########################################\n\n# 호스트 (공백 구분)\n'+hosts.map(function(h){return h.h;}).join(' ')+'\n';
+    var cats=[];issues.forEach(function(i){if(cats.indexOf(i.cat)<0)cats.push(i.cat);});
+    cats.forEach(function(cat){
+      t+='\n########################################\n# '+cat+'\n########################################\n';
+      issues.filter(function(i){return i.cat===cat;}).forEach(function(i){
+        t+='['+L[i.sev]+'] '+i.title+' — 요구값: '+i.req+'\n';
+        i.hosts.forEach(function(y){t+='  '+y[0]+'  '+y[1]+'  ('+y[2]+')\n';});
+        t+='  조치: '+i.fix+'\n';
+      });
+    });
+    document.getElementById('reportText').textContent=t;document.getElementById('copied').textContent='';
+    if(dlg.showModal)dlg.showModal();
+  });
+  document.getElementById('reportClose').addEventListener('click',function(){dlg.close();});
+  document.getElementById('copyBtn').addEventListener('click',function(){
+    var msg=document.getElementById('copied');
+    try{navigator.clipboard.writeText(document.getElementById('reportText').textContent).then(function(){msg.textContent='복사했다';},function(){msg.textContent='복사하지 못했다 — 직접 선택해 복사';});}
+    catch(e){msg.textContent='복사하지 못했다 — 직접 선택해 복사';}
+  });
+
+  /* 실행 로그 + 다시 점검(전체 / 실패·경고·미확인만 / 한 호스트) */
   var logEl=document.getElementById('log'),mode=document.getElementById('logMode'),state=document.getElementById('runState');
-  var lines=[
-    ['','실행 시작 — 대상 6대, 항목 6종, 프로필 CDP DS 1.5.4'],
-    ['','ecs-master1 CPUInspection 가상 코어 64 ≥ 16 … 통과'],
-    ['','ecs-master1 StorageInspection /var/lib 여유 412GiB ≥ 300GiB … 통과'],
-    ['','ecs-master1 /var/lib/longhorn 심볼릭 링크 아님 … 통과'],
-    ['','ecs-master2 OS RHEL 9.2 (허용 목록) · Python 3.8 · nm-cloud-setup 비활성 … 통과'],
-    ['','ecs-master3 포트 9345·6443·2379–2381 사용 가능 … 통과'],
-    ['warn','ecs-agent01 Data Warehouse 노드 4대 — 권장 10대 미만 … 권장 미달'],
-    ['fail','ecs-agent01 docker_dir=/ecs/docker 여유 188GiB < 300GiB … 실패'],
-    ['','ecs-agent05 nvidia-smi 정상 · nvidia-container-toolkit 설치됨 … 통과'],
-    ['warn','ecs-agent05 /etc/resolv.conf nameserver 3개 (3개 미만 필요) … 경고'],
-    ['','ecs-agent05 *.apps.ecs.corp.local → 10.20.0.10 (LB) 조회 … 통과'],
-    ['fail','lb01 SSH 연결 시간 초과 (10s) … 미확인 3건'],
-    ['','완료 — 통과 27 · 권장 미달 1 · 실패 1 · 경고 1 · 미확인 3']
-  ];
-  var shown=[];
+  var shown=[['','실행 시작 — 대상 6대, 항목 6종, 프로필 CDP DS 1.5.4','10:02:00'],['','에이전트 보고 재사용 4대 · SSH 수집 2대','10:02:01'],
+    ['fail','lb01 SSH 연결 시간 초과 (10s) … 미확인 3건','10:02:12'],['fail','ecs-agent01 docker_dir=/ecs/docker 여유 188GiB < 300GiB … 실패','10:02:13'],
+    ['warn','ecs-agent05 /etc/resolv.conf nameserver 3개 … 경고','10:02:13'],['','완료 — 통과 3대 · 실패 1대 · 경고 1대 · 미확인 1대','10:02:14']];
   function paint(){
     logEl.classList.toggle('collapsed',mode.value==='off');
     var f=mode.value==='bad'?shown.filter(function(l){return l[0];}):shown;
@@ -377,14 +575,24 @@ select.s{border:1px solid hsl(var(--border));background:hsl(var(--card));border-
     logEl.scrollTop=logEl.scrollHeight;
   }
   mode.addEventListener('change',paint);
-  document.getElementById('runBtn').addEventListener('click',function(){
-    var btn=this;btn.disabled=true;shown=[];state.textContent='실행 중';var i=0;
+  var runBtn=document.getElementById('runBtn');
+  function run(targets){
+    var names=targets||(document.getElementById('scope').value==='bad'?hosts.filter(function(h){return worst(h)!=='pass';}).map(function(h){return h.h;}):hosts.map(function(h){return h.h;}));
+    runBtn.disabled=true;state.textContent='실행 중 · 대상 '+names.length+'대';shown=[];
+    var ts=function(){return new Date().toTimeString().slice(0,8);};
+    shown.push(['','다시 점검 시작 — 대상 '+names.join(', '),ts()]);paint();
+    names.forEach(function(n){var h=hosts.filter(function(x){return x.h===n;})[0];h.col='run';});render();
+    var i=0;
     (function tick(){
-      if(i>=lines.length){state.textContent='완료';btn.disabled=viewer.checked;return;}
-      var d=new Date(),ts=d.toTimeString().slice(0,8);
-      shown.push([lines[i][0],lines[i][1],ts]);i++;paint();setTimeout(tick,350);
+      if(i>=names.length){state.textContent='완료 · '+ts();runBtn.disabled=viewer.checked;shown.push(['','완료 — 대상 '+names.length+'대',ts()]);paint();summary();chips();render();return;}
+      var h=hosts.filter(function(x){return x.h===names[i];})[0];
+      (hostLog[h.h]||[['',h.src==='agent'?'에이전트 보고 재사용 — 모든 항목 통과':'SSH 수집 — 모든 항목 통과']]).forEach(function(l){shown.push([l[0],h.h+' '+l[1],ts()]);});
+      h.col=h.h==='lb01'?'fail':'done';h.at=h.src==='agent'?'방금':ts().slice(0,5);
+      i++;paint();render();setTimeout(tick,450);
     })();
-  });
+  }
+  runBtn.addEventListener('click',function(){run();});
+  paint();summary();chips();render();renderIssues();
 })();
 </script>
 </body>

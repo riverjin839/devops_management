@@ -1,6 +1,6 @@
 # Cloudera Data Services 1.5.4 호스트 아키텍처 — 정리와 PEP 반영 설계 (계획 · 목업)
 
-> 상태: **설계만** (2026-11-23). 코드 변경 없음. 수치와 규칙은 모두 Cloudera 1.5.4 원문(§9 출처)에서 옮겼다.
+> 상태: **설계만** (2026-11-23, 2026-11-24 Apache Ambari 기준 재검토 — §8-8). 코드 변경 없음. 수치와 규칙은 모두 Cloudera 1.5.4 원문(§9 출처)에서 옮겼다.
 > 원문에서 확인하지 못한 항목은 **원문 미확인**으로 표시했다.
 
 ## 1. 개요
@@ -251,7 +251,7 @@ erDiagram
 | `CDP_DEPLOYMENT` | Base 클러스터와 DS 클러스터의 짝, 플랫폼(ECS/OCP), 버전(1.5.4), 앱 도메인, CIDR, Docker 저장소 방식, Longhorn 복제 수 | 1 배포 = 1행 |
 | `CDP_HOST_ASSIGNMENT` | 호스트 ↔ 역할(ECS Server / Agent / GPU / LB / OCP Master · CSAH · Bootstrap · Worker) · 배치 서비스(CDW/CDE/CML) | 호스트 신원은 `dc_devices` 참조 |
 | `CDP_REQUIREMENT_PROFILE` | §3–§6 의 요구값(역할별 CPU · 메모리 · 디스크 · OS 목록 · 포트 · 경로) | **DB 행 = 화면 편집**. 1.5.4 기본 프로필을 시드로 넣는다 |
-| `CDP_READINESS_RESULT` | 호스트 × 항목 판정(통과 · 경고 · 실패 · 미확인)과 근거 값 | 로그성, 최신만 화면 노출 |
+| `CDP_READINESS_RESULT` | 호스트 × 항목 판정(통과 · 경고 · 실패 · 미확인)과 근거 값 + **수집 상태**(대기 · 수집 중 · 수집됨 · 수집 실패) · **출처**(에이전트 보고 / SSH 일회) · **수집 시각** · 실행(run) id | 로그성, 최신만 화면 노출. 수집 상태·출처·시각은 §8-8 Ambari 재검토로 추가 |
 
 > 엔터티 이름은 개념 이름이다. 실제 테이블 이름 · 컬럼은 구현 단계에서 `backend-feature` 스킬 절차로 정한다.
 
@@ -289,6 +289,7 @@ erDiagram
 | `cdp_host_network` | 정·역방향 DNS, 와일드카드 조회, nameserver 3개 미만, `myhostname`, NTP 오차, `172.17.0.0/16` 충돌, 인터페이스 1개 | `app_domain`, `ntp_max_offset_ms`, `docker_subnet` |
 | `cdp_host_ports` | 역할별 포트 개방 · 미사용(설치 전 80/443 비어 있음) | 역할별 포트 목록 |
 | `cdp_gpu_host` | `nvidia-smi` 정상, nvidia-container-toolkit, RHEL 여부 | 대상 호스트 셀렉터 |
+| `cdp_host_optional` (선택, 기본 꺼짐) | THP · 방화벽 · umask · 시간 동기 서비스 실행 · 이전 설치 흔적 — Ambari 관례(§8-8), DS 1.5.4 원문에는 없음 | 항목별 사용 여부 · 기준값 |
 
 - 새 체커를 넣을 때는 `services/check_matrix_runbook.py` 의 명령 목록을 같은 커밋에서 갱신한다(가시화 규칙).
 - `param_fields` · `threshold_fields` 에 `label` · `help` 를 채운다.
@@ -307,7 +308,8 @@ erDiagram
 
 ### 8-5. 목업
 
-> HTML 미리보기: [`preview/mockups.html`](preview/mockups.html) — 탭 전환 · 준비도 실행(실시간 로그 · 로그 보기 옵션) · 셀 근거 패널 · viewer 비활성화 · 라이트/다크를 브라우저에서 확인할 수 있다.
+> HTML 미리보기: [`preview/mockups.html`](preview/mockups.html) (v2 — §8-8 반영) — 탭 전환 · 준비도 실행(실시간 로그 · 로그 보기 옵션) · 결과 **호스트별 / 문제별** 전환 · 판정 필터 · 수집 상태 · 셀 근거 패널 · **호스트 상세 드로어**(이 호스트 다시 점검) · **텍스트 리포트** · 다시 점검 범위 · 선택 점검 · viewer 비활성화 · 라이트/다크를 브라우저에서 확인할 수 있다.
+> 아래 텍스트 목업은 v1 구조이고, v2 차이는 목업 2 아래 「v2 변경」에 적었다.
 >
 > 화면 목업은 구조만 나타낸 와이어프레임이다. 색은 테마 토큰을 쓰고, 정상은 중립색, 비정상만 상태색으로 표시한다.
 
@@ -363,6 +365,32 @@ erDiagram
 - 좌측 제어 영역은 320px 이하이고 실행 바는 하단에 고정한다. 판정은 조회만 하므로 확인 대화상자 없이 실행한다.
 - 결과 셀: 통과 = 중립색, 권장 미달 = 경고색, 실패 = 위험색, 미확인 = 흐린 중립색 + 사유.
 
+**v2 변경 (§8-8 Apache Ambari 재검토)**
+
+```
+결과  [호스트별 | 문제별]                                   [텍스트 리포트] [CSV]
+호스트 6대 중 3대 통과 · 실패 1대 · 경고 1대 · 미확인 1대 — 수집 실패 1대는 판정하지 못했다.
+── 호스트별 ──────────────────────────────────────────────────────────────────────
+[전체 6] [실패 1] [경고 1] [미확인 1] [통과 3]                         [호스트 검색 ]
+호스트       역할              수집                    용량  스토리지  …  
+ecs-agent01  ECS Agent · CDW   ● 수집됨  에이전트 · 1분 전  경고  실패      …  로그 상세
+lb01         Load Balancer     ● 수집 실패  SSH · 10:02     미확인 미확인  …  로그 상세
+── 문제별 ────────────────────────────────────────────────────────────────────────
+호스트 [전체 호스트 ▾]          고친 뒤 「다시 점검」으로 확인한다 — PEP 는 자동 조치하지 않는다.
+▾ 스토리지 경로  문제 1건 · 호스트 1대
+   [실패] docker 데이터 디렉터리 여유 부족 — 1대
+     호스트       수집 값              요구값                         수집 시각 · 출처
+     ecs-agent01  /ecs/docker 188GiB   여유 300GiB 이상(StorageInsp.)  에이전트 · 1분 전
+     조치: 디스크를 늘리거나 docker 경로를 여유 있는 디스크로 지정한다 · 원문
+▾ 수집 실패  문제 1건 · 호스트 1대
+   [미확인] SSH 연결 시간 초과 — 용량 · 스토리지 · OS 판정 못 함 — 1대
+```
+
+- 실행 바: **다시 점검 범위**(전체 호스트 / 실패 · 경고 · 미확인 호스트만) + 실행 버튼. 호스트 상세 드로어에는 **이 호스트 다시 점검**.
+- 제어 영역 **수집 경로**: "에이전트 보고가 N분 안이면 재사용"(기본 10분) — 에이전트 값이 신선한 호스트는 SSH 를 생략한다.
+- **호스트 상세 드로어**(행의 「상세」·문제별 보기의 호스트 이름): 요약(수집 상태 · 출처 · 시각, OS · 커널, CPU · 메모리, 디스크) · 항목 결과 · 이 호스트 로그. 행의 「로그」는 같은 드로어를 로그부터 연다.
+- **텍스트 리포트**: 범주별 블록(판정 · 문제 · 요구값 · 호스트별 수집 값 · 조치)을 복사해 인프라 담당에게 넘긴다.
+
 ### 목업 3 — 요구사항 프로필 탭
 
 ```
@@ -396,9 +424,9 @@ erDiagram
 | 2 | 모델(배포 · 역할 할당 · 프로필 · 결과) + `_safe_*` 마이그레이션 + 1.5.4 프로필 시드 + CRUD API + 백업 호환 | pytest, 백업 export/import 왕복 |
 | 3 | 용량 판정(기존 `node_server_specs` 대조만, 수집 없음) + 화면 구성 · 프로필 탭 | lint · tsc · build, 문서 동기화 |
 | 4 | deep check 6종 + 런북 명령 목록 + 점검 매트릭스 등록 | 런북 커버리지 테스트 |
-| 5 | 준비도 탭(RunLogPanel 실시간 로그, 결과 표, 근거 패널) | 화면 확인, a11y 스캔 |
-| 6 | (선택) 사이징 계산기: 서비스 · 워크벤치 · executor 수 입력 → 필요 호스트 수 | 원문 예시와 계산 일치 |
-
+| 5 | 준비도 탭(RunLogPanel 실시간 로그, 결과 표, 근거 패널) + §8-8 반영분(수집 상태 열, 호스트별 / 문제별 보기, 판정 필터, 호스트 상세 드로어, 텍스트 리포트, 다시 점검 범위) | 화면 확인, a11y 스캔 |
+| 6 | (선택) 선택 점검(`cdp_host_optional` — THP · 방화벽 · umask · 시간 동기 서비스 · 이전 설치 흔적) | 기본 꺼짐 확인, 런북 커버리지 테스트 |
+| 7 | (선택) 사이징 계산기: 서비스 · 워크벤치 · executor 수 입력 → 필요 호스트 수 | 원문 예시와 계산 일치 |
 ### 8-7. 결정할 사항
 
 | 항목 | 선택지 | 제안 |
@@ -407,6 +435,44 @@ erDiagram
 | 수집 경로 | SSH 일회 수집 / 노드 파라미터 에이전트 | 설치 전 = SSH(에이전트 없음), 설치 후 = 에이전트 |
 | 화면 위치 | 신규 `/cdp-hosts` / DC 인벤토리 하위 탭 | 신규 화면(클러스터 단위 운영 화면) |
 | Base 노드 전환(Repurposing) | 포함 / 제외 | 1차 제외. 전환 절차 문서를 확인한 뒤 별도 설계 |
+| 선택 점검(Ambari 관례) | 넣지 않음 / 기본 꺼짐으로 제공 | 기본 꺼짐으로 제공 — 현장마다 운영 기준이 달라 운영자가 켠다 |
+
+### 8-8. Apache Ambari 대비 검토 (2026-11-24)
+
+[Apache Ambari](https://github.com/apache/ambari) 는 하둡 클러스터의 **설치 전 호스트 등록 · 점검(Confirm Hosts)** 과
+**운영 중 호스트 관리(Hosts)** 를 오래 다뤄 온 레퍼런스다. 같은 문제를 푸는 이 설계를 Ambari 소스 기준으로 다시 봤다.
+
+**확인한 Ambari 소스**
+
+| 영역 | 파일 | 본 것 |
+|---|---|---|
+| 설치 마법사 Confirm Hosts | `ambari-web/classic/app/controllers/wizard/step3_controller.js`, `templates/wizard/step3.hbs` | 호스트별 등록 상태(Installing → Registering → Success / Warning / Failed), 호스트별 로그 팝업, **Retry Failed** · Remove Selected |
+| Host Checks 팝업 | `templates/wizard/step3/step3_host_warnings_popup.hbs`, `messages.js` `installer.step3.hostWarningsPopup.*` | 문제를 **범주별**(JDK · 디스크 · 저장소/OS · 호스트명 해석 · 역방향 조회 · THP · 방화벽 · 남은 파일/폴더 · 프로세스 · 패키지 · 사용자 · 서비스 · umask · alternatives)로 묶고 "문제 on N hosts" 로 표시, 호스트 선택(전체 / 한 호스트), **Show Report**, "수동으로 고친 뒤 **Rerun Checks**" |
+| 결과 문장 | `messages.js` `installer.step3.warnings.*` | "All host checks passed on N registered hosts", "skipped on N hosts that failed to register" — 수집 실패 호스트를 통과로 세지 않고 따로 말한다 |
+| 점검 실행 | `ambari-server/.../custom_actions/scripts/check_host.py` | java_home · db_connection · host_resolution · **last_agent_env** · installed_packages/existing_repos · transparentHugePage |
+| 에이전트 수집 | `ambari-agent/.../ambari_agent/HostInfo.py` | 방화벽 · 역방향 조회 · umask · 사용자 · 폴더 · 시간 동기 서비스 · THP — 에이전트가 주기 보고한 환경을 점검이 재사용 |
+| 호스트 목록 · 상세 | `templates/main/host.hbs`, `templates/main/host/summary.hbs`, `mixins/main/host/details/actions/check_host.js` | 상태 필터 · 검색 · 일괄 작업, 요약(호스트명 · IP · 랙 · OS · 코어 · 메모리 · 디스크 · Load · **Heartbeat**), 호스트 단위 **Check host** |
+
+**재검토 결과 → 반영**
+
+| Ambari 패턴 | 이 설계의 빈곳 | 반영(목업 v2) |
+|---|---|---|
+| 호스트 등록 상태 + 호스트별 로그 | 수집 실패가 셀의 "미확인"으로만 보임 | 결과 표에 **수집 상태 열**(대기 · 수집 중 · 수집됨 · 수집 실패) + 출처 · 시각, 행의 「로그」 |
+| 범주별 "문제 on N hosts" | 호스트 × 항목 표만 — 호스트가 많으면 길어지고 같은 문제가 흩어짐 | 결과 **호스트별 / 문제별** 전환. 문제별 = 범주 → 문제 → 호스트 표(수집 값 · 요구값 · 출처) |
+| 호스트 선택(전체 / 한 호스트) | 없음 | 문제별 보기의 호스트 선택 |
+| 결과 문장 | 표만 | 결과 위 **요약 문장** — 통과 · 실패 · 경고 · 미확인 수와 "수집 실패 N대는 판정하지 못했다" |
+| Show Report | CSV 만 | **텍스트 리포트**(범주별 블록, 복사) — 인프라 담당 전달용 |
+| Retry Failed / Rerun Checks | 전체 재실행만 | **다시 점검 범위**(전체 / 실패 · 경고 · 미확인만) + 드로어의 **이 호스트 다시 점검** |
+| last_agent_env 재사용 · Heartbeat | 수집 경로만 있고 신선도 없음 | "에이전트 보고가 N분 안이면 재사용"(기본 10분), 셀 근거 · 드로어에 **수집 시각 · 출처** |
+| 호스트 상세 + Check host | 없음 | **호스트 상세 드로어** — 요약 · 항목 결과 · 이 호스트 로그 |
+| 추가 점검 범주(THP · 방화벽 · umask · 시간 동기 서비스 · 남은 파일/패키지/사용자) | 일부 없음 | 요구사항 프로필 **선택 점검** — 기본 꺼짐, 출처 "Ambari 관례"로 표시(DS 1.5.4 원문의 EcsCleanUpHostInspection · IPTablesInspection · NTP 동기와 구분) |
+
+**가져오지 않은 것**
+
+- 등록 단계(에이전트 설치 · 부트스트랩) — PEP 는 노드 파라미터 에이전트가 이미 있고, 설치 전 호스트는 SSH 일회 수집으로 충분하다.
+- Remove Selected(대상에서 빼기) — 호스트 구성은 「구성」 탭 역할 할당에서만 바꾼다(한 곳에서만 바꾸기).
+- JDK · 저장소(repo) · alternatives 점검 — 하둡 스택 설치용이라 ECS 호스트 요구사항과 맞지 않는다. Java 일치는 DS 원문(VersionInspection)대로 `cdp_host_os` 에 이미 있다.
+- 점검 결과로 자동 정리(HostCleanup) — PEP 원칙(분석과 조치 분리)에 따라 조치 안내만 한다.
 
 ---
 
