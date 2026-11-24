@@ -5,6 +5,8 @@ This file provides essential context for AI assistants (Claude and others) worki
 ---
 ## riverjin839  custom 요청 
 모든 "실행"버튼 이벤트에는 항상 상세,실시간 로그 출력이 함께 구현되어야 하고, 사용자  "로그 보기" 옵션을 결정할수있어야한다.
+모든 로그 보기에서 ADMIN 은 실제로 노드에 날린 명령부터 볼 수 있어야 한다 — 노드·클러스터에 명령을 보내는 새 길목은
+`services/command_trace.py` `record()` 로 기록한다(SSH·subprocess·파드 exec 은 이미 기록됨, 상세 `DESIGN_SYSTEM.md` §12.9.1).
 
 
 ## Project Overview
@@ -300,7 +302,7 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
   (좌측 공백 0) — 행 전체에 좌측 패딩이나 `mx-auto` 를 주지 않는다.
 - **SSH/exec 콘솔은 콘솔 패턴 필수.** 좌(컨트롤)/우(결과) 한 로우, stdout/stderr 는
   `ExecOutputTabs`, 로그는 `LogViewer`(plain `<pre>` 금지), 최상단에서 `useTerminalEnvSync` 호출.
-  적용 화면: `/bulk-exec` `/mc` `/etcdctl` `/cilium-trace` `/kernel-params` `/isilon-nfs`
+  적용 화면: `/bulk-exec` `/mc` `/etcdctl` `/cilium-trace` `/isilon-nfs`
   (+ 신규 콘솔 전부). 세부 예외(`/isilon-nfs` 의 `ExecOutputTabs` 미적용 등)는 `DESIGN_SYSTEM.md` §12.6.
 - **실행 → 결과 화면은 로그 중심 패턴(`DESIGN_SYSTEM.md` §12.6.1).** 좌 제어(≤320px, 하단 고정 실행 바) / 우 상단
   실행 로그(`RunLogPanel fill`, 중심) / 우 하단 결과. 조회 명령은 확인 없이 실행·변경 명령만 danger 확인, 입력 중
@@ -532,7 +534,7 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
 3. **자격증명은 params 에 저장하지 않는다.** params 는 JSONB 이고 런북·실행 로그에 노출된다.
    SSH 등 인증이 필요한 수집은 기존 UI 흐름(요청 시에만 자격증명 사용, 미저장)으로
    스냅샷을 남기고, 체커는 그 스냅샷을 읽는다 (예: `etcd_defrag` 의 snapshot 경로가
-   `/versions` 화면이 수집한 `etcdctl_config:{host}` 를 읽는 구조).
+   점검 런북 패널·서비스 구성의 SSH 수집 모달이 남긴 `etcdctl_config:{host}` 를 읽는 구조).
 4. **가시화가 편집보다 먼저다.** 무슨 명령이 나가는지 화면에서 볼 수 없으면 편집은 무의미하다
    — 새 체커/실행 경로를 추가하면 `services/check_matrix_runbook.py` 의 명령 목록도 같은
    커밋에서 갱신한다(테스트가 전 타입 커버리지를 검사한다).

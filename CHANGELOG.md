@@ -8,7 +8,7 @@
 
 ## [Unreleased]
 
-1.106.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.106.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **서비스 구성 ▸ NIC 적용(노드 반영)**: NIC 설정 버전을 「적용…」으로 노드에 반영한다(SSH, 자격증명 저장 안 함, 실시간 실행 로그·중지·이력). 노드마다 현재 값을 다시 읽어 `max` 를 인터페이스 최대값으로 풀고, 본딩 해시·LACP rate·miimon 은 끊김 없이 바꾼 뒤 ring·채널·offload 는 **본딩 하위 인터페이스를 하나씩** 바꾸며 바꾼 하위가 링크·LACP 활성 Aggregator 에 다시 들어온 걸 확인하고 다음으로 간다. 시작 전에 노드에 **원복 타이머**(기본 120초)를 걸어, 확인 전에 연결이 끊기면 노드가 스스로 이전 값으로 돌아간다. 재합류 실패·다시 읽은 값 불일치면 그 노드를 즉시 원복하고(실패 시 중단 기본), 이중화가 확인되지 않은 인터페이스·`[fixed]`·드라이버 미지원은 건너뛴다. 최대값을 넘는 값은 시작 전에 막는다. 확인이 끝나면 NetworkManager 연결 설정에도 기록해 재부팅 뒤 유지된다(연결을 다시 올리지 않음, NM 이 관리하지 않는 인터페이스는 런타임만 + 메모). lacp_rate 를 커널이 거부하면 영구 기록만 하고 '본딩 재기동 후 반영' 으로 남긴다. 동시 노드 수 최대 20, 대기·제한 시간·ethtool 경로는 적용 설정에서 바꾼다. Backend: `services/service_config/apply_nic.py`, 적용 옵션 `member_wait_sec`·`rejoin_timeout_sec`·`rollback_timer_sec`, 적용 설정 `nic_*`. Frontend: `ApplyDialog`·`ApplySettingsDialog` NIC 구역, 실행 결과 메모 열.
@@ -16,6 +16,29 @@
 
 ### Changed
 - **서비스 구성 ▸ NIC — 노드 수백 대 클러스터 대응**: 인터페이스 표의 검색(이름 일부 또는 glob)·종류·경고만 필터와 페이지(100행)를 서버에서 처리하고, 카운터·offload 전체·본딩 하위 상태는 행을 펼칠 때만 따로 읽는다. 레일 상태 점은 요약만 받는다. 500노드 기준 첫 화면 응답이 약 3MB → 150KB, 레일용 요청은 2KB. 판정 결과는 클러스터별로 20초 캐시하고, 에이전트 보고는 카운터 말고 바뀐 게 없으면 5분 동안 받은 시각만 갱신해 노드마다 매분 다시 쓰지 않는다. Backend: `nic_watch` 조회 쿼리(`q`·`kind`·`only_flagged`·`offset`·`limit`), `GET /nic-watch/clusters/{id}/nodes/{node}/interfaces/{iface}`. Frontend: `NicStatusView` 페이지·상세 지연 조회, `useNicWatchSummary`·`useNicInterfaceDetail`.
+
+## [1.106.4] - 2026-11-24
+
+### Removed
+- **K8S 클러스터 허브 — 구성 ▸ 「버전 / 설정」 화면 삭제**: 서비스 구성이 같은 수집(K8S API·SSH)과 현재 값 보기를 대체해 옛 화면을 지웠다. 컴포넌트 전체 이력·두 스냅샷 비교·CSV 내보내기·3D 관계 그래프(`/versions/:id/graph`)·MinIO 수집 버튼도 함께 없어졌다. 옛 주소(`/versions`, `/versions/:id/graph`, `/k8s/:id/versions`)는 서비스 구성으로 이동한다. Backend: 수집 API(`routers/versions.py` `collect-*`)는 서비스 구성·점검(인증서 만료·etcd defrag)이 계속 써서 유지. Frontend: `VersionsPage`·`VersionGraphPage`·`CsvExportModal` 삭제, 허브 `RETIRED_HUB_VIEWS` 로 옛 뷰 id 연결.
+
+## [1.106.3] - 2026-11-24
+
+### Fixed
+- **사이드바 K8s 클러스터 목록 — 보던 화면 상태 유지** — 허브 화면(예: 서비스 `?service=`)에서 사이드바 목록으로 클러스터를 바꾸면 주소의 쿼리가 빠져 보던 선택이 풀리던 문제를 고쳤다. 허브의 클러스터 선택기처럼 쿼리를 그대로 넘긴다. Frontend: `components/layout/K8sClusterFlyoutBody.tsx`.
+- **실행 로그 — 실제로 나간 명령부터 표시(관리자 전용)**: 모든 "로그 보기"(실행 로그 패널)에서 관리자는 그 실행이 노드·클러스터에 실제로 날린 명령을 `CMD $ [ssh root@10.0.0.1:22] sysctl -e …` 줄로 먼저 본다(SSH·SFTP·kubectl/helm/ansible-playbook 등 로컬 프로세스·파드 exec). 비밀번호·토큰·Authorization·URL 자격증명은 가리고, kubeconfig 경로는 `<kubeconfig>`, heredoc 파일 내용은 앞 몇 줄만 남긴다. 실행 로그 헤더의 「명령」 토글로 숨길 수 있다(전 화면 공통, 관리자에게만 보임). 비관리자에게는 서버가 명령 줄을 보내지 않는다. Backend: `services/command_trace.py`(명령 길목 기록 — `ssh_runner`·`isilon_service`·`kubectl_exec`·`etcd_checker` + `subprocess.Popen` 감사 훅, `CommandTraceMiddleware` → 단건 응답 헤더 `X-PEP-Commands`, SSE `log{level:"cmd"}`, 이벤트 루프 기본 executor 가 contextvars 를 넘기게), DB 실행 로그(서비스 구성 적용·공통 서비스·플레이북·점검 매트릭스 수행)에 `cmd` 줄 저장 + 조회 시 비관리자 제외. Frontend: `lib/commandTrace.ts`(axios 인터셉터 → 진행 중 실행 로그), `RunLogLevel` `cmd`, `RunLogPanel` 「명령」 토글(`logWindowStore.showCommands`), `LogViewer` CMD 줄 색.
+
+## [1.106.2] - 2026-11-24
+
+### Fixed
+- **K8S 클러스터 허브 — 탭 이동 때도 터미널 세션 확인 · `[` `]` 단축키 수정**: k9s·노드 SSH 탭에서 세션이 열려 있거나 연결 중이면 다른 탭으로 옮길 때(클릭·`[` `]` 단축키) 「세션 끊고 이동」 확인 창이 뜬다. 닫힌 사이드 패널이 열린 대화상자로 잘못 세어져 허브 `[` `]` 단축키가 동작하지 않던 문제도 고쳤다. Frontend: `HubTabs` 이동 전 가드 호출, `useHubTabShortcuts` 대화상자 판정.
+- **실행 로그 새 창이 화면을 가리지 않게**: 「로그 보기」 새 창이 760×640(점검 매트릭스는 820×720) 고정 크기라 노트북 화면에서는 작업 화면을 거의 덮었다. 이제 앱 화면을 4등분한 오른쪽 위 1/4(1사분면) 크기·위치로 열린다(너무 작은 화면은 최소 480×320). Frontend: `PopoutWindow` 기본 크기·위치 계산.
+- **K8S 클러스터 허브 — 터미널 세션이 있을 때 클러스터 전환 확인**: 허브 k9s·노드 SSH 탭에서 세션이 열려 있거나 연결 중이면, 「클러스터 전환」이나 사이드바 클러스터 목록으로 다른 클러스터를 고를 때 「세션 끊고 전환」 확인 창이 다시 뜬다(허브로 옮기며 빠졌던 확인). 노드 SSH 도 k9s 처럼 연결 중인 세션에서 확인한다. Frontend: `stores/clusterSwitchGuardStore.ts`, `K8sClusterFlyoutBody` 이동 전 가드 호출.
+
+## [1.106.1] - 2026-11-24
+
+### Removed
+- **K8S 허브 콘솔 ▸ 커널 파라미터 뷰 삭제**: 커널 파라미터(sysctl) 조회·관리는 구성 ▸ 서비스 구성 LINUX(OS)(현재 값 수집·노드별 비교·설정 버전·적용)로 대체됐다. 옛 `/kernel-params`·`/k8s/:id/kernel-params` 경로는 따로 이동시키지 않는다(허브의 모르는 뷰는 개요로). sysctl 이외의 ad-hoc 조회(ulimit·디스크/IO·커널 모듈 등)는 노드 일괄 실행(`/bulk-exec`)·노드 SSH 를 쓴다. Frontend: `KernelParamsPage` 와 허브 뷰·아일랜드 패널·메뉴 항목 제거(백엔드 SSH 수집 `collect-kernel-params` 는 서비스 구성이 계속 사용).
 
 ## [1.106.0] - 2026-11-24
 

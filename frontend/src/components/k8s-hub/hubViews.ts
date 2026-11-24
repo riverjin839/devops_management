@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   LayoutGrid, Boxes, Gauge, TrendingUp, Activity, Bell, ScrollText, Zap, ClipboardCheck,
-  KeyRound, Tags, Dog, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks,
+  KeyRound, Tags, Dog, Package, Database, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks,
 } from 'lucide-react';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
@@ -16,9 +16,7 @@ import { OpsCheckConsolePage } from '@/pages/OpsCheckConsolePage';
 import { K8sRbacPage } from '@/pages/K8sRbacPage';
 import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { NodeImagesPage } from '@/pages/NodeImagesPage';
-import { VersionsPage } from '@/pages/VersionsPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
-import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
 import { ServiceConfigPage } from '@/pages/ServiceConfigPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -91,9 +89,7 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'rbac', category: 'config', label: '접근 권한', icon: KeyRound, navKey: '/k8s-rbac', component: K8sRbacPage },
   { id: 'node-labels', category: 'config', label: '노드 라벨', icon: Tags, navKey: '/node-labels', component: NodeLabelsPage },
   { id: 'node-images', category: 'config', label: '노드 이미지', icon: Package, navKey: '/node-images', component: NodeImagesPage },
-  { id: 'versions', category: 'config', label: '버전 / 설정', icon: GitCommit, navKey: '/versions', component: VersionsPage },
   { id: 'etcdctl', category: 'console', label: 'etcdctl', icon: Database, navKey: '/etcdctl', component: EtcdCtlPage },
-  { id: 'kernel-params', category: 'console', label: '커널 파라미터', icon: Cpu, navKey: '/kernel-params', component: KernelParamsPage },
   { id: 'k9s', category: 'console', label: 'k9s', icon: Dog, navKey: '/k9s', component: K9sPage },
   { id: 'node-ssh', category: 'console', label: '노드 SSH', icon: TerminalSquare, navKey: '/node-ssh', component: NodeSshPage },
 ];
@@ -104,6 +100,13 @@ export const DEFAULT_HUB_VIEW = 'overview';
 export function hubViewAllowed(v: HubView, featureAllowed: (path: string) => boolean): boolean {
   return featureAllowed(v.navKey) || (v.extraNavKeys ?? []).some(featureAllowed);
 }
+
+/** 지운 뷰 id → 대체 뷰 id. 옛 링크(`/k8s/:id/versions` 등)가 개요가 아니라 대체 화면으로 가게 한다. */
+export const RETIRED_HUB_VIEWS: Readonly<Record<string, string>> = {
+  terminals: 'k9s', // 옛 터미널 실행 카드 → k9s(D-243)
+  versions: 'services', // 버전 / 설정 → 서비스 구성(2026-11-23)
+  'kernel-params': 'services', // 커널 파라미터 → 서비스 구성 LINUX(OS)(2026-11-24)
+};
 
 export function findHubView(id: string | undefined): HubView | undefined {
   return HUB_VIEWS.find((v) => v.id === id);

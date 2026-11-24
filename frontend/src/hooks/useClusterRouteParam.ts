@@ -20,7 +20,7 @@ interface ClusterRouteParam {
  *
  * @param basePath 라우트 접두사 (예: '/ops-checks')
  * @param clusters 선택 대상 목록 — 비어 있으면 아무것도 하지 않는다.
- * @param opts.pathFor 클러스터 id 가 경로 가운데에 오는 라우트(예: `/versions/:id/graph`)의 경로 생성기.
+ * @param opts.pathFor 클러스터 id 가 경로 가운데에 오는 라우트(예: `/<base>/:id/<sub>`)의 경로 생성기.
  *   없으면 `${basePath}/${id}`.
  * @param opts.local true 면 URL 을 건드리지 않고 로컬 state 로 동작한다 — 허브 탭 안에 다른 화면을
  *   그대로 마운트한 경우(예: 지식 허브의 온톨로지 탭)처럼 이동하면 탭을 벗어나는 곳에서 쓴다.

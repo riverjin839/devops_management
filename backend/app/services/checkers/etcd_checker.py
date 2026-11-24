@@ -15,6 +15,7 @@ from typing import Optional
 from kubernetes.stream import stream as k8s_stream
 
 from app.models import StatusEnum, ClusterConfigSnapshot
+from app.services import command_trace
 from app.services.checkers.base import BaseChecker, CheckResult
 
 
@@ -47,10 +48,10 @@ class EtcdChecker(BaseChecker):
                 return fallback
             return CheckResult(
                 status=StatusEnum.warning,
-                message="etcd pod 없음 · 스냅샷 없음 — '버전/설정' 페이지에서 etcdctl 수집 먼저 실행하세요",
+                message="etcd pod 없음 · 스냅샷 없음 — etcdctl 설정 수집(collect-etcdctl-config)을 먼저 실행하세요",
                 details={
                     "source": "none",
-                    "hint": "etcd 가 systemd 로 동작 중이면 Versions 페이지의 'etcd (systemd)' 또는 etcdctl config 수집을 사용하세요.",
+                    "hint": "etcd 가 systemd 로 동작 중이면 POST /api/v1/clusters/{id}/collect-etcdctl-config 로 etcdctl 설정을 수집하세요.",
                 },
             )
 
@@ -72,18 +73,20 @@ class EtcdChecker(BaseChecker):
 
         pod_name = target.metadata.name
 
+        etcd_cmd = [
+            "etcdctl", "endpoint", "status",
+            "--cacert=/etc/kubernetes/pki/etcd/ca.crt",
+            "--cert=/etc/kubernetes/pki/etcd/server.crt",
+            "--key=/etc/kubernetes/pki/etcd/server.key",
+            "--write-out=json",
+        ]
+        command_trace.record("pod-exec", f"kube-system/{pod_name} -c etcd", etcd_cmd)
         try:
             resp = k8s_stream(
                 v1.connect_get_namespaced_pod_exec,
                 pod_name,
                 "kube-system",
-                command=[
-                    "etcdctl", "endpoint", "status",
-                    "--cacert=/etc/kubernetes/pki/etcd/ca.crt",
-                    "--cert=/etc/kubernetes/pki/etcd/server.crt",
-                    "--key=/etc/kubernetes/pki/etcd/server.key",
-                    "--write-out=json",
-                ],
+                command=etcd_cmd,
                 container="etcd",
                 stderr=True, stdout=True, stdin=False, tty=False,
                 _preload_content=True,

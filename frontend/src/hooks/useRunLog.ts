@@ -5,12 +5,14 @@
 // 한 화면의 실행 로그 하나를 여러 실행이 함께 쓸 수 있다. `begin` 은 그 실행 전용 핸들을 돌려주고,
 // 앞 실행이 아직 진행 중이면 줄을 지우지 않고 이어 쓰며 각 실행의 줄 앞에 `[제목]` 을 붙인다.
 // `running` 은 진행 중인 실행이 하나라도 있으면 참이다(먼저 끝난 실행이 다른 실행을 끝난 것처럼 만들지 않는다).
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { subscribeCommands } from '@/lib/commandTrace';
 import { postSse, type SseEvent } from '@/lib/sse';
 import { formatApiError } from '@/lib/utils';
 import { camelizeKeys, snakeizeKeys } from '@/services/api';
 
-export type RunLogLevel = 'info' | 'warn' | 'error';
+/** `cmd` — 서버가 노드·클러스터에 실제로 날린 명령(관리자에게만 온다, lib/commandTrace). */
+export type RunLogLevel = 'info' | 'warn' | 'error' | 'cmd';
 export interface RunLogLine { ts: string; level: RunLogLevel; message: string }
 export type RunStepStatus = 'running' | 'done' | 'failed';
 export interface RunStep { name: string; label: string; status: RunStepStatus }
@@ -42,7 +44,7 @@ export interface RunLog {
   clear: () => void;
 }
 
-const LEVELS: RunLogLevel[] = ['info', 'warn', 'error'];
+const LEVELS: RunLogLevel[] = ['info', 'warn', 'error', 'cmd'];
 
 export function toRunLogLevel(v: unknown): RunLogLevel {
   return LEVELS.includes(v as RunLogLevel) ? (v as RunLogLevel) : 'info';
@@ -118,6 +120,16 @@ export function useRunLog(): RunLog {
     };
   }, [log, setStep, sync]);
 
+  // 실행 중에 받은 단건 응답의 실행 명령(X-PEP-Commands — 관리자 요청만)을 CMD 줄로 남긴다.
+  // SSE 실행은 서버가 cmd 이벤트를 직접 보내므로 여기로 오지 않는다(스트림 응답엔 헤더가 비어 있다).
+  useEffect(() => {
+    if (!running) return undefined;
+    return subscribeCommands((cmds) => {
+      if (active.current.size === 0) return;
+      for (const c of cmds) log('cmd', c);
+    });
+  }, [running, log]);
+
   const end = useCallback(() => {
     generation.current += 1;
     active.current.clear();
@@ -133,7 +145,7 @@ export function useRunLog(): RunLog {
   return { title, lines, steps, running, begin, log, setStep, end, clear };
 }
 
-/** LogViewer 에 넘길 텍스트 — `HH:MM:SS LEVEL message`. LogViewer 가 ERROR/WARN 키워드로 색을 입힌다. */
+/** LogViewer 에 넘길 텍스트 — `HH:MM:SS LEVEL message`. LogViewer 가 ERROR/WARN/CMD 키워드로 색을 입힌다. */
 export function formatRunLog(lines: RunLogLine[]): string {
   return lines
     .map((l) => {

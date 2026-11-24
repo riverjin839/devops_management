@@ -1,7 +1,7 @@
 """SSE(Server-Sent Events) 실행 로그 공용 헬퍼 — 실행 버튼의 실시간 로그(D-089·D-135).
 
 이벤트 규약(프론트 `lib/sse.ts` `postSse` + `hooks/useRunLog.ts` `applyRunEvent` 가 소비):
-  - ``log``    {level: info|warn|error, ts, message}
+  - ``log``    {level: info|warn|error|cmd, ts, message}   ← cmd = 실제로 나간 명령(관리자에게만, command_trace)
   - ``step``   {name, label, status: running|done|failed}
   - ``result`` {result: <동기 엔드포인트와 같은 응답 본문>}   ← 마지막 이벤트(성공)
   - ``error``  {message}                                       ← 마지막 이벤트(실패, 빈 500 금지)
@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.services import command_trace
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +83,12 @@ def stream_async_job(job: Callable[[Session, Emit], Awaitable[Any]], *, name: st
     loop = asyncio.get_running_loop()
     q: asyncio.Queue[object] = asyncio.Queue()
     done = object()
+    # 실행 명령(cmd 줄)은 관리자에게만 — 보는 사람이 관리자가 아니면 스트림에서 거른다(services/command_trace.py).
+    show_commands = command_trace.viewer_is_admin()
 
     def emit(evt: dict) -> None:
+        if not show_commands and command_trace.is_cmd_event(evt):
+            return
         loop.call_soon_threadsafe(q.put_nowait, evt)
 
     async def runner() -> None:
@@ -91,7 +96,9 @@ def stream_async_job(job: Callable[[Session, Emit], Awaitable[Any]], *, name: st
         # — 직전에 예약된 log 보다 result 가 먼저 큐에 들어가 "마지막 이벤트 = result" 가 깨지지 않게.
         sdb = SessionLocal()
         try:
-            result = await job(sdb, emit)
+            # 이 작업이 노드·클러스터에 날리는 명령을 실행 로그 맨 앞(해당 단계 직전)에 cmd 줄로 남긴다.
+            with command_trace.bind_stream(emit):
+                result = await job(sdb, emit)
             emit({"type": "result", "result": _result_payload(result)})
         except HTTPException as e:
             sdb.rollback()
