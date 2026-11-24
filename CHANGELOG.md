@@ -10,6 +10,9 @@
 
 1.106.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Removed
+- **K8S 허브 콘솔 ▸ 커널 파라미터 뷰 삭제**: 커널 파라미터(sysctl) 조회·관리는 구성 ▸ 서비스 구성 LINUX(OS)(현재 값 수집·노드별 비교·설정 버전·적용)로 대체됐다. 옛 `/kernel-params`·`/k8s/:id/kernel-params` 경로는 따로 이동시키지 않는다(허브의 모르는 뷰는 개요로). sysctl 이외의 ad-hoc 조회(ulimit·디스크/IO·커널 모듈 등)는 노드 일괄 실행(`/bulk-exec`)·노드 SSH 를 쓴다. Frontend: `KernelParamsPage` 와 허브 뷰·아일랜드 패널·메뉴 항목 제거(백엔드 SSH 수집 `collect-kernel-params` 는 서비스 구성이 계속 사용).
+
 ## [1.106.0] - 2026-11-24
 
 ### Changed
