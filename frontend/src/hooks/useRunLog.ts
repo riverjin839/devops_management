@@ -6,7 +6,7 @@
 // 앞 실행이 아직 진행 중이면 줄을 지우지 않고 이어 쓰며 각 실행의 줄 앞에 `[제목]` 을 붙인다.
 // `running` 은 진행 중인 실행이 하나라도 있으면 참이다(먼저 끝난 실행이 다른 실행을 끝난 것처럼 만들지 않는다).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { subscribeCommands } from '@/lib/commandTrace';
+import { claimRequests, registerRun, unregisterRun } from '@/lib/commandTrace';
 import { postSse, type SseEvent } from '@/lib/sse';
 import { formatApiError } from '@/lib/utils';
 import { camelizeKeys, snakeizeKeys } from '@/services/api';
@@ -23,6 +23,9 @@ export interface RunLogHandle {
   log: (level: RunLogLevel, message: string) => void;
   setStep: (name: string, label: string, status: RunStepStatus) => void;
   end: () => void;
+  /** 이 실행이 곧 보낼 요청을 이 실행 것으로 표시한다(응답의 실행 명령이 이 실행에만 붙게, lib/commandTrace).
+   *  `begin` 이 이미 한 번 부른다 — 나중에(타이머·폴링 뒤) 요청을 보낼 때만 다시 부른다. */
+  claim: () => void;
 }
 
 export interface RunLog {
@@ -50,7 +53,7 @@ export function toRunLogLevel(v: unknown): RunLogLevel {
   return LEVELS.includes(v as RunLogLevel) ? (v as RunLogLevel) : 'info';
 }
 
-interface ActiveRun { title: string; shared: boolean }
+interface ActiveRun { title: string; shared: boolean; owner: string }
 
 export function useRunLog(): RunLog {
   const [title, setTitle] = useState('');
@@ -86,7 +89,7 @@ export function useRunLog(): RunLog {
   const begin = useCallback((t: string, firstMessage?: string): RunLogHandle => {
     const id = ++seq.current;
     const runs = active.current;
-    const me: ActiveRun = { title: t, shared: false };
+    const me: ActiveRun = { title: t, shared: false, owner: '' };
     const now = new Date().toISOString();
     if (runs.size === 0) {
       setSteps([]);
@@ -106,32 +109,40 @@ export function useRunLog(): RunLog {
       if (firstMessage) added.push({ ts: now, level: 'info', message: `[${t}] ${firstMessage}` });
       setLines((prev) => [...prev, ...added]);
     }
-    runs.set(id, me);
-    sync();
     const myGen = generation.current;
     const live = () => myGen === generation.current;
     const tag = (msg: string) => (me.shared ? `[${t}] ${msg}` : msg);
+    // 이 실행이 보낸 요청의 응답 명령(X-PEP-Commands — 관리자 요청만)만 이 실행에 CMD 줄로 붙인다(lib/commandTrace).
+    // SSE 실행은 서버가 cmd 이벤트를 스트림에 직접 보내므로 여기로 오지 않는다.
+    me.owner = registerRun((cmds) => {
+      if (!live() || !active.current.has(id)) return;
+      for (const c of cmds) log('cmd', tag(c));
+    });
+    runs.set(id, me);
+    sync();
+    claimRequests(me.owner); // begin 직후 바로 나가는 요청(runLogged 의 fn 등)은 이 실행 것
     return {
       log: (level, message) => { if (live()) log(level, tag(message)); },
       setStep: (name, label, status) => { if (live()) setStep(`${id}:${name}`, label ? tag(label) : label, status); },
       end: () => {
-        if (live() && active.current.delete(id)) sync();
+        if (live() && active.current.delete(id)) {
+          unregisterRun(me.owner);
+          sync();
+        }
       },
+      claim: () => { if (live() && active.current.has(id)) claimRequests(me.owner); },
     };
   }, [log, setStep, sync]);
 
-  // 실행 중에 받은 단건 응답의 실행 명령(X-PEP-Commands — 관리자 요청만)을 CMD 줄로 남긴다.
-  // SSE 실행은 서버가 cmd 이벤트를 직접 보내므로 여기로 오지 않는다(스트림 응답엔 헤더가 비어 있다).
+  // 화면을 떠나면 진행 중이던 실행의 명령 수신 등록을 푼다(늦은 응답이 사라진 로그로 가지 않게).
   useEffect(() => {
-    if (!running) return undefined;
-    return subscribeCommands((cmds) => {
-      if (active.current.size === 0) return;
-      for (const c of cmds) log('cmd', c);
-    });
-  }, [running, log]);
+    const runs = active.current;
+    return () => { runs.forEach((r) => unregisterRun(r.owner)); };
+  }, []);
 
   const end = useCallback(() => {
     generation.current += 1;
+    active.current.forEach((r) => unregisterRun(r.owner));
     active.current.clear();
     setRunning(false);
   }, []);
@@ -238,7 +249,7 @@ export async function runLogged<T>(
  * 조회 실패는 warn 한 줄만 남기고 계속 폴링한다(백엔드 일시 오류로 로그가 끊기지 않게).
  */
 export async function pollIntoRunLog<S>(
-  run: Pick<RunLog, 'log' | 'end'>,
+  run: Pick<RunLog, 'log' | 'end'> & { claim?: () => void },
   opts: {
     fetch: () => Promise<S>;
     describe: (snap: S, prev: S | undefined) => RunLogEntry[];
@@ -260,6 +271,8 @@ export async function pollIntoRunLog<S>(
     for (;;) {
       if (signal?.aborted) { run.log('warn', `진행 추적 중지 · ${elapsed(t0)}`); return prev; }
       try {
+        // 폴링 요청이 이 실행 것임을 표시 — 응답의 실행 명령이 다른 실행 로그로 가지 않게.
+        run.claim?.();
         const snap = await fetch();
         for (const [level, msg] of describe(snap, prev)) run.log(level, msg);
         prev = snap;

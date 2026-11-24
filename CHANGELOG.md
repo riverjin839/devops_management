@@ -10,6 +10,9 @@
 
 1.106.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+- **실행 로그 명령 줄 — 강등된 관리자 노출·동시 실행 섞임 수정**: 역할을 바꾸거나 비활성화·비밀번호 변경을 해도 옛 관리자 토큰으로 실행 명령(CMD 줄)이 계속 보이던 문제를 고쳤다 — 이제 토큰과 함께 DB 의 현재 역할·활성 상태를 확인한다(10초 캐시, 역할 변경·삭제 시 즉시 지움). 한 화면에 실행 로그가 여럿이고 동시에 돌 때 서로의 명령이 양쪽에 붙던 문제도 고쳤다 — 명령은 그 요청을 보낸 실행에만 붙고, 어느 실행 것인지 모르는 배경 요청의 명령은 실행이 하나일 때만 붙인다. Backend: `command_trace.resolve_admin`·`forget_user`(`routers/auth.py` 역할 변경·삭제). Frontend: `lib/commandTrace.ts` `registerRun`·`claimRequests`(요청 config 에 실행 owner), `RunLogHandle.claim`(`pollIntoRunLog` 가 폴링마다 claim).
+
 ## [1.106.3] - 2026-11-24
 
 ### Fixed
