@@ -170,6 +170,7 @@ AI 어시스턴트 + 사람 개발자용 — 기능 → 파일 경로와 자주 
 
 | 기능 | 위치 |
 |---|---|
+| 공통 서비스 (LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS — 등록·설정 수집·변경 감지·실행 로그) | `backend/app/routers/common_services.py` + `services/common_services/{catalog,flatten,collectors,service}.py` + `models/common_service.py` → `frontend/src/pages/CommonServicesPage.tsx` · `components/common-services/` · `hooks/useCommonServices.ts` |
 | LAKE 서비스 + 타입 | `backend/app/routers/lake_services.py` · `lake_service_types.py` + `services/lake_checkers/` → `frontend/src/pages/LakeServicesPage.tsx` · `LakeServiceDetailPage.tsx` |
 | 관리 서비스 설정 (admin) | `backend/app/routers/service_categories.py` → Settings `?tab=mgmt-service` → `frontend/src/components/settings/ServiceCategoryManager.tsx`(카테고리) · `LakeServiceTypeManager.tsx`(서비스 타입), 둘 다 `domain` prop. 아이콘/색상 출처는 `hooks/useServiceCatalog.ts` |
 | 클러스터 아이템/커스텀 필드 | `backend/app/routers/cluster_items.py` · `cluster_custom_fields.py` |

@@ -10,6 +10,9 @@
 
 1.104.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **공통 서비스(`/common-services`) — 1단계: 등록 · 설정값 가져오기 · 변경 감지 · 실행 로그**: 여러 K8S 클러스터가 함께 쓰는 LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS 를 인스턴스로 등록한다(등록 클러스터 안 워크로드는 「K8S 에서 가져오기」, 일반 노드 Podman 컨테이너는 SSH, 클러스터 밖은 주소 직접 입력, 사용 클러스터 지정). 「지금 수집」·「접속 테스트」는 실시간 실행 로그(로그 보기 토글)로 배포 설정(워크로드 spec·env·ConfigMap / podman inspect)과 앱 설정(Keycloak realm·클라이언트·IdP, Jenkins 시스템·플러그인·JCasC, ArgoCD ConfigMap·클러스터·저장소, Nexus 저장소·보안·nexus.properties, AD rootDSE·도메인 정책)을 읽고, 직전 값과 다르면 변경 이력·알람으로 남긴다. 주기 수집(기본 30분)·알람은 「감시 설정」(admin). 비밀처럼 보이는 값은 해시로만 저장해 변경만 감지한다. Backend: `routers/common_services.py`, `services/common_services/`, `models/common_service.py`(접속 정보는 암호화 저장·백업 마스킹), Celery `common-services-watch-dispatcher`. Frontend: `CommonServicesPage`, `components/common-services/`, 서비스 레일은 서비스 구성 레일 재사용.
+
 ## [1.104.0] - 2026-11-23
 
 ### Changed

@@ -46,6 +46,7 @@ FEATURE_API_PATTERNS: dict[str, tuple[str, ...]] = {
     "/pod-bottleneck": (r"^/pod-bottleneck(/|$)",),
     # lake-service-types 는 Settings 에서도 편집하므로 제외.
     "/lake-services": (r"^/lake-services(/|$)",),
+    "/common-services": (r"^/common-services(/|$)",),
     "/mindmap": (r"^/mindmaps(/|$)",),
     "/ontology": (r"^/ontology(/|$)",),
     "/trends": (r"^/trends(/|$)",),

@@ -101,6 +101,7 @@ from app.routers import (
     external_services_router,
     external_services_public_router,
     public_share_router,
+    common_services_router,
     k8s_helm_router,
     k8s_exec_router,
     k9s_ssh_router,
@@ -1508,6 +1509,17 @@ def _run_migrations():
                            "(cluster_id, service, detected_at DESC)")
     if "service_config_groups" in inspector.get_table_names():
         _safe_create_index("ix_service_config_groups_lookup", "service_config_groups", "(cluster_id, service, sort_order)")
+    # common_service_*: 공통 서비스 — 테이블은 create_all, 스냅샷·변경·실행 조회 인덱스 보강.
+    if "common_service_instances" in inspector.get_table_names():
+        _safe_add_column("common_service_instances", "fail_count", "INTEGER NOT NULL DEFAULT 0")
+        _safe_add_column("common_service_instances", "tenant_id", "UUID")
+    if "common_service_snapshots" in inspector.get_table_names():
+        _safe_create_index("ix_common_service_snapshots_lookup", "common_service_snapshots",
+                           "(instance_id, component, collected_at DESC)")
+    if "common_service_changes" in inspector.get_table_names():
+        _safe_create_index("ix_common_service_changes_lookup", "common_service_changes", "(instance_id, detected_at DESC)")
+    if "common_service_runs" in inspector.get_table_names():
+        _safe_create_index("ix_common_service_runs_lookup", "common_service_runs", "(instance_id, started_at DESC)")
 
     # cluster_items: 현황 아이템 — 문자형/도메인상태 컬럼은 구버전 DB 호환을 위해 보강.
     if "cluster_items" in inspector.get_table_names():
@@ -2864,6 +2876,7 @@ app.include_router(daily_report_router, prefix="/api/v1", dependencies=_auth)
 # 외부 서비스(도메인·IP:Port) — 공개 조회(`/public/external-services/*`)는 비인증(저장 스냅샷만), 수집·설정은 JWT.
 app.include_router(external_services_public_router, prefix="/api/v1")
 app.include_router(external_services_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(common_services_router, prefix="/api/v1", dependencies=_auth)
 # 공개 화면 공유 링크(만료 기한이 있는 접근 토큰) 관리 — require_admin.
 app.include_router(public_share_router, prefix="/api/v1", dependencies=_auth)
 # cluster-trends — per-node 메트릭 추이(Prometheus range query, 노드 명시선택+상한).

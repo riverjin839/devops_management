@@ -46,6 +46,7 @@ import { CheckItemDetailPage } from '@/pages/CheckItemDetailPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
 import { NodeSshPopupPage } from '@/pages/NodeSshPopupPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
+import { CommonServicesPage } from '@/pages/CommonServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
@@ -182,6 +183,8 @@ function AppShell() {
               {/* LAKE service monitoring (lake-service-monitoring PDCA) */}
               <Route path="/lake-services" element={<LakeServicesPage />} />
               <Route path="/lake-services/:id" element={<LakeServiceDetailPage />} />
+              {/* 공통 서비스 — 여러 클러스터가 함께 쓰는 LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS 설정·변경 감지 */}
+              <Route path="/common-services" element={<CommonServicesPage />} />
 
               {/* Pod-to-pod bottleneck analyzer (pod-bottleneck-analyzer PDCA) */}
               <Route path="/pod-bottleneck" element={<RedirectToHub view="bottleneck" />} />
