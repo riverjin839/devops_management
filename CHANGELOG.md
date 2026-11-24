@@ -10,6 +10,9 @@
 
 1.106.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **로그인 화면 가입 신청 + 관리자 승인**: 관리자가 Settings ▸ 가입 신청에서 창구를 켜면(기본 꺼짐) 로그인 화면에 "가입 신청" 이 생기고, 아이디·이름·이메일·소속·사유·비밀번호로 신청한다. 관리자는 같은 탭에서 역할(viewer·operator)을 골라 승인하면 계정이 만들어지고, 거절 사유는 신청자가 로그인을 시도할 때 보인다(비밀번호가 맞을 때만 — 신청 여부를 캐는 경로가 되지 않게). 허용 이메일 도메인·비밀번호 최소 길이(영문+숫자, 아이디 포함 금지)·대기 기한·기록 보관 일수·대기 건수 상한을 화면에서 정하고, IP 당 제출 횟수 제한·봇 차단 숨김 필드·예약 아이디 차단·관리자 알림·감사 로그(`signup.*`)가 붙는다. 비밀번호는 신청 때부터 해시로만 보관하고 승인 뒤 신청 기록에서 지운다. Backend: `routers/auth_signup.py`, `services/signup_service.py`, `signup_requests` 테이블(백업 시 해시 마스킹). Frontend: `components/auth/SignupForm.tsx`, `components/settings/SignupRequestsPanel.tsx`.
+
 ## [1.106.0] - 2026-11-24
 
 ### Changed

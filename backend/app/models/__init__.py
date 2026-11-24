@@ -43,6 +43,7 @@ from app.models.cluster_item import ClusterItem
 from app.models.batch_job import BatchJob, BatchJobRun
 from app.models.command_entry import CommandEntry
 from app.models.user import User
+from app.models.signup_request import SignupRequest
 from app.models.user_setting import UserSetting
 from app.models.island import Island
 from app.models.audit_log import AuditLog
@@ -115,6 +116,7 @@ from app.models.check_matrix import (
 )
 
 __all__ = [
+    "SignupRequest",
     "Cluster",
     "ResourceCountSnapshot",
     "MetricChecklistItem",

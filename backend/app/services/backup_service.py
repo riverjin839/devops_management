@@ -106,6 +106,8 @@ SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "clusters": ["kubeconfig_content", "kubeconfig_path"],
     # bcrypt 해시지만 외부 유출 시 오프라인 브루트포스 가능성이 있어 기본 마스킹.
     "users": ["hashed_password"],
+    # 가입 신청 비밀번호 해시(대기·거절 행) — users 와 같은 이유로 기본 마스킹.
+    "signup_requests": ["password_hash"],
     # Jira PAT/세션쿠키 + 저장된 SSO 로그인 정보 — 암호문이지만 export 기본 마스킹
     # (SECRET_KEY 유출 시 복호 방지).
     "user_jira_credentials": ["token_encrypted", "sso_login_encrypted", "confluence_cookie_encrypted", "servicenow_cookie_encrypted"],

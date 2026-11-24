@@ -7193,3 +7193,61 @@ export interface CommonServiceWatchSettings {
 export interface CommonServiceStatusMap {
   services: Record<string, { count: number; level: 'ok' | 'warning' | 'critical'; reasons: string[] }>;
 }
+
+// ── 가입 신청 + 관리자 승인 (/auth/signup*) ───────────────────────────────
+export type SignupStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'withdrawn';
+
+/** 로그인 화면용 공개 설정 — 운영값(상한·보존 기간)은 싣지 않는다. */
+export interface SignupPublicConfig {
+  enabled: boolean;
+  minPasswordLength: number;
+  allowedEmailDomains: string[];
+  notice: string;
+}
+
+export interface SignupSubmitPayload {
+  username: string;
+  password: string;
+  displayName: string;
+  email: string;
+  department?: string;
+  reason?: string;
+  /** 봇용 숨김 필드(honeypot) — 사람은 비워 둔다. */
+  website?: string;
+}
+
+export interface SignupSettings {
+  enabled: boolean;
+  minPasswordLength: number;
+  allowedEmailDomains: string[];
+  pendingExpireDays: number;
+  retentionDays: number;
+  maxPending: number;
+  notice: string;
+  ldapEnabled: boolean;
+  oidcEnabled: boolean;
+}
+
+export interface SignupRequestItem {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string;
+  department: string | null;
+  reason: string | null;
+  status: SignupStatus;
+  requestIp: string | null;
+  userAgent: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  grantedRole: 'viewer' | 'operator' | null;
+  userId: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface SignupRequestList {
+  items: SignupRequestItem[];
+  counts: Record<SignupStatus, number>;
+}
