@@ -2323,6 +2323,43 @@ export interface KernelParamsCollectResponse {
   errors: string[];
 }
 
+// ── NIC 수집 (SSH, 서비스 구성 ▸ NIC 현재 값) ──────────────────────────────
+
+export interface NicCollectRequest {
+  hosts: string[];
+  /** host(IP) → 쿠버네티스 노드 이름. NIC 상태·스냅샷은 노드 이름으로 저장된다. */
+  hostNames?: Record<string, string>;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+}
+
+export interface NicCollectPerHost {
+  host: string;
+  node?: string;
+  status: string;
+  interfaceCount?: number;
+  warnings?: string[];
+  stored?: boolean;
+  error?: string;
+  rawStdout?: string;
+  rawStderr?: string;
+  exitCode?: number | null;
+}
+
+export interface NicCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: NicCollectPerHost[];
+  errors: string[];
+}
+
 // ── kubelet config 수집 (SSH) ────────────────────────────────────────────
 
 export interface KubeletConfigCollectRequest {
@@ -6610,9 +6647,9 @@ export interface ContainerdConfigCollectResponse {
 
 // ── 서비스 구성 (`/k8s/:clusterId/services`) ─────────────────────────────────
 /** 현재 값을 다시 읽는 수집 종류 — 화면의 '현재 값 수집' 이 여는 모달. */
-export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config';
+export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config' | 'nic';
 export type ServiceConfigRestartScope = 'immediate' | 'restart_member' | 'restart_service' | 'rolling_restart_ds' | 'reboot'
-  | 'restart_static_pod' | 'restart_kubelet';
+  | 'restart_static_pod' | 'restart_kubelet' | 'nic_queue_reset';
 export type ServiceConfigItemStatus = 'same' | 'differs' | 'mixed' | 'unknown';
 
 export interface ServiceConfigServiceDef {
@@ -6773,6 +6810,8 @@ export interface ServiceConfigApplyNodeResult {
   after: Record<string, string | null>;
   error: string | null;
   durationMs: number;
+  /** NIC — 적용은 됐지만 알아 둘 것(lacp_rate 재기동 후 반영·NM 미관리 런타임만 등). */
+  notes?: string[];
 }
 export interface ServiceConfigApplyRun {
   id: string;
@@ -6883,6 +6922,10 @@ export interface ServiceConfigApplySettings {
   kubeletConfig: string;
   kubeletService: string;
   kubeletRestartCmd: string;
+  nicEthtool: string;
+  nicRollbackTimerSec: number;
+  nicMemberWaitSec: number;
+  nicRejoinTimeoutSec: number;
 }
 
 // ── NIC 상태(서비스 구성 ▸ NIC, `/nic-watch`) ──
@@ -6929,6 +6972,7 @@ export interface NicRates {
   flaps: number;
   bondLinkFailures: number;
 }
+/** 목록 행(가벼운 형태) — 카운터·offload 전체·본딩 하위·경고는 `NicInterfaceDetail`(펼칠 때 따로 조회). */
 export interface NicInterfaceRow {
   node: string;
   name: string;
@@ -6944,28 +6988,32 @@ export interface NicInterfaceRow {
   vlanId: number | null;
   driver: { driver: string | null; version: string | null; firmware: string | null; bus: string | null } | null;
   ring: { rx: number | null; rxMax: number | null; tx: number | null; txMax: number | null } | null;
-  bond: NicBond | null;
+  bond: Omit<NicBond, 'slaveState'> | null;
   lacp: NicSlaveState | null;
   offload: { name: string; label: string; on: boolean }[];
+  rates: NicRates | null;
+  level: NicLevel;
+  /** 위험·확인 필요 경고 수. */
+  findingCount: number;
+}
+export interface NicInterfaceDetail extends Omit<NicInterfaceRow, 'bond' | 'findingCount'> {
+  bond: NicBond | null;
   features: { name: string; label: string; on: boolean; fixed: boolean }[];
   counters: { name: string; value: number }[];
-  rates: NicRates | null;
   findings: NicFinding[];
-  level: NicLevel;
 }
-export interface NicNodeInfo {
-  node: string;
-  hostIp: string | null;
-  agentVersion: string | null;
-  collectedAt: string | null;
-  receivedAt: string | null;
-  stale: boolean;
-  interfaceCount: number;
-  rateReady: boolean;
-  level: NicLevel;
+export interface NicViewQuery {
+  q?: string;
+  kind?: string;
+  onlyFlagged?: boolean;
+  offset?: number;
+  limit?: number;
 }
 export interface NicWatchSettings {
   enabled: boolean;
+  /** 서비스 구성 nic 설정 값을 읽을 대상 — 본딩과 그 하위(기본) | glob. */
+  targetMode: 'bond_members' | 'glob';
+  targetGlob: string[];
   includeKinds: string[];
   includeNames: string[];
   excludeNames: string[];
@@ -7001,10 +7049,14 @@ export interface NicObserved {
 }
 export interface NicOverrideSummary { clusterId: string; clusterName: string; fields: string[] }
 export interface NicClusterView {
-  nodes: NicNodeInfo[];
   interfaces: NicInterfaceRow[];
+  interfacesTotal: number;
+  offset: number;
+  limit: number;
+  /** 앞 300건(요약만 요청하면 5건). 전체 수는 `findingsTotal`. */
   findings: NicFinding[];
-  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel };
+  findingsTotal: number;
+  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel; latestReceivedAt: string | null };
   pendingAgents: { node: string; agentVersion: string | null; reason: string }[];
   agentCount: number;
   settings: NicWatchSettings;

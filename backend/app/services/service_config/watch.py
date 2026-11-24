@@ -45,7 +45,7 @@ ALERT_CHANGED = "ServiceConfigChanged"
 ALERT_DRIFT = "ServiceConfigDrift"
 WATCHED_SERVICES = tuple(s for s in SERVICE_KEYS if s != "linux")
 # 노드별로 저장되는 컴포넌트만 변경을 비교한다(버전 수집의 대표 파드 1개 — ``etcd``·``kube_apiserver`` 등은 노드가 바뀔 수 있어 제외).
-_NODE_PREFIXES = ("static_pod:", "containerd_config:", "kubelet_config:", "etcd_systemd:")
+_NODE_PREFIXES = ("static_pod:", "containerd_config:", "kubelet_config:", "etcd_systemd:", "nic:")
 _CLUSTER_COMPONENTS = ("cilium_config",)
 AGENT_FILE_IDS = {"containerd": "containerd_config", "kubelet": "kubelet_config"}  # 파일 id → 적용 설정 경로 키
 AGENT_FILE_MAX = 256 * 1024

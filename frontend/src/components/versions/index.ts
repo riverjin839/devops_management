@@ -4,3 +4,4 @@ export { KernelParamsCollectModal } from './KernelParamsCollectModal';
 export { NodeNicsCollectModal } from './NodeNicsCollectModal';
 export { KubeletConfigCollectModal } from './KubeletConfigCollectModal';
 export { ContainerdConfigCollectModal } from './ContainerdConfigCollectModal';
+export { NicCollectModal } from './NicCollectModal';

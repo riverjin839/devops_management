@@ -1,6 +1,6 @@
 [package]
 name = "pep-node-agent"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 description = "PEP 노드 에이전트 — sysctl·설정 파일·NIC 상태를 PEP 로 보고한다 (Python node_param_agent 의 Rust 구현)"
 license = "MIT"

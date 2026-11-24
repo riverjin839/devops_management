@@ -25,6 +25,7 @@ const RESTART_LABEL: Record<ServiceConfigRestartScope, string> = {
   rolling_restart_ds: 'cilium 롤링 재시작',
   reboot: '재부팅',
   restart_static_pod: '정적 파드 재시작 (1대씩)',
+  nic_queue_reset: '하위 인터페이스 큐 재설정 (1개씩)',
   restart_kubelet: 'kubelet 재시작',
 };
 
@@ -35,13 +36,26 @@ const STATUS: Record<ServiceConfigItemStatus, { variant: StatusVariant; label: s
   unknown: { variant: 'pending', label: '값 없음' },
 };
 
+/** 기대 값과 노드 현재 값 비교(백엔드 `current.same_value` 와 같은 규칙). NIC 현재 값 `N/M`(현재/최대)은 `N`·`max`(N==M)와 같고,
+ *  인터페이스별 값 `a=x b=y` 는 모두 같아야 같다. */
+function sameValue(expected: string, current: string): boolean {
+  const e = expected.trim();
+  const c = current.trim();
+  if (e === c) return true;
+  if (!e || !c) return false;
+  const toks = c.split(/\s+/);
+  if (toks.length > 1 && toks.every((t) => /^[^=\s]+=\S+$/.test(t))) return toks.every((t) => sameValue(e, t.slice(t.indexOf('=') + 1)));
+  const m = /^(\d+)\/(\d+)$/.exec(c);
+  return !!m && (e === m[1] || (e === 'max' && m[1] === m[2]));
+}
+
 /** VALUE 칸 아래 줄 — 노드 현재 값. 입력(비교) 값과 같으면 아무것도 그리지 않고(같은 노드 수는 ⓘ), 다르면 노드 값을, 노드마다 다르면 값별 노드 목록(펼침). */
 function NodeValueLine({ row, compare }: { row: ServiceConfigRow; compare: string }) {
   const [open, setOpen] = useState(false);
   const c = row.current;
   if (c.groups.length === 0) return <span className="block text-xs text-muted-foreground mt-1">노드 값 없음</span>;
   if (c.uniform) {
-    if ((c.value ?? '') === compare) return null;
+    if (sameValue(compare, c.value ?? '')) return null;
     return (
       <span className="block text-xs mt-1 break-all">
         <span className="text-muted-foreground">노드 </span>
@@ -100,6 +114,17 @@ function ValueInput({ row, value, placeholder, disabled, changed, onChange }: {
     );
   }
   const numeric = row.valueType === 'int' || row.valueType === 'size';
+  if (row.valueType === 'int_or_max') {
+    // 숫자 또는 max(인터페이스별 최대값) — 노드마다 NIC 최대값이 달라도 한 값으로 맞출 수 있다
+    const listId = `max-${row.key}`;
+    return (
+      <>
+        <input value={value} disabled={disabled} aria-label={label} placeholder={placeholder || '숫자 또는 max'} list={listId}
+          title="숫자 또는 max(인터페이스 최대값)" onChange={(e) => onChange(e.target.value.trim())} className={`${INPUT} ${border}`} />
+        <datalist id={listId}><option value="max">max — 인터페이스 최대값</option></datalist>
+      </>
+    );
+  }
   return (
     <input value={value} disabled={disabled} aria-label={label} placeholder={placeholder || '(없음)'}
       inputMode={numeric ? 'numeric' : undefined} onChange={(e) => onChange(e.target.value)} className={`${INPUT} ${border}`} />

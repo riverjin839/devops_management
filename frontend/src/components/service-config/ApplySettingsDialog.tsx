@@ -184,6 +184,25 @@ export function ApplySettingsDialog({ open, isAdmin, service, serviceLabel, onCl
                   onChange={(e) => set({ nodeReadyTimeoutSec: Number(e.target.value) || 300 })} aria-label="노드 Ready 대기 시간" />
               </Field>
               </>)}
+              {service === 'nic' && (<>
+              <Field label="노드의 ethtool 경로" help="PATH 에 있으면 ethtool, 아니면 절대 경로(예: /usr/sbin/ethtool). 수집·적용이 함께 쓴다.">
+                <input className={INPUT} disabled={!isAdmin} value={form.nicEthtool} onChange={(e) => set({ nicEthtool: e.target.value })} aria-label="ethtool 경로" />
+              </Field>
+              <div className="grid grid-cols-3 gap-2">
+                <Field label="원복 타이머 기본값(초)" help="30 ~ 900. 확인 전 연결이 끊기면 노드가 이 시간 뒤 이전 값으로 돌아간다.">
+                  <input type="number" min={30} max={900} className={INPUT} disabled={!isAdmin} value={form.nicRollbackTimerSec}
+                    onChange={(e) => set({ nicRollbackTimerSec: Number(e.target.value) || 120 })} aria-label="원복 타이머(초)" />
+                </Field>
+                <Field label="하위 사이 대기 기본값(초)" help="0 ~ 300.">
+                  <input type="number" min={0} max={300} className={INPUT} disabled={!isAdmin} value={form.nicMemberWaitSec}
+                    onChange={(e) => set({ nicMemberWaitSec: Number(e.target.value) || 0 })} aria-label="하위 인터페이스 사이 대기(초)" />
+                </Field>
+                <Field label="재합류 대기 기본값(초)" help="10 ~ 600. 링크 up·LACP 활성 Aggregator 재합류.">
+                  <input type="number" min={10} max={600} className={INPUT} disabled={!isAdmin} value={form.nicRejoinTimeoutSec}
+                    onChange={(e) => set({ nicRejoinTimeoutSec: Number(e.target.value) || 60 })} aria-label="재합류 대기(초)" />
+                </Field>
+              </div>
+              </>)}
               {service === 'containerd' && (<>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="설정 파일"><input className={INPUT} disabled={!isAdmin} value={form.containerdConfig} onChange={(e) => set({ containerdConfig: e.target.value })} aria-label="containerd 설정 파일" /></Field>

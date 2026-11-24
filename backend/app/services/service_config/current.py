@@ -11,6 +11,9 @@
 - kube-apiserver·kube-controller-manager·kube-scheduler(·etcd): ``static_pod:{service}:{node}``(서비스 구성의 K8S API 수집 —
   컨트롤 플레인 노드마다 ``data.flags``) 우선, 없으면 버전 수집의 대표 파드 1개(``kube_apiserver`` 등)
 - kubelet    : ``kubelet_config:{host}``(SSH ``data.config_content`` — KubeletConfiguration YAML 을 평탄화)
+- nic        : ``nic:{node}``(``data.flat`` — 에이전트 보고·SSH 수집을 ``services/nic_watch/snapshot.py`` 가 평탄화).
+  ring·채널 값은 ``현재/최대``(예 ``1024/8192``), 인터페이스마다 다르면 ``ens1f0=1024/8192 ens1f1=4096/8192``.
+  버전 값(숫자 또는 ``max``)과는 ``same_value`` 로 비교한다.
 """
 from __future__ import annotations
 
@@ -42,7 +45,12 @@ SERVICE_COMPONENTS: dict[str, dict[str, tuple[str, ...]]] = {
     "containerd": {"exact": (), "prefix": ("containerd_config:",)},
     "cilium": {"exact": ("cilium_config",), "prefix": ()},
     "linux": {"exact": (), "prefix": ("node_params:", "kernel_params:")},
+    "nic": {"exact": (), "prefix": ("nic:",)},
 }
+
+_CUR_MAX = re.compile(r"^(\d+)/(\d+)$")
+_IFACE_PART = re.compile(r"^[^=\s]+=(\S+)$")
+_NIC_SOURCE = {"agent": "노드 에이전트", "ssh": "SSH 수집", "apply": "PEP 적용"}
 
 STATIC_POD_PREFIX = "static_pod:"
 CLUSTER_NODE = "(클러스터)"  # 노드 구분 없이 클러스터에 하나뿐인 값(cilium-config)
@@ -62,6 +70,48 @@ def norm(value: Any) -> Optional[str]:
     if isinstance(value, (list, dict)):
         return json.dumps(value, ensure_ascii=False, sort_keys=True)
     return " ".join(str(value).split())
+
+
+def _parts(value: str) -> list[str]:
+    """인터페이스별 값 ``a=x b=y`` → [x, y]. 아니면 [value]."""
+    toks = value.split()
+    if len(toks) > 1 and all(_IFACE_PART.match(t) for t in toks):
+        return [_IFACE_PART.match(t).group(1) for t in toks]  # type: ignore[union-attr]
+    return [value]
+
+
+def same_value(expected: Any, current: Any) -> bool:
+    """기대(버전) 값과 노드 현재 값이 같은가. 일반 값은 정규화 문자열 비교.
+
+    NIC 표기: 현재 값 ``N/M``(현재/최대)은 기대 ``N`` 또는 ``max``(N == M)와 같다. 인터페이스별 값 ``a=x b=y`` 는
+    모든 인터페이스가 같아야 같다."""
+    e, c = norm(expected), norm(current)
+    if e == c:
+        return True
+    if e is None or c is None:
+        return False
+    parts = _parts(c)
+    if len(parts) > 1:
+        return all(same_value(e, p) for p in parts)
+    m = _CUR_MAX.match(c)
+    if m:
+        return e == m.group(1) or (e == "max" and m.group(1) == m.group(2))
+    return False
+
+
+def to_version_value(current: Any) -> Optional[str]:
+    """노드 현재 값 → 버전에 저장할 값(V1 가져오기). ``N/M`` → ``N``, 인터페이스별 값은 가장 많은 값."""
+    c = norm(current)
+    if c is None:
+        return None
+    parts = _parts(c)
+    if len(parts) > 1:
+        counts: dict[str, int] = {}
+        for p in parts:
+            counts[p] = counts.get(p, 0) + 1
+        c = max(sorted(counts), key=lambda k: counts[k])
+    m = _CUR_MAX.match(c)
+    return m.group(1) if m else c
 
 
 # ── 파서 ─────────────────────────────────────────────────────────────────────
@@ -252,6 +302,17 @@ def current_values(service: str, snaps: Iterable[SnapLike], items: Iterable[Item
                 if k in params:
                     put(it.key, node, params[k])
 
+    elif service == "nic":
+        for s in snaps:
+            node = s.component.split(":", 1)[1]
+            data = s.data or {}
+            flat = data.get("flat") or {}
+            sources.append(_src(s.component, node, f"NIC · {_NIC_SOURCE.get(str(data.get('source')), '수집')}", s))
+            for it in items:
+                k = (it.source_keys or {}).get("key") or it.key
+                if k in flat:
+                    put(it.key, node, flat[k])
+
     return {"values": values, "sources": sources}
 
 
@@ -274,7 +335,10 @@ def item_status(version_value: Optional[str], summary: dict[str, Any]) -> str:
     if not summary["groups"]:
         return "unknown"
     if not summary["uniform"]:
+        # 노드 값 표기가 달라도(NIC 최대값이 노드마다 다름) 모두 버전 값과 같으면 같은 것으로 본다
+        if version_value is not None and all(same_value(version_value, g["value"]) for g in summary["groups"]):
+            return "same"
         return "mixed"
-    if version_value is not None and norm(version_value) != summary["value"]:
+    if version_value is not None and not same_value(version_value, summary["value"]):
         return "differs"
     return "same"

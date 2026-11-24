@@ -10,6 +10,13 @@
 
 1.106.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **서비스 구성 ▸ NIC 적용(노드 반영)**: NIC 설정 버전을 「적용…」으로 노드에 반영한다(SSH, 자격증명 저장 안 함, 실시간 실행 로그·중지·이력). 노드마다 현재 값을 다시 읽어 `max` 를 인터페이스 최대값으로 풀고, 본딩 해시·LACP rate·miimon 은 끊김 없이 바꾼 뒤 ring·채널·offload 는 **본딩 하위 인터페이스를 하나씩** 바꾸며 바꾼 하위가 링크·LACP 활성 Aggregator 에 다시 들어온 걸 확인하고 다음으로 간다. 시작 전에 노드에 **원복 타이머**(기본 120초)를 걸어, 확인 전에 연결이 끊기면 노드가 스스로 이전 값으로 돌아간다. 재합류 실패·다시 읽은 값 불일치면 그 노드를 즉시 원복하고(실패 시 중단 기본), 이중화가 확인되지 않은 인터페이스·`[fixed]`·드라이버 미지원은 건너뛴다. 최대값을 넘는 값은 시작 전에 막는다. 확인이 끝나면 NetworkManager 연결 설정에도 기록해 재부팅 뒤 유지된다(연결을 다시 올리지 않음, NM 이 관리하지 않는 인터페이스는 런타임만 + 메모). lacp_rate 를 커널이 거부하면 영구 기록만 하고 '본딩 재기동 후 반영' 으로 남긴다. 동시 노드 수 최대 20, 대기·제한 시간·ethtool 경로는 적용 설정에서 바꾼다. Backend: `services/service_config/apply_nic.py`, 적용 옵션 `member_wait_sec`·`rejoin_timeout_sec`·`rollback_timer_sec`, 적용 설정 `nic_*`. Frontend: `ApplyDialog`·`ApplySettingsDialog` NIC 구역, 실행 결과 메모 열.
+- **서비스 구성 ▸ NIC 설정 버전·드리프트 + SSH 현재 값 수집**: NIC 가 서비스 구성의 9번째 서비스가 됐다(탭: 설정·상태·요약). 본딩 하위 인터페이스의 ring buffer·채널 수·offload 6개와 본딩 해시 정책·LACP rate·링크 감시를 다른 서비스처럼 설정 버전으로 관리하고(V1 가져오기·비교·되돌리기·노드 그룹 재정의), 노드 값이 기준 버전과 다르면 드리프트 배너·알람, 값이 바뀌면 변경 이력·알람이 남는다. ring·채널은 숫자 또는 `max`(인터페이스별 최대값)로 적을 수 있고 노드 값은 `현재/최대` 로 보인다. 에이전트 없이도 쓰도록 **SSH 로 수집**(조회 명령만, 동시 20대, 실시간 실행 로그)을 추가했고, 에이전트가 있으면 1분마다 같은 경로로 들어온다. 상태 탭의 판정 기준(해시 정책·LACP rate·offload)은 설정 버전이 있으면 버전 값을 따른다. Backend: `services/nic_watch/{snapshot,ssh_collect}.py`, `POST /clusters/{id}/collect-nic(/stream)`, `current.same_value`, `node_nic_states.source`, 에이전트 채널 수 보고(Rust `agent-rs` 2.1.0 · Python 1.3.0). Frontend: `NicCollectModal`, NIC 탭 구성, `int_or_max` 입력.
+
+### Changed
+- **서비스 구성 ▸ NIC — 노드 수백 대 클러스터 대응**: 인터페이스 표의 검색(이름 일부 또는 glob)·종류·경고만 필터와 페이지(100행)를 서버에서 처리하고, 카운터·offload 전체·본딩 하위 상태는 행을 펼칠 때만 따로 읽는다. 레일 상태 점은 요약만 받는다. 500노드 기준 첫 화면 응답이 약 3MB → 150KB, 레일용 요청은 2KB. 판정 결과는 클러스터별로 20초 캐시하고, 에이전트 보고는 카운터 말고 바뀐 게 없으면 5분 동안 받은 시각만 갱신해 노드마다 매분 다시 쓰지 않는다. Backend: `nic_watch` 조회 쿼리(`q`·`kind`·`only_flagged`·`offset`·`limit`), `GET /nic-watch/clusters/{id}/nodes/{node}/interfaces/{iface}`. Frontend: `NicStatusView` 페이지·상세 지연 조회, `useNicWatchSummary`·`useNicInterfaceDetail`.
+
 ## [1.106.4] - 2026-11-24
 
 ### Removed

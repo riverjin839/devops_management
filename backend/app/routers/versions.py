@@ -14,6 +14,7 @@ import json
 import os
 import re
 import asyncio
+from shlex import quote as shlex_quote
 from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, Callable
@@ -778,6 +779,88 @@ async def collect_kernel_params(
         "hosts": per_host,
         "errors": errors,
     }
+
+
+# ── NIC 수집 (SSH) — 서비스 구성 ▸ NIC 의 현재 값 ────────────────────────────
+
+class NicCollectRequest(BaseModel):
+    """각 노드에 SSH 로 접속해 NIC 상태(본딩/LACP·링크·MTU·ring·채널·offload·드롭 카운터)를 **조회 명령만으로** 읽는다.
+
+    결과는 노드 파라미터 에이전트 보고와 같은 ``node_nic_states`` 행(source ``ssh``)과 서비스 구성 ``nic:{node}``
+    스냅샷으로 저장된다 — 에이전트 없이도 NIC 화면·설정 비교가 동작한다. 자격증명은 이 요청에만 쓴다.
+    """
+    hosts: list[str] = Field(..., min_length=1, max_length=2000)
+    # host → 쿠버네티스 노드 이름(화면 노드 목록). 없으면 host 를 노드 이름으로 쓴다.
+    host_names: dict[str, str] = Field(default_factory=dict)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(default="root", min_length=1, max_length=64)
+    password: str | None = None
+    private_key: str | None = None
+    use_sudo: bool = False
+    connect_timeout: int = Field(default=8, ge=1, le=60)
+    parallelism: int = Field(default=20, ge=1, le=50)
+    chunk_size: int = Field(default=50, ge=1, le=200)
+    chunk_pause_ms: int = Field(default=200, ge=0, le=5000)
+
+
+@router.post("/{cluster_id}/collect-nic")
+async def collect_nic(
+    cluster_id: UUID,
+    payload: NicCollectRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_operator),
+):
+    """노드별 NIC 상태를 병렬로 읽어 저장. 노드 설정은 바꾸지 않는다(sysfs·/proc 읽기 + ethtool 조회만)."""
+    from app.services.nic_watch import service as nic_svc
+    from app.services.nic_watch import ssh_collect as NS
+    from app.services.nic_watch.settings import get_effective as nic_effective
+
+    cluster = _require_collect_target(db, cluster_id, payload)
+    cfg = nic_effective(db, cluster_id)  # 공통 기준 + 이 클러스터 재정의(제외 이름·수집 종류)
+    script = NS.build_script(cfg["exclude_names"])
+    sudo = "sudo -n " if payload.use_sudo else ""
+    cmd = f"{sudo}sh -c {shlex_quote(script)}"
+    now = datetime.utcnow()
+
+    def _one(host: str) -> dict:
+        target = SSHTarget(host=host, port=payload.port, username=payload.username,
+                           password=payload.password, private_key=payload.private_key)
+        res = _exec_ssh(target, cmd, connect_timeout=payload.connect_timeout, exec_timeout=30,
+                        max_stdout_chars=1_000_000)
+        entry: dict = {"host": host, "node": payload.host_names.get(host) or host, "status": res.status,
+                       "raw_stdout": (res.stdout or "")[:1500], "raw_stderr": (res.stderr or "")[:800],
+                       "exit_code": res.exit_code}
+        if res.status != "ok":
+            entry["error"] = res.error or (res.stderr or "")[:200]
+            return entry
+        parsed = NS.parse_output(res.stdout or "", cfg)
+        entry["interface_count"] = len(parsed["interfaces"])
+        entry["warnings"] = parsed["errors"]
+        entry["_parsed"] = parsed
+        return entry
+
+    per_host: list[dict] = await _parallel_collect(
+        payload.hosts, worker=_one, parallelism=payload.parallelism,
+        chunk_size=payload.chunk_size, chunk_pause_ms=payload.chunk_pause_ms,
+    )
+    changed = 0
+    errors: list[str] = []
+    for entry in per_host:
+        parsed = entry.pop("_parsed", None)
+        if entry.get("status") != "ok" or parsed is None:
+            errors.append(f"{entry.get('host')}: {entry.get('error') or entry.get('status')}")
+            continue
+        try:
+            nic_svc.ingest(db, cluster, entry["node"], entry["host"], None, now.isoformat(), parsed, now=now, source="ssh")
+            entry["stored"] = True
+            changed += 1
+        except Exception as exc:  # noqa: BLE001 — 한 노드 저장 실패가 나머지를 막지 않는다
+            db.rollback()
+            entry["stored"] = False
+            entry["error"] = f"저장 실패: {str(exc)[:160]}"
+            errors.append(f"{entry.get('host')}: 저장 실패")
+    nic_svc.invalidate(cluster_id)
+    return {"cluster_id": str(cluster_id), "changed": changed, "hosts": per_host, "errors": errors}
 
 
 # ── kubelet config 수집 (SSH) ───────────────────────────────────────────────
@@ -2380,6 +2463,22 @@ async def collect_etcd_systemd_stream(
         payload, user,
         lambda sdb, u: collect_etcd_systemd(cluster_id, payload, db=sdb, _=u),
         label="etcd systemd",
+    )
+
+
+@router.post("/{cluster_id}/collect-nic/stream")
+async def collect_nic_stream(
+    cluster_id: UUID,
+    payload: NicCollectRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_operator),
+):
+    """``collect-nic`` 의 SSE 버전 — 호스트별 진행을 실시간으로 흘린다."""
+    _require_collect_target(db, cluster_id, payload)
+    return _collect_stream(
+        payload, user,
+        lambda sdb, u: collect_nic(cluster_id, payload, db=sdb, _=u),
+        label="NIC",
     )
 
 
