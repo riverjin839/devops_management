@@ -272,6 +272,11 @@ def cluster(db):
     from app.models.node_nic import NodeNicState
     from app.models.node_param_watch import NodeParamAgent
 
+    from app.services.service_config.catalog_seed import seed_catalog, seed_rules
+
+    # 서비스 구성 nic 키·규칙 — 앱 기동(lifespan) 시드에 기대지 않는다(새 DB 에서 이 파일이 먼저 돌 수 있다)
+    seed_catalog(db)
+    seed_rules(db)
     c = Cluster(name=f"nic-{uuid.uuid4().hex[:8]}", api_endpoint="https://nic:6443")
     db.add(c)
     db.commit()
@@ -446,6 +451,11 @@ def test_flatten_targets_mixed_and_carry_over():
     old_agent = SN.flatten([b, _phys("ens1f0"), _phys("ens1f1")])
     assert "channels.combined" not in old_agent["measured"]
     assert SN.carry_over(f, old_agent["flat"], old_agent["measured"])["channels.combined"] == "8/63"
+    assert SN.carry_over(f, old_agent["flat"], old_agent["measured"], out["targets"], old_agent["targets"])["channels.combined"] == "8/63"
+    # 대상이 바뀌면(glob 으로 본딩만) 이전 대상의 물리 인터페이스 값은 버린다
+    bond_only = SN.flatten([b, p0, p1], mode="glob", globs=["bond*"])
+    moved = SN.carry_over(f, bond_only["flat"], bond_only["measured"], out["targets"], bond_only["targets"])
+    assert "ring.rx" not in moved and "channels.combined" not in moved and moved["bond.lacp_rate"] == "slow"
     # 본딩이 없으면 링크가 올라온 물리 인터페이스
     assert SN.flatten([mgmt, _phys("eno2", master=None, oper="down")])["targets"] == ["eno1"]
     assert SN.flatten([b, p0, mgmt], mode="glob", globs=["eno*"])["targets"] == ["eno1"]
