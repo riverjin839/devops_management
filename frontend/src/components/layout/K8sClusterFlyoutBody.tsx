@@ -132,7 +132,8 @@ export function K8sClusterFlyoutBody({ onNavigate }: { onNavigate: () => void })
                 return (
                   <div key={c.id} className="flex items-center mx-1">
                     <Link
-                      to={`/k8s/${c.id}${view ? `/${view}` : ''}`}
+                      // 허브 안에서 옮길 때는 뷰 쿼리(?service= 등)도 유지한다 — 허브의 클러스터 선택기와 같은 동작.
+                      to={`/k8s/${c.id}${view ? `/${view}` : ''}${currentId ? location.search : ''}`}
                       role="menuitem"
                       aria-current={active ? 'page' : undefined}
                       onClick={onNavigate}
