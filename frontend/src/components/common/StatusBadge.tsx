@@ -71,6 +71,28 @@ function StatusBadgeBase({
 
 export const StatusBadge = memo(StatusBadgeBase);
 
+// ── 아이콘만 (글자 라벨 없이 모양·색으로 구분) ────────────────────────
+// 상태 이름은 툴팁·스크린리더(`title`/`aria-label`)로만 전한다. 정상은 무채색.
+const ICON_CLS: Record<StatusVariant, string> = {
+  healthy:  'text-muted-foreground',
+  warning:  'text-status-warning',
+  critical: 'text-status-critical',
+  pending:  'text-status-unknown',
+  info:     'text-status-info',
+  neutral:  'text-faint',
+  loading:  'text-status-info animate-spin',
+};
+
+export function StatusIcon({ variant, title, className = '' }: { variant: StatusVariant; title?: string; className?: string }) {
+  const { icon: Icon, defaultLabel } = VARIANT_META[variant];
+  const label = title ?? defaultLabel;
+  return (
+    <span role="img" aria-label={label} title={label} className={`inline-flex items-center ${className}`}>
+      <Icon className={`w-4 h-4 ${ICON_CLS[variant]}`} aria-hidden="true" />
+    </span>
+  );
+}
+
 // ── 더 작은 dot (테이블 셀 왼쪽 등) ─────────────────────────────────
 interface StatusDotProps {
   variant: StatusVariant;

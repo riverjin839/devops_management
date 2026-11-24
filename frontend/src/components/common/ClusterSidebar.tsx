@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Server, CheckCircle, AlertTriangle, XCircle, WifiOff, LayoutGrid, Plus, RefreshCw, ShieldAlert } from 'lucide-react';
-import type { Cluster, Status } from '@/types';
+import type { Cluster, ClusterCheckSummary, Status } from '@/types';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useK8sHub } from '@/lib/k8sHub';
 import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
 import { isGuardedLevel, levelLabel, useOperationLevels } from '@/hooks/useOperationLevels';
+import { useClusterCheckSummaries } from '@/hooks/useOpsCheck';
 import { ResizeHandle } from './ResizeHandle';
 import { Skeleton } from './Skeleton';
 
@@ -59,10 +60,20 @@ function iconSizeFor(railWidth: number) {
 /** 레일 "전체" 항목의 id — 클러스터 id(UUID)와 겹치지 않는다. */
 const ALL_RAIL_ID = '__all__';
 
-/** 상태 어휘는 `StatusBadge` 와 같다 — 툴팁·스크린리더가 색 없이도 상태를 전한다. */
-const STATUS_LABEL: Record<Status, string> = {
-  healthy: '정상', warning: '경고', critical: '위험', pending: '미연결',
-};
+/** 레일 상태 표식은 K8s 허브 「점검」 탭 결과(`/ops-checks/summary`)가 원천 — 글자 라벨 없이 아이콘만.
+ *  툴팁·스크린리더에는 어떤 점검 항목이 문제인지 담는다. 결과가 없으면 표식도 없다. */
+function checkMarkStatus(summary: ClusterCheckSummary | undefined): Status | undefined {
+  if (!summary || summary.status === 'none') return undefined;
+  return summary.status;
+}
+
+function checkTooltip(summary: ClusterCheckSummary | undefined): string {
+  if (!summary || summary.status === 'none') return '점검 결과 없음';
+  if (summary.status === 'healthy') return '점검 정상';
+  const names = summary.problems.slice(0, 3).map((p) => p.name).join(', ');
+  const more = summary.problems.length > 3 ? ` 외 ${summary.problems.length - 3}건` : '';
+  return `점검 문제 ${summary.problems.length}건: ${names}${more}`;
+}
 
 // 비정상은 색뿐 아니라 모양으로도 구분한다(WCAG 1.4.1) — 정상만 무채색 점.
 const STATUS_MARK: Partial<Record<Status, { Icon: React.ComponentType<{ className?: string }>; cls: string }>> = {
@@ -71,7 +82,6 @@ const STATUS_MARK: Partial<Record<Status, { Icon: React.ComponentType<{ classNam
   pending:  { Icon: WifiOff,       cls: 'text-status-unknown' },
 };
 
-const isAbnormal = (c: Cluster) => c.status === 'critical' || c.status === 'warning';
 
 const railItem = (box: HTMLElement | null, id: string) =>
   box?.querySelector<HTMLElement>(`[data-rail-item="${window.CSS.escape(id)}"]`) ?? null;
@@ -234,10 +244,11 @@ function IconRailButton({
 /** 아이콘 레일의 클러스터 버튼 — `useClusterIconSrc` 훅(테마 동기화)을 써야 해서
  *  `clusters.map()` 콜백 안에서 직접 훅을 호출할 수 없어 별도 컴포넌트로 분리했다. */
 function ClusterRailIconButton({
-  cluster, tooltip, ...rest
+  cluster, tooltip, checkStatus, ...rest
 }: {
   cluster: Cluster;
   tooltip: string;
+  checkStatus?: Status;
 } & Pick<IconRailButtonProps,
   'railId' | 'guarded' | 'tabbable' | 'onRailKeyDown' | 'onRailFocus' | 'current' | 'pressed' | 'active' | 'onClick' | 'size'
 >) {
@@ -255,7 +266,7 @@ function ClusterRailIconButton({
       Icon={lucideIcon}
       emojiText={emojiText}
       imageSrc={imageSrc}
-      status={cluster.status}
+      status={checkStatus}
       {...rest}
     />
   );
@@ -285,6 +296,11 @@ function ClusterSidebarIconRail({
   // 누르려던 자리에 다른 클러스터가 올 수 있어서, 순서는 고정하고 운영자가 직접 좁혀 보게 한다.
   // 비정상이 없어지면 자동으로 전체로 돌아가고, 지금 선택한 클러스터는 좁혀도 남긴다.
   const [abnormalOnly, setAbnormalOnly] = useState(false);
+  const { byId: checkSummary } = useClusterCheckSummaries();
+  const isAbnormal = (c: Cluster) => {
+    const st = checkSummary.get(c.id)?.status;
+    return st === 'critical' || st === 'warning';
+  };
   const abnormal = clusters.filter(isAbnormal);
   const filtering = abnormalOnly && abnormal.length > 0;
   const isChosen = (c: Cluster) => (multiSelect ? !!selectedSet?.has(c.id) : c.id === selectedId);
@@ -368,7 +384,7 @@ function ClusterSidebarIconRail({
         >
           <AlertTriangle
             aria-hidden
-            className={`w-3.5 h-3.5 ${abnormal.some((c) => c.status === 'critical') ? 'text-status-critical' : 'text-status-warning'}`}
+            className={`w-3.5 h-3.5 ${abnormal.some((c) => checkSummary.get(c.id)?.status === 'critical') ? 'text-status-critical' : 'text-status-warning'}`}
           />
           {abnormal.length}
         </button>
@@ -446,7 +462,7 @@ function ClusterSidebarIconRail({
                       c.region,
                       c.operationLevel ? levelLabel(levels, c.operationLevel) : '',
                       guarded ? '보호 등급' : '',
-                      STATUS_LABEL[c.status] ?? STATUS_LABEL.pending,
+                      checkTooltip(checkSummary.get(c.id)),
                     ].filter(Boolean).join(' · ');
                     const isActive = multiSelect
                       ? !!selectedSet?.has(c.id)
@@ -466,6 +482,7 @@ function ClusterSidebarIconRail({
                         current={!multiSelect && c.id === selectedId}
                         pressed={multiSelect ? isActive : undefined}
                         cluster={c}
+                        checkStatus={checkMarkStatus(checkSummary.get(c.id))}
                         tooltip={tooltip}
                         active={isActive}
                         onClick={() => handleClusterClick(c.id)}

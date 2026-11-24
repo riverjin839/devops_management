@@ -1,4 +1,4 @@
-import { Fragment, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useId, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ViewModeBar, DebugLogPanel, useToast, DoubleScrollX, ConfirmDialog, Skeleton, SkeletonTable, EmptyState, PageHeader, RunLogPanel } from '@/components/common';
 import { useModalA11y } from '@/components/common/useModalA11y';
@@ -40,6 +40,7 @@ import { StandardizeClusterNamesModal } from '@/components/cluster-manage/Standa
 import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useClusterCheckSummaries } from '@/hooks/useOpsCheck';
 
 type GroupByMode = 'none' | 'region' | 'level';
 
@@ -156,8 +157,15 @@ export function ClusterManagePage() {
   const sortBy: SortKey = pickParam(listParams.sort, ['name', 'status', 'level', 'manual'] as const, 'manual');
   const groupBy: GroupByMode = pickParam(listParams.group, ['region', 'level', 'none'] as const, 'none');
   const viewMode = pickParam(listParams.view, ['table', 'card'] as const, 'table');
-  // 「문제만」 — 경고·위험·미연결 상태이거나 CIDR 이 겹치는 클러스터만. 장애 대응 중 가장 먼저 찾는 목록.
+  // 「문제만」 — 점검 탭 결과가 경고·실패이거나 CIDR 이 겹치는 클러스터만. 장애 대응 중 가장 먼저 찾는 목록.
   const problemsOnly = listParams.problems === '1';
+  // 상태(아이콘·정렬·「문제만」)는 K8s 허브 점검 탭 결과가 원천 — `cluster.status` 가 아니다.
+  const { byId: checkSummary } = useClusterCheckSummaries();
+  const checkLevel = useCallback((c: Cluster) => checkSummary.get(c.id)?.status ?? 'none', [checkSummary]);
+  const isProblemCluster = useCallback((c: Cluster) => {
+    const lv = checkLevel(c);
+    return lv === 'warning' || lv === 'critical';
+  }, [checkLevel]);
   const setSearch      = (v: string) => setListParams({ q: v });
   const setFilterLevel = (v: string) => setListParams({ level: v });
   const setSortBy      = (v: SortKey) => setListParams({ sort: v });
@@ -326,9 +334,9 @@ export function ClusterManagePage() {
       );
     }
     if (filterLevel) list = list.filter(c => c.operationLevel === filterLevel);
-    if (problemsOnly) list = list.filter(c => c.status !== 'healthy' || cidrOverlapGroups.has(c.id));
+    if (problemsOnly) list = list.filter(c => isProblemCluster(c) || cidrOverlapGroups.has(c.id));
     list.sort((a, b) => {
-      if (sortBy === 'status') return (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3);
+      if (sortBy === 'status') return (STATUS_ORDER[checkLevel(a)] ?? 3) - (STATUS_ORDER[checkLevel(b)] ?? 3);
       if (sortBy === 'level')  return (a.operationLevel ?? '').localeCompare(b.operationLevel ?? '');
       // seq 미할당 fallback 은 useClusters 의 정렬(?? 1000)과 동일하게 — 두 기준이
       // 다르면 미할당 클러스터의 위치가 화면마다 반대로 나온다 (D-045).
@@ -336,7 +344,7 @@ export function ClusterManagePage() {
       return a.name.localeCompare(b.name);
     });
     return list;
-  }, [clusters, search, filterLevel, sortBy, problemsOnly, cidrOverlapGroups]);
+  }, [clusters, search, filterLevel, sortBy, problemsOnly, cidrOverlapGroups, isProblemCluster, checkLevel]);
 
   // ── 그룹화 ──────────────────────────────────────────────────────────────────
   // groupBy === 'none' 면 단일 그룹 (label 없음). 그 외는 키별로 묶고 빈 값은 "(미지정)" 으로 표시.
@@ -414,7 +422,7 @@ export function ClusterManagePage() {
 
 
   const overlapCount = cidrOverlapGroups.size;
-  const problemCount = clusters.filter((c) => c.status !== 'healthy' || cidrOverlapGroups.has(c.id)).length;
+  const problemCount = clusters.filter((c) => isProblemCluster(c) || cidrOverlapGroups.has(c.id)).length;
 
   // 삭제 확인은 클러스터 이름 재입력으로 잠근다 — 운영 클러스터와 개발 클러스터의 삭제 마찰이
   // 같으면 엉뚱한 행에서 확인을 누르는 사고를 막지 못한다.

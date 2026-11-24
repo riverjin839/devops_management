@@ -7251,3 +7251,24 @@ export interface SignupRequestList {
   items: SignupRequestItem[];
   counts: Record<SignupStatus, number>;
 }
+
+// ── 클러스터 점검 상태 요약 (/ops-checks/summary) — K8s 허브 점검 탭 결과가 원천 ──
+export type ClusterCheckLevel = 'healthy' | 'warning' | 'critical' | 'none';
+
+export interface ClusterCheckProblem {
+  source: OpsCheckSource;
+  itemRefId: string;
+  name: string;
+  status: 'warning' | 'critical';
+  lastRunAt: string | null;
+}
+
+export interface ClusterCheckSummary {
+  clusterId: string;
+  /** 점검 탭 항목 마지막 결과 중 가장 나쁜 값. 결과가 없으면 `none`. */
+  status: ClusterCheckLevel;
+  counts: Record<ClusterCheckLevel, number>;
+  total: number;
+  /** 경고·위험 항목 — 심각한 것부터. */
+  problems: ClusterCheckProblem[];
+}

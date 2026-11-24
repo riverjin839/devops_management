@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
-import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
+import { StatusBadge, StatusIcon, statusToVariant } from '@/components/common/StatusBadge';
 import { useToast, ConfirmDialog, EmptyState, LoadingState } from '@/components/common';
 import { ExecTechBadge } from '@/components/platform-status/ExecTechBadge';
 import { formatApiError, parseUTC } from '@/lib/utils';
@@ -15,6 +15,12 @@ import type { OpsCheckCatalogItem, OpsCheckRunItem } from '@/types';
 import { OpsRunProgressCard } from './OpsRunProgressCard';
 import { OpsRunItemDetailModal } from './OpsRunItemDetailModal';
 import { CATEGORY_LABEL, SOURCE_LABEL, itemKey } from './opsCheckLabels';
+
+/** 마지막 결과가 경고·실패인 항목 — 클러스터 상태 아이콘(`/ops-checks/summary`)과 같은 기준. */
+function isProblem(c: OpsCheckCatalogItem) {
+  const v = statusToVariant(c.lastStatus);
+  return v === 'warning' || v === 'critical';
+}
 
 interface Props {
   clusterId: string | undefined;
@@ -33,7 +39,14 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
   const toast = useToast();
   const { canOperate, withHint } = useCanOperate(clusterId);
   // `?run=<id>` — 개요의 「전체 점검」이 만든 실행 묶음을 이 화면에서 이어 본다.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // `?filter=problem` — 클러스터 상태 아이콘(사이드바·허브 헤더)을 눌러 들어오면 경고·실패 항목만 보인다.
+  const problemOnly = searchParams.get('filter') === 'problem';
+  const setProblemOnly = (on: boolean) => setSearchParams((prev) => {
+    const next = new URLSearchParams(prev);
+    if (on) next.set('filter', 'problem'); else next.delete('filter');
+    return next;
+  }, { replace: true });
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [category, setCategory] = useState<string>('all');
@@ -64,14 +77,17 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
     return Array.from(set);
   }, [catalog]);
 
+  const problemCount = catalog.filter(isProblem).length;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return catalog.filter((c) => {
+      if (problemOnly && !isProblem(c)) return false;
       if (category !== 'all' && String(c.category) !== category) return false;
       if (q && !`${c.name ?? ''} ${c.checkType ?? ''}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [catalog, category, search]);
+  }, [catalog, category, search, problemOnly]);
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((c) => selected.has(itemKey(c)));
 
@@ -153,6 +169,17 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
               </span>
             </button>
           ))}
+          {(problemCount > 0 || problemOnly) && (
+            <button
+              type="button"
+              aria-pressed={problemOnly}
+              onClick={() => setProblemOnly(!problemOnly)}
+              title={problemOnly ? '전체 항목 보기' : '경고·실패 항목만 보기'}
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium border ${problemOnly ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-secondary/60'}`}>
+              <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+              문제만 <span className="text-xs font-mono opacity-60">{problemCount}</span>
+            </button>
+          )}
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <input
@@ -202,8 +229,8 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
           <EmptyState
             compact
             icon={ListChecks}
-            title="표시할 점검 항목이 없습니다"
-            description="분류 필터나 검색어를 바꾸거나, 점검 항목 관리에서 항목을 활성화하세요."
+            title={problemOnly ? '문제가 있는 점검 항목이 없습니다' : '표시할 점검 항목이 없습니다'}
+            description={problemOnly ? '마지막 결과가 경고·실패인 항목이 없습니다. 「문제만」을 끄면 전체 항목이 보입니다.' : '분류 필터나 검색어를 바꾸거나, 점검 항목 관리에서 항목을 활성화하세요.'}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -251,7 +278,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
                     <td className="px-2 py-2">
                       {live ? (
                         live.status === 'done' ? (
-                          <StatusBadge variant={statusToVariant(live.resultStatus)} />
+                          <StatusIcon variant={statusToVariant(live.resultStatus)} />
                         ) : live.status === 'error' ? (
                           <StatusBadge variant="critical" label="실패" />
                         ) : (
@@ -262,7 +289,7 @@ export function ClusterOpsCheckPanel({ clusterId, clusterName }: Props) {
                         )
                       ) : c.lastStatus ? (
                         <span className="inline-flex items-center gap-1.5">
-                          <StatusBadge variant={statusToVariant(c.lastStatus)} />
+                          <StatusIcon variant={statusToVariant(c.lastStatus)} />
                           {c.lastRunAt && (
                             <span className="text-xs text-muted-foreground">{parseUTC(c.lastRunAt).toLocaleString()}</span>
                           )}

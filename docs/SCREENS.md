@@ -306,6 +306,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8s 클러스터 허브 (`/k8s`, `/k8s/:clusterId/:view?`)
 
+> **클러스터 상태 아이콘 = 점검 탭 결과(2026-11-24)**: 클러스터 옆 「위험」「경고」 같은 글자 라벨을 모두 없애고 아이콘(정상 무채색 체크 · 경고 삼각형 · 실패 X · 결과 없음 빈 원)으로만 구분한다. 원천은 `cluster.status` 가 아니라 **점검 ▸ 점검 항목 탭의 마지막 결과**다 — `GET /api/v1/ops-checks/summary`(볼 수 있는 클러스터별 가장 나쁜 판정 + 문제 항목, `OpsCheckService.summarize`) → `useClusterCheckSummaries`(공유 쿼리, 60초 갱신, 점검 실행이 끝나면 무효화) → `components/common/ClusterCheckIcon.tsx`. 아이콘을 누르면 `/k8s/:clusterId/checks?filter=problem` 으로 가서 경고·실패 항목만 보이고(「문제만」 칩으로 해제), 툴팁·스크린리더 이름에 문제 항목 이름이 들어간다. 적용: 허브 헤더, 사이드바 K8s 클러스터 flyout(「비정상 N개만 보기」도 같은 기준), `ClusterSidebar` 레일 표식, 클러스터 관리 표·카드, 점검 탭 상태 칸(`StatusIcon`). 개요의 「N개 신호 종합」 옆 배지는 허브 안에서는 그리지 않는다(헤더와 중복).
+
 > **개요 = 상태, 점검 = 실행(2026-11-23, D-242)**: Cloudera Manager(클러스터 Status ↔ Actions 의 Command 진행 창)·Ambari(Dashboard ↔ Alerts·Background Operations)처럼 개요는 상태만 보여 주고 점검 카탈로그는 **점검 ▸ 점검 항목**(`checks`)으로 옮겼다. 진단 카테고리는 문제 발생 후 깊이 파는 조사 도구(병목·BPF·패킷)만 둔다. 개요에는 클러스터 전체를 한 번에 돌리는 「전체 점검」만 남는다.
 
 > **레일 클러스터 목록(2026-11-23)**: 사이드바 레일의 K8s 클러스터 아이콘에 마우스를 올리거나 클릭하면 바로 이동하지 않고 오른쪽 flyout 에 **접근 권한이 있는 클러스터 목록**이 뜬다(`components/layout/K8sClusterFlyoutBody.tsx`, `Sidebar.tsx` 의 `k8sFlyoutAnchor`). 목록은 `useClusters()`(서버 `ClusterScope` 로 이미 거른 `GET /clusters`) — 운영 수준(`operationLevel`)으로 묶고, 상태 점은 정상이면 중립색·경고/위험만 상태색+글자, 사용자 지정 읽기 권한(`useMyClusterAccess` = `read`)은 "읽기" 배지, 7개 이상이면 검색창. 항목은 `/k8s/{id}/{현재 뷰}` 로 이동(허브 밖이면 기본 뷰), 하단에 "전체 클러스터 보기"(`/k8s`)·"클러스터 등록"(`/cluster-manage`, viewer 는 비활성+사유).
@@ -1036,6 +1038,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 클러스터 관리 (`/cluster-manage`)
+
+> **2026-11-24**: 상태 칸·카드의 「정상/경고/위험」 글자 배지를 `ClusterCheckIcon`(점검 탭 결과 원천, 누르면 점검 탭 문제 항목)으로 바꿨다. 「문제만」·상태 정렬도 같은 기준(+ CIDR 겹침).
 
 > **2026-10-15 (D-135)**: 자체 실행 로그(`appendLog`·LogViewer 카드·수동 SSE 파서)를 표준 실행 로그(`cluster-manage`)로 대체했다. 검증은 `components/cluster-manage/verifyLogged.ts`(`/verify/stream` → 단계 칩, 설정 화면과 공유), 재수집·IP 수집·일괄 수집(클러스터별 칩)·적용은 `runLogged`, 실패 재시도는 패널 버튼.
 
