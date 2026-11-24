@@ -59,9 +59,6 @@ jobs:
         with:
           ref: ${{ steps.reltag.outputs.tag }}
 
-      - name: Set up QEMU (agent multi-arch)
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -92,16 +89,6 @@ jobs:
             type=raw,value=${{ steps.reltag.outputs.major_minor }}
             type=raw,value=latest,enable=${{ !contains(steps.reltag.outputs.tag, '-') }}
 
-      - name: Extract metadata for node agent
-        id: meta-agent
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AGENT }}
-          tags: |
-            type=raw,value=${{ steps.reltag.outputs.version }}
-            type=raw,value=${{ steps.reltag.outputs.major_minor }}
-            type=raw,value=latest,enable=${{ !contains(steps.reltag.outputs.tag, '-') }}
-
       - name: Copy CHANGELOG for backend image
         # backend/app/routers/release_notes.py 가 이미지 안에서 CHANGELOG.md 를 읽어
         # 릴리즈 노트 API 를 서빙한다 — backend 이미지를 빌드하는 유일한 워크플로라 여기서 복사한다.
@@ -127,7 +114,52 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 노드 DaemonSet 에이전트 — 정적 Rust 바이너리(distroless). 노드가 amd64/arm64 섞여 있어도 받을 수 있게 둘 다 만든다.
+  # 노드 DaemonSet 에이전트 — 정적 Rust 바이너리(distroless), amd64+arm64.
+  # **일부러 별도 잡**: arm64 를 QEMU 로 컴파일해 10분 안팎이 걸리고 실패할 수도 있는데, 이 잡을 기다리면 GitHub Release 와 dev 배포가
+  # 같이 늦어지거나 막힌다. github-release·deploy-dev·cleanup-old-images 는 build-and-push 만 기다리므로 에이전트 빌드가 실패해도
+  # 릴리스는 진행되고 실패는 이 잡에 남는다(숨기지 않는다). 실패하면 같은 태그로 workflow_dispatch 를 다시 실행해 이 잡만 재시도해도 된다.
+  build-node-agent:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build-and-push.outputs.tag }}
+
+      - name: Resolve tags
+        id: tags
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.build-and-push.outputs.version }}"
+          echo "major_minor=$(echo "$VERSION" | cut -d. -f1,2)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for node agent
+        id: meta-agent
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_AGENT }}
+          tags: |
+            type=raw,value=${{ needs.build-and-push.outputs.version }}
+            type=raw,value=${{ steps.tags.outputs.major_minor }}
+            type=raw,value=latest,enable=${{ !contains(needs.build-and-push.outputs.tag, '-') }}
+
       - name: Build and push node agent image
         uses: docker/build-push-action@v5
         with:
