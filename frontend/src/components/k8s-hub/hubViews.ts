@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   LayoutGrid, Boxes, Gauge, TrendingUp, Activity, Bell, ScrollText, Zap, ClipboardCheck,
-  KeyRound, Tags, Dog, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks,
+  KeyRound, Tags, Dog, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks, Binary,
 } from 'lucide-react';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
@@ -23,6 +23,7 @@ import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
 import { ServiceConfigPage } from '@/pages/ServiceConfigPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
+import { CiliumDatapathPage } from '@/pages/CiliumDatapathPage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { K9sPage } from '@/pages/K9sPage';
 import { NodeSshPage } from '@/pages/NodeSshPage';
@@ -86,6 +87,7 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'os-param-watch', category: 'checks', label: 'OS 파라미터 감시', icon: ShieldCheck, navKey: '/os-param-watch', component: NodeParamWatchPage },
   { id: 'bottleneck', category: 'diagnose', label: '파드 병목 진단', icon: Activity, navKey: '/pod-bottleneck', component: PodBottleneckPage },
   { id: 'cilium', category: 'diagnose', label: 'Cilium BPF 추적', icon: Waves, navKey: '/cilium-trace', component: CiliumTracePage },
+  { id: 'cilium-datapath', category: 'diagnose', label: 'Cilium 데이터패스', icon: Binary, navKey: '/cilium-datapath', component: CiliumDatapathPage },
   { id: 'packet-flow', category: 'diagnose', label: '패킷 흐름 분석', icon: Route, navKey: '/packet-flow', component: PacketFlowPage },
   { id: 'services', category: 'config', label: '서비스 구성', icon: Layers, navKey: '/k8s-services', component: ServiceConfigPage },
   { id: 'rbac', category: 'config', label: '접근 권한', icon: KeyRound, navKey: '/k8s-rbac', component: K8sRbacPage },

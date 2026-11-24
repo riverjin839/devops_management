@@ -98,6 +98,33 @@ jobs:
       - name: Build
         run: npm run build
 
+  # Rust 노드 에이전트(agents/pep-bpf-agent) — fmt·clippy·테스트. BPF 통합 테스트(실제 맵 생성·고정·순회)는
+  # root 가 필요해 sudo 로 한 번 더 돌린다(권한이 없으면 테스트가 스스로 건너뛴다).
+  bpf-agent:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agents/pep-bpf-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: agents/pep-bpf-agent
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Test (unprivileged)
+        run: cargo test --locked
+      - name: Test (root — real BPF maps)
+        run: |
+          mountpoint -q /sys/fs/bpf || sudo mount -t bpf bpf /sys/fs/bpf
+          sudo env "PATH=$PATH" "RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup}" "CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}" \
+            cargo test --locked -- --nocapture
+
   # Backend 테스트
   backend:
     runs-on: ubuntu-latest

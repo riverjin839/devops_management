@@ -10,6 +10,9 @@
 
 1.104.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **Cilium 데이터패스(eBPF) — Rust 노드 에이전트로 BPF 맵 용량 상시 감시**: K8S 허브 ▸ 진단 ▸ **Cilium 데이터패스**. 노드마다 뜨는 `pep-bpf-agent`(Rust)가 Cilium 이 고정한 BPF 맵(CT·NAT·LB·ipcache·정책·이웃 등)을 읽기 전용으로 열어 항목 수·최대치를 세고 요약만 보고한다(원본 키·값은 노드 밖으로 나가지 않는다). 노드 × 맵 사용률 히트맵, 칸 상세(설정 추천 — cilium-config 키), 임계치(기본 주의 70%·위험 90%)를 넘으면 알람 인박스 `CiliumBpfMapPressure`. 「지금 수집」 은 에이전트에 바로 작업을 보내고 노드별 단계 로그를 실시간으로 보여준다(로그 보기 선택). 노드별 커널 기능(CAP_BPF·drop reason 지원 등)과 BPF 프로그램 목록(기준 대비 다시 로드된 프로그램 표시, CAP_SYS_ADMIN 설정 시)도 본다. 임계치·주기·시간 예산·고정 경로·권한은 화면 설정. Backend: `routers/cilium_datapath.py`(에이전트 수신은 `CILIUM_BPF_AGENT_TOKEN` fail-closed) · `services/cilium_datapath/` · 모델 `CiliumBpfAgent`·`CiliumDatapathRun`. Agent: `agents/pep-bpf-agent/`(libbpf 없이 `bpf(2)` 직접 호출, CAP_BPF 만) · 배포 `deploy/k8s/cilium-bpf-agent/`. 데이터패스 일관성·드롭 사유 탭은 다음 단계.
+
 ## [1.104.0] - 2026-11-23
 
 ### Changed

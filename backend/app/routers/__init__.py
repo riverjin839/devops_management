@@ -66,6 +66,10 @@ from app.routers.k8s_allocation import router as k8s_allocation_router
 from app.routers.k8s_efficiency import router as k8s_efficiency_router
 from app.routers.service_config import router as service_config_router
 from app.routers.nic_watch import router as nic_watch_router
+from app.routers.cilium_datapath import (
+    ingest_router as cilium_datapath_ingest_router,
+    router as cilium_datapath_router,
+)
 from app.routers.node_param_watch import (
     ingest_router as node_param_ingest_router,
     router as node_param_watch_router,
@@ -111,6 +115,8 @@ __all__ = [
     "node_param_watch_router",
     "nic_watch_router",
     "node_param_ingest_router",
+    "cilium_datapath_router",
+    "cilium_datapath_ingest_router",
     "service_config_router",
     "ns_migration_router",
     "daily_report_router",

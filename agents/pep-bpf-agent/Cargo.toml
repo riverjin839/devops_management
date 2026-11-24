@@ -1,0 +1,24 @@
+[package]
+name = "pep-bpf-agent"
+version = "0.1.0"
+edition = "2021"
+description = "PEP 노드 에이전트 — Cilium 이 고정(pin)해 둔 BPF 맵을 읽기 전용으로 열어 사용률·프로그램 목록을 PEP 로 보고한다"
+license = "MIT"
+publish = false
+rust-version = "1.85"
+
+[dependencies]
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2.12", default-features = false, features = ["tls", "json"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1.9", features = ["std"] }
+webpki-roots = "0.26"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

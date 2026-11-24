@@ -7033,3 +7033,133 @@ export interface NicClusterView {
   agentCount: number;
   settings: NicWatchSettings;
 }
+
+// ── Cilium 데이터패스 (`/k8s/:clusterId/cilium-datapath`) — Rust 노드 에이전트(pep-bpf-agent) 보고 ──────
+export type CiliumMapLevel = 'critical' | 'warning' | 'ok' | 'unknown';
+
+export interface CiliumBpfMap {
+  name: string;
+  group: string;
+  mapType: string;
+  maxEntries: number;
+  /** 센 항목 수 — 시간 예산이 남지 않아 세지 못했으면 null. */
+  entries: number | null;
+  /** 끝까지 세지 못함 — entries 는 하한. */
+  partial: boolean;
+  /** 같은 그룹(엔드포인트별 맵) 개수 — 이 맵은 그 중 가장 찬 맵. */
+  members: number;
+  elapsedMs: number;
+  pinned: boolean;
+  keySize: number;
+  valueSize: number;
+  error: string | null;
+  pct: number | null;
+  level: CiliumMapLevel;
+  label: string;
+  configKey: string | null;
+  note: string;
+  recommendation: string | null;
+}
+
+export interface CiliumBpfProgram {
+  name: string;
+  progType: string;
+  count: number;
+  tags: string[];
+  loadedAt: string | null;
+  runTimeNs: number | null;
+  runCnt: number | null;
+  diff: 'same' | 'changed' | 'new' | 'removed';
+}
+
+export interface CiliumBpfFeatures {
+  kernel?: string;
+  capBpf?: boolean;
+  capSysAdmin?: boolean;
+  capPerfmon?: boolean;
+  kernelCapBpf?: boolean;
+  kernelBatchOps?: boolean;
+  kernelDropReason?: boolean;
+  btf?: boolean;
+  bpfStatsEnabled?: boolean;
+  pinDirsFound?: string[];
+}
+
+export interface CiliumBpfAgent {
+  id: string;
+  node: string;
+  hostIp: string | null;
+  agentVersion: string | null;
+  state: 'reporting' | 'offline' | 'never';
+  lastSeenAt: string | null;
+  collectedAt: string | null;
+  collectMs: number | null;
+  features: CiliumBpfFeatures;
+  maps: CiliumBpfMap[];
+  mapsSkipped: number;
+  programs: CiliumBpfProgram[];
+  programsOther: number;
+  programsError: string | null;
+  baselineAt: string | null;
+  errors: string[];
+}
+
+export interface CiliumDatapathRun {
+  id: string;
+  clusterId: string;
+  kind: string;
+  status: 'running' | 'succeeded' | 'partial' | 'failed';
+  targetNodes: string[];
+  doneNodes: string[];
+  summary: { critical?: number; warning?: number; missing?: string[] };
+  requestedBy: string | null;
+  createdAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface CiliumDatapathView {
+  clusterId: string;
+  settings: {
+    warnPct: number;
+    critPct: number;
+    intervalSec: number;
+    sysAdmin: boolean;
+    alertsEnabled: boolean;
+    mapBudgetMs: number;
+    totalBudgetMs: number;
+    offlineMinutes: number;
+  };
+  columns: { group: string; label: string; configKey: string | null; known: boolean }[];
+  agents: CiliumBpfAgent[];
+  summary: { agents: number; reporting: number; critical: number; warning: number };
+  lastRun: CiliumDatapathRun | null;
+  tokenConfigured: boolean;
+}
+
+export interface CiliumDatapathSettings {
+  intervalSec: number;
+  mapBudgetMs: number;
+  totalBudgetMs: number;
+  warnPct: number;
+  critPct: number;
+  alertsEnabled: boolean;
+  pinDirs: string[];
+  mapPrefixes: string[];
+  programPrefixes: string[];
+  sysAdmin: boolean;
+  runTimeoutSec: number;
+  offlineMinutes: number;
+  agentImage: string;
+  agentNamespace: string;
+  ingestBaseUrl: string;
+  tlsVerify: boolean;
+  tokenConfigured: boolean;
+}
+
+export interface CiliumDatapathManifest {
+  yaml: string;
+  apiBaseUrl: string;
+  apiBaseUrlFromSettings: boolean;
+  tokenConfigured: boolean;
+  sysAdmin: boolean;
+}

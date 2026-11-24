@@ -28,6 +28,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME_BACKEND: ${{ github.repository }}/backend
   IMAGE_NAME_FRONTEND: ${{ github.repository }}/frontend
+  IMAGE_NAME_BPF_AGENT: ${{ github.repository }}/bpf-agent
 
 jobs:
   build-and-push:
@@ -88,6 +89,16 @@ jobs:
             type=raw,value=${{ steps.reltag.outputs.major_minor }}
             type=raw,value=latest,enable=${{ !contains(steps.reltag.outputs.tag, '-') }}
 
+      - name: Extract metadata for BPF agent
+        id: meta-bpf-agent
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BPF_AGENT }}
+          tags: |
+            type=raw,value=${{ steps.reltag.outputs.version }}
+            type=raw,value=${{ steps.reltag.outputs.major_minor }}
+            type=raw,value=latest,enable=${{ !contains(steps.reltag.outputs.tag, '-') }}
+
       - name: Copy CHANGELOG for backend image
         # backend/app/routers/release_notes.py 가 이미지 안에서 CHANGELOG.md 를 읽어
         # 릴리즈 노트 API 를 서빙한다 — backend 이미지를 빌드하는 유일한 워크플로라 여기서 복사한다.
@@ -112,6 +123,17 @@ jobs:
           labels: ${{ steps.meta-frontend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Cilium 데이터패스 Rust 노드 에이전트(pep-bpf-agent) — musl 정적 바이너리 scratch 이미지.
+      - name: Build and push BPF agent image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./agents/pep-bpf-agent
+          push: true
+          tags: ${{ steps.meta-bpf-agent.outputs.tags }}
+          labels: ${{ steps.meta-bpf-agent.outputs.labels }}
+          cache-from: type=gha,scope=bpf-agent
+          cache-to: type=gha,mode=max,scope=bpf-agent
 
   github-release:
     needs: build-and-push
@@ -193,6 +215,7 @@ jobs:
             const packages = [
               `${context.repo.repo}/backend`,
               `${context.repo.repo}/frontend`,
+              `${context.repo.repo}/bpf-agent`,
             ];
 
             // org 여부 확인 (org vs 개인 계정 API 엔드포인트 분기)
