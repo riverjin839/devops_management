@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { EmptyState } from '@/components/common';
 import type { Cluster, Status } from '@/types';
 import { FlyoutAction } from './NavFlyout';
+import { useClusterSwitchGuardStore } from '@/stores/clusterSwitchGuardStore';
 
 /** 이 개수 이상이면 목록 위에 검색창을 띄운다. */
 const SEARCH_MIN = 7;
@@ -40,6 +41,8 @@ export function K8sClusterFlyoutBody({ onNavigate }: { onNavigate: () => void })
   const { data: access } = useMyClusterAccess(!isAdmin);
   const { canOperate, withHint } = useCanOperate();
   const [query, setQuery] = useState('');
+  // 열린 터미널 세션이 있는 화면의 전환 가드(D-244) — 다른 클러스터로 갈 때만 묻는다.
+  const switchGuard = useClusterSwitchGuardStore((s) => s.guard);
   // 「비정상 N개만 보기」 — 허브의 옛 클러스터 레일에 있던 필터를 옮겨 왔다(D-243).
   const [abnormalOnly, setAbnormalOnly] = useState(false);
   const abnormalCount = useMemo(() => clusters.filter((c) => c.status === 'warning' || c.status === 'critical').length, [clusters]);
@@ -135,7 +138,10 @@ export function K8sClusterFlyoutBody({ onNavigate }: { onNavigate: () => void })
                       to={`/k8s/${c.id}${view ? `/${view}` : ''}`}
                       role="menuitem"
                       aria-current={active ? 'page' : undefined}
-                      onClick={onNavigate}
+                      onClick={(e) => {
+                        if (!active && switchGuard?.({ clusterId: c.id, path: `/k8s/${c.id}${view ? `/${view}` : ''}` })) e.preventDefault();
+                        onNavigate();
+                      }}
                       className={`flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
                         active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-secondary'
                       }`}

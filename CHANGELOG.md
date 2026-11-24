@@ -30,6 +30,11 @@
 - **NIC 클러스터별 판정 기준** — 클러스터마다 본딩 구성(bond0/bond1, bond0만, ens·eth0)과 속도가 달라 공통 기준 한 벌로는 오탐이 나던 문제. 설정 화면에 「이 클러스터 / 공통 기준」 탭을 두고, 이 클러스터에서 바꾼 항목만 재정의로 저장한다(나머지는 공통을 따름, 항목별 되돌리기·전체 지우기). "관측 값으로 채우기"가 보고된 구성에서 본딩 모드·해시·LACP·최소 속도를 제안하고 본딩이 없으면 본딩 기준을 비운다. 에이전트 수집 대상과 판정이 모두 클러스터 실효 기준을 따른다. Backend: `nic_watch/settings.py`(`nic_watch.cluster_overrides`, `merge_effective`), `learn.py`, `GET|PUT|DELETE /nic-watch/clusters/{id}/settings`·`/observed`·`/overrides`(감사 로그). Frontend: `NicSettingsDialog`.
 - **노드 에이전트 Rust 구현** — DaemonSet 에이전트(`node_param_agent`)를 정적 바이너리로 다시 구현하는 `agent-rs/` 크레이트 추가. sysctl 런타임·영구 설정 값, 서비스 설정 파일 해시/내용, 보고 루프를 Python 에이전트와 같은 환경 변수·보고 프로토콜로 처리한다(서버 무변경, `--dry-run` 출력이 Python 과 동일). NIC 상태 수집(본딩/LACP·링크·MTU·ring·offload·드롭 카운터, ethtool GET ioctl)도 같은 보고 계약으로 구현. 전용 이미지(`…/node-agent`, distroless·amd64/arm64)를 릴리스에서 빌드하고, 설치 매니페스트·`deploy/k8s/node-param-agent/` 가 이 이미지를 기본으로 쓴다(노드당 requests 48Mi → 8Mi). `agent_image` 를 backend 이미지로 둔 기존 설치는 Python 에이전트 방식으로 그대로 렌더된다. CI 에 `agent-rs` 잡(fmt·clippy·test·이미지 빌드) 추가. 서비스 구성 설정 파일(containerd·kubelet)과 sysctl.d 가 바뀌면 보고 주기를 기다리지 않고 inotify 로 바로 보고한다(대상 파일 이름만 깨우고 최소 5초 간격).
 
+### Fixed
+- **K8S 클러스터 허브 — 탭 이동 때도 터미널 세션 확인 · `[` `]` 단축키 수정**: k9s·노드 SSH 탭에서 세션이 열려 있거나 연결 중이면 다른 탭으로 옮길 때(클릭·`[` `]` 단축키) 「세션 끊고 이동」 확인 창이 뜬다. 닫힌 사이드 패널이 열린 대화상자로 잘못 세어져 허브 `[` `]` 단축키가 동작하지 않던 문제도 고쳤다. Frontend: `HubTabs` 이동 전 가드 호출, `useHubTabShortcuts` 대화상자 판정.
+- **실행 로그 새 창이 화면을 가리지 않게**: 「로그 보기」 새 창이 760×640(점검 매트릭스는 820×720) 고정 크기라 노트북 화면에서는 작업 화면을 거의 덮었다. 이제 앱 화면을 4등분한 오른쪽 위 1/4(1사분면) 크기·위치로 열린다(너무 작은 화면은 최소 480×320). Frontend: `PopoutWindow` 기본 크기·위치 계산.
+- **K8S 클러스터 허브 — 터미널 세션이 있을 때 클러스터 전환 확인**: 허브 k9s·노드 SSH 탭에서 세션이 열려 있거나 연결 중이면, 「클러스터 전환」이나 사이드바 클러스터 목록으로 다른 클러스터를 고를 때 「세션 끊고 전환」 확인 창이 다시 뜬다(허브로 옮기며 빠졌던 확인). 노드 SSH 도 k9s 처럼 연결 중인 세션에서 확인한다. Frontend: `stores/clusterSwitchGuardStore.ts`, `K8sClusterFlyoutBody` 이동 전 가드 호출.
+
 ## [1.104.0] - 2026-11-23
 
 ### Changed
