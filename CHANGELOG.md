@@ -10,6 +10,14 @@
 
 1.106.4 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Fixed
+
+- **node-agent 이미지 빌드가 릴리스를 붙잡지 않도록 분리** — amd64+arm64(QEMU) 빌드가 `build-and-push` 안에 있어 10분 가까이 GitHub Release·dev 배포를 늦추고, 실패하면 함께 막힐 수 있었다. 별도 잡 `build-node-agent` 로 옮겨, 실패해도 릴리스는 진행되고 실패는 그 잡에 남는다(같은 태그로 `workflow_dispatch` 재실행하면 재시도).
+
+### Added
+
+- **노드 에이전트 폐쇄망 반입·canary 전환 절차** — `deploy-airgap.sh` 가 `node-agent` 이미지를 build/push/save 한다(`NODE_AGENT_SOURCE_IMAGE` 로 공개 이미지를 pull+retag 하는 것이 폐쇄망 권장 경로, `SKIP_NODE_AGENT=1` 로 건너뜀, 실패해도 나머지 흐름은 계속). 설치 매니페스트에 이미지 부재 시 안내 주석 추가. `deploy/k8s/node-param-agent/README.md` 에 Python → Rust canary 전환 절차(노드 라벨 분리·출력 비교·확대·되돌리기).
+
 ## [1.106.4] - 2026-11-24
 
 ### Removed

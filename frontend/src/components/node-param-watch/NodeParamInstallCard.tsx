@@ -128,7 +128,7 @@ export function NodeParamInstallCard({ clusterId, clusterName }: { clusterId: st
                 <input type="number" min={0} max={1440} className={INPUT} disabled={!isAdmin}
                   value={form.offlineMinutes} onChange={(e) => set({ offlineMinutes: Number(e.target.value) })} aria-label="무응답 알람(분)" />
               </Field>
-              <Field label="에이전트 이미지" help="전용 노드 에이전트 이미지(node-agent, 정적 바이너리). backend 이미지를 지정하면 Python 에이전트 방식으로 렌더된다. 폐쇄망이면 사내 레지스트리 경로로 바꾼다.">
+              <Field label="에이전트 이미지" help="전용 노드 에이전트 이미지(node-agent, 릴리스 1.106.0 이상). 레지스트리에 없으면 backend 이미지를 지정해 Python 에이전트 방식으로 설치한다. 폐쇄망이면 사내 레지스트리 경로로 바꾼다.">
                 <input className={`${INPUT} font-mono`} disabled={!isAdmin} value={form.agentImage}
                   onChange={(e) => set({ agentImage: e.target.value })} aria-label="에이전트 이미지" />
               </Field>
