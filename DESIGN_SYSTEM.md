@@ -846,6 +846,14 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   사용자가 창을 닫으면 다음 실행 시작 때 다시 연다. `LogViewer` 는 툴바 "새 창으로 열기"(`allowPopout`, 기본 true). 새 로그 패널도
   표시 위치를 직접 정하지 말고 이 설정을 따른다. **예외: 로그 중심 화면(`RunLogPanel fill`, §12.6.1)은 설정과 무관하게 항상 화면 안**
   (창 전환 버튼 숨김, 툴바 "새 창으로 열기" 는 유지). 설정 화면: Settings → 화면 UI 설정 → 실행 로그 표시(`components/settings/LogDisplaySetting.tsx`).
+- **실행 명령 줄(관리자, 2026-11-24)** — 관리자에게는 서버가 노드·클러스터에 실제로 날린 명령이 `cmd` 레벨 줄
+  (`CMD   $ [ssh root@host:22] …`, `LogViewer` 보라색)로 실행 로그에 함께 쌓인다. 화면이 따로 할 일은 없다: 단건 요청은 axios
+  인터셉터가 응답 헤더 `X-PEP-Commands` 를 진행 중인 `useRunLog` 에 붙이고(`lib/commandTrace.ts`), SSE 는 서버가 `log{level:"cmd"}`
+  를 직접 보낸다(`applyRunEvent`). 표준 이벤트를 쓰지 않는 스트림 소비자(예: `verifyLogged`)는 `log` 이벤트를 `run.log` 로 넘겨야 한다.
+  `RunLogPanel` 헤더의 「명령」 토글(`useLogWindowStore().showCommands`, localStorage `pep.runlog.showCommands`, 기본 켬)은 관리자에게만
+  보이고, 비관리자 화면은 `cmd` 줄을 거른다. 백엔드에서 새로 노드에 명령을 보내는 길목을 만들면 `command_trace.record(kind, target, cmd)`
+  를 부른다(`ssh_runner`·`subprocess`(감사 훅)·`kubectl_exec.safe_pod_exec` 는 이미 기록한다). DB 에 남는 실행 로그는
+  `command_trace.bind_log(log.log)` 로 `cmd` 줄을 저장하고, 조회 직렬화에서 `command_trace.visible_lines(lines)` 로 거른다.
 - **새 실행 버튼 체크리스트**: ① `useRunLog` + `useLogPref('<화면키>')` + `RunLogPanel` ② 동기=`runLogged`·SSE=`streamLogged`·큐잉=
   `pollIntoRunLog` ③ 대상(호스트·클러스터·항목)별 한 줄 + 합계 줄 ④ 실패 사유가 error 줄로 남는가(훅에 `onError` 가 없어도)
   ⑤ 자격증명·비밀값을 로그에 싣지 않는가 ⑥ 기존 결과 뷰(표·출력·타임라인)는 그대로인가.

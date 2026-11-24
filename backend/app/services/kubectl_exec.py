@@ -12,6 +12,8 @@ from typing import Optional
 from kubernetes import client
 from kubernetes.stream import stream as k8s_stream
 
+from app.services import command_trace
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +39,7 @@ def safe_pod_exec(
        (stdout_str, None)         — 성공
        (None, manual_fallback)    — 실패 (사용자에게 manual command 안내)
     """
+    command_trace.record("pod-exec", f"{namespace}/{pod}" + (f" -c {container}" if container else ""), command)
     try:
         kwargs = dict(
             command=command,

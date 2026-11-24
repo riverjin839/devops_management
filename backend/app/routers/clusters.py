@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from uuid import UUID
 
+from app.services import command_trace
 from app.config import settings
 from app.database import get_db
 from app.models import (
@@ -1002,7 +1003,12 @@ def verify_event_stream(db: Session, cluster, actor: User, request: Request):
     try:
         for check, label in VERIFY_STEPS:
             yield _sse({"type": "step", "check": check, "label": label, "status": "running"})
-            r = next(steps)
+            # 이 단계가 클러스터에 날린 명령(kubectl 등)을 관리자 실행 로그에 먼저 남긴다(command_trace).
+            # 동기 제너레이터는 next() 마다 다른 스레드 컨텍스트라 bind 를 단계 안에서만 연다.
+            with command_trace.collecting() as cmds:
+                r = next(steps)
+            for evt in command_trace.drain_events(cmds):
+                yield _sse(evt)
             results.append(r)
             yield _sse({
                 "type": "step",

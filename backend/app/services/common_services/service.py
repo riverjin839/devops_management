@@ -24,6 +24,7 @@ from app.models.common_service import (
     CommonServiceRun,
     CommonServiceSnapshot,
 )
+from app.services import command_trace
 from app.services.common_services import catalog as K
 from app.services.common_services import collectors as CO
 from app.services.common_services import flatten as F
@@ -306,6 +307,12 @@ def _plan_steps(inst: CommonServiceInstance) -> list[tuple[str, str, Callable[..
 def run_collect(db: Session, inst: CommonServiceInstance, run: CommonServiceRun, emit: Optional[Emit] = None) -> dict[str, Any]:
     """동기 실행(Celery 워커·SSE 의 executor 스레드). 반환 = 요약(화면 result 이벤트)."""
     log = RunLog(db, run, emit)
+    # 대상에 나간 SSH·kubectl·파드 exec 명령을 실행 로그에 cmd 줄로 남긴다(조회 시 관리자에게만).
+    with command_trace.bind_log(log.log):
+        return _run_collect(db, inst, run, log)
+
+
+def _run_collect(db: Session, inst: CommonServiceInstance, run: CommonServiceRun, log: "RunLog") -> dict[str, Any]:
     store = run.kind == "collect"
     meta = K.meta(inst.service_type)
     cluster = db.query(Cluster).filter(Cluster.id == inst.cluster_id).first() if inst.cluster_id else None
@@ -423,7 +430,7 @@ def run_row(r: CommonServiceRun, full: bool = False) -> dict[str, Any]:
            "started_at": _iso(r.started_at), "finished_at": _iso(r.finished_at), "summary": r.summary or {},
            "steps": r.steps or []}
     if full:
-        out["log_lines"] = r.log_lines or []
+        out["log_lines"] = command_trace.visible_lines(r.log_lines or [])
     return out
 
 
