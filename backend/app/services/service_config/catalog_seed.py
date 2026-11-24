@@ -440,7 +440,7 @@ RULES: list[dict[str, Any]] = [
      "params": {"value": "fast"}, "reason": "1초마다 LACPDU 를 보내 스위치 쪽 장애를 3초 안에 감지한다."},
     {"rule_key": "nic.queue_reset_impact", "service": "nic", "key": "*",
      "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
-     "reason": "ring·채널·offload 는 하위 인터페이스마다 큐를 다시 만든다 — 하나씩 바꾸고 LACP 재합류를 확인하므로 본딩은 끊기지 않는다(적용은 다음 단계)."},
+     "reason": "ring·채널·offload 는 하위 인터페이스마다 큐를 다시 만든다 — 하나씩 바꾸고 LACP 재합류를 확인하므로 본딩은 끊기지 않는다. 이중화가 확인되지 않은 인터페이스는 건너뛴다."},
     {"rule_key": "nic.tunnel_offload_cilium", "service": "nic", "key": "offload.tx-udp_tnl-segmentation",
      "target_service": None, "target_key": None, "kind": "impact", "rule_type": "impact",
      "reason": "끄면 CILIUM VXLAN/Geneve 송신을 CPU 가 나눠야 해 처리량이 떨어진다."},

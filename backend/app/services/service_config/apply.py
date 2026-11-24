@@ -9,6 +9,7 @@
 - CILIUM: K8S API 로 ① cilium-config 읽기 ② 바뀐 키만 patch ③ (옵션) DaemonSet 롤링 재시작 + 롤아웃 대기 ④ 다시 읽어 확인
           ⑤ ``cilium_config`` 스냅샷 갱신(화면 현재 값 즉시 반영).
 - ETCD·CONTAINERD: ``apply_nodes`` — 사전 점검 · 한 대씩 · 상태 확인 · 실패 시 자동 복원.
+- NIC: ``apply_nic`` — 하위 인터페이스 하나씩 · LACP 재합류 확인 · 데드맨 원복 타이머 · NetworkManager 영구 기록.
 """
 from __future__ import annotations
 
@@ -32,8 +33,8 @@ from app.services.ssh_runner import SSHTarget
 from app.services import ssh_runner
 
 STATIC_POD_SERVICES = ("kube-apiserver", "kube-controller-manager", "kube-scheduler")
-APPLY_SUPPORTED = ("linux", "cilium", "etcd", "containerd", *STATIC_POD_SERVICES, "kubelet")
-SSH_SERVICES = ("linux", "etcd", "containerd", *STATIC_POD_SERVICES, "kubelet")
+APPLY_SUPPORTED = ("linux", "cilium", "etcd", "containerd", *STATIC_POD_SERVICES, "kubelet", "nic")
+SSH_SERVICES = ("linux", "etcd", "containerd", *STATIC_POD_SERVICES, "kubelet", "nic")
 ONE_BY_ONE_SERVICES = ("etcd", *STATIC_POD_SERVICES)  # 쿼럼·컨트롤 플레인 보호 — 한 대씩·실패 시 중단 고정  # 노드에 SSH 로 들어가는 적용 — 요청마다 자격증명 필요
 SETTINGS_KEY = "service_config.settings"
 SETTINGS_DEFAULTS: dict[str, Any] = {
@@ -69,6 +70,11 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "kubelet_config": "/var/lib/kubelet/config.yaml",
     "kubelet_service": "kubelet",
     "kubelet_restart_cmd": "systemctl restart kubelet",
+    # NIC — 노드의 ethtool 경로, 데드맨 원복 타이머, 하위 인터페이스 사이 대기, 재합류 대기 제한
+    "nic_ethtool": "ethtool",
+    "nic_rollback_timer_sec": 120,
+    "nic_member_wait_sec": 10,
+    "nic_rejoin_timeout_sec": 60,
 }
 _PATH_KEYS = ("sysctl_file", "etcd_manifest", "etcd_env_file", "etcd_backup_dir", "containerd_config",
               "static_pod_manifest_dir", "kubelet_config")
@@ -77,7 +83,9 @@ _CMD_KEYS = ("etcd_health_cmd", "containerd_restart_cmd", "apiserver_health_cmd"
 _EXPECT_KEYS = ("etcd_health_expect", "control_plane_health_expect")
 _UNIT_KEYS = ("etcd_service", "containerd_service", "kubelet_service")
 _INT_RANGES = {"rollout_timeout_sec": (30, 3600), "etcd_health_timeout_sec": (30, 1800),
-               "node_ready_timeout_sec": (30, 1800), "control_plane_health_timeout_sec": (30, 1800)}
+               "node_ready_timeout_sec": (30, 1800), "control_plane_health_timeout_sec": (30, 1800),
+               "nic_rollback_timer_sec": (30, 900), "nic_member_wait_sec": (0, 300), "nic_rejoin_timeout_sec": (10, 600)}
+_ETHTOOL_RE = re.compile(r"^(ethtool|/[A-Za-z0-9_./\-]+)$")
 ETCD_MODES = ("auto", "static_pod", "systemd")
 RUN_ACTIVE = "running"
 WATCH_RULE_OWNER = "service-config"
@@ -118,6 +126,8 @@ def _normalize_settings(stored: Any) -> dict[str, Any]:
     for k in _EXPECT_KEYS:
         if not _cmd_ok(out[k]):
             out[k] = SETTINGS_DEFAULTS[k]
+    if not _ETHTOOL_RE.match(str(out["nic_ethtool"] or "")):
+        out["nic_ethtool"] = SETTINGS_DEFAULTS["nic_ethtool"]
     if out["etcd_mode"] not in ETCD_MODES:
         out["etcd_mode"] = "auto"
     for k, (lo, hi) in _INT_RANGES.items():
@@ -154,6 +164,8 @@ def set_settings(db: Session, patch: dict[str, Any]) -> dict[str, Any]:
             raise ApplyError(422, f"{k}: systemd 유닛 이름 형식이 아닙니다.")
         if k in (*_CMD_KEYS, *_EXPECT_KEYS) and not _cmd_ok(v):
             raise ApplyError(422, f"{k}: 한 줄(300자 이하)이어야 하고 제어문자를 쓸 수 없습니다.")
+        if k == "nic_ethtool" and not _ETHTOOL_RE.match(str(v)):
+            raise ApplyError(422, "nic_ethtool: ethtool 또는 / 로 시작하는 절대 경로여야 합니다.")
         if k == "etcd_mode" and v not in ETCD_MODES:
             raise ApplyError(422, "etcd_mode 는 auto · static_pod · systemd 중 하나입니다.")
     cur = get_settings(db)
@@ -249,6 +261,12 @@ def plan_apply(db: Session, cluster: Cluster, service: str, version_no: Optional
         targets = scope_nodes
     if service == "linux":
         hosts = _node_hosts(db, cluster, targets)
+    elif service == "nic":  # NIC 상태를 보고·수집한 주소(에이전트 hostIP 또는 SSH 수집 주소)
+        from app.models.node_nic import NodeNicState
+
+        rows = db.query(NodeNicState.node, NodeNicState.host_ip).filter(NodeNicState.cluster_id == cluster.id).all()
+        nic_ip = {n: ip for n, ip in rows if ip}
+        hosts = {n: nic_ip.get(n) or n for n in targets}
     elif service in ONE_BY_ONE_SERVICES:
         hosts = {n: etcd_hosts.get(n) or n for n in targets}
     else:
@@ -275,6 +293,10 @@ def planned_commands(service: str, cfg: dict[str, Any], values: dict[str, Any], 
         return [f"K8S API: read configmap {ns}/{cm}", f"K8S API: patch configmap {ns}/{cm}  # 바뀐 키만",
                 f"K8S API: patch daemonset {ns}/{ds} restartedAt  # 롤링 재시작(옵션)",
                 f"K8S API: read daemonset {ns}/{ds}  # 롤아웃 대기"]
+    if service == "nic":
+        from app.services.service_config import apply_nic as AC
+
+        return AC.planned_commands(cfg, values)
     from app.services.service_config import apply_nodes as AN
 
     if service == "etcd":
@@ -692,6 +714,10 @@ async def execute(db: Session, cluster: Cluster, run_id: UUID, plan: dict[str, A
     try:
         if run.service == "linux":
             return await run_os(db, cluster, run, plan, opts, creds, log)
+        if run.service == "nic":
+            from app.services.service_config import apply_nic as AC
+
+            return await AC.run_nic(db, cluster, run, plan, opts, creds, log)
         if run.service in ("etcd", "containerd", "kubelet", *STATIC_POD_SERVICES):
             from app.services.service_config import apply_nodes as AN
 

@@ -52,11 +52,10 @@ const COLLECT_LABEL: Record<ServiceConfigCollectKind, string> = {
 const STATUS_LABEL: Record<string, string> = { imported: '가져옴', saved: '저장됨·미적용', applied: '적용됨', superseded: '대체됨' };
 
 type Filter = 'all' | 'flagged' | 'edited';
-/** 적용 버튼 비활성 사유 — NIC 는 적용이 다음 단계(설정 버전·비교·드리프트만). */
-function notSupported(label: string, service: string): string {
-  return service === 'nic' ? 'NIC 적용(노드 반영)은 아직 지원하지 않습니다 — 지금은 설정 버전·비교·드리프트 알람까지' : `${label} 은(는) 적용을 지원하지 않습니다`;
+function notSupported(label: string): string {
+  return `${label} 은(는) 적용을 지원하지 않습니다`;
 }
-const APPLY_SUPPORTED = new Set(['linux', 'cilium', 'etcd', 'containerd', 'kube-apiserver', 'kube-controller-manager', 'kube-scheduler', 'kubelet']);
+const APPLY_SUPPORTED = new Set(['linux', 'cilium', 'etcd', 'containerd', 'kube-apiserver', 'kube-controller-manager', 'kube-scheduler', 'kubelet', 'nic']);
 
 function sourceSummary(view: ServiceConfigView | undefined): string {
   if (!view || view.sources.length === 0) return '아직 수집된 값이 없다';
@@ -443,7 +442,7 @@ export function ServiceConfigPage() {
                       <Button size="sm" variant="outline"
                         disabled={!canOperate || !APPLY_SUPPORTED.has(service) || applyStreaming || dirty}
                         onClick={() => setApplyOpen(true)}
-                        title={!APPLY_SUPPORTED.has(service) ? notSupported(meta?.label ?? service, service)
+                        title={!APPLY_SUPPORTED.has(service) ? notSupported(meta?.label ?? service)
                           : dirty ? '저장하지 않은 편집이 있습니다 — 먼저 저장하세요' : withHint(`V${view.version.versionNo} 을(를) 노드에 적용`)}
                         aria-label={ariaWithHint(`V${view.version.versionNo} 적용`)}>
                         <Play /> 적용…
@@ -548,7 +547,7 @@ export function ServiceConfigPage() {
                             <Button size="sm" variant="outline" onClick={() => setCompareOpen(true)}>변경 보기</Button>
                             <Button size="sm" disabled={!canOperate || !APPLY_SUPPORTED.has(service) || applyStreaming || dirty}
                               onClick={() => setApplyOpen(true)}
-                              title={!APPLY_SUPPORTED.has(service) ? notSupported(meta?.label ?? service, service) : withHint('노드에 적용')}
+                              title={!APPLY_SUPPORTED.has(service) ? notSupported(meta?.label ?? service) : withHint('노드에 적용')}
                               aria-label={ariaWithHint('저장된 변경 적용')}>적용…</Button>
                           </>
                         )}

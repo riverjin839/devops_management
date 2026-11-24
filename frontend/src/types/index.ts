@@ -6853,6 +6853,8 @@ export interface ServiceConfigApplyNodeResult {
   after: Record<string, string | null>;
   error: string | null;
   durationMs: number;
+  /** NIC — 적용은 됐지만 알아 둘 것(lacp_rate 재기동 후 반영·NM 미관리 런타임만 등). */
+  notes?: string[];
 }
 export interface ServiceConfigApplyRun {
   id: string;
@@ -6963,6 +6965,10 @@ export interface ServiceConfigApplySettings {
   kubeletConfig: string;
   kubeletService: string;
   kubeletRestartCmd: string;
+  nicEthtool: string;
+  nicRollbackTimerSec: number;
+  nicMemberWaitSec: number;
+  nicRejoinTimeoutSec: number;
 }
 
 // ── NIC 상태(서비스 구성 ▸ NIC, `/nic-watch`) ──

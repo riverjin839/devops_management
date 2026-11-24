@@ -110,7 +110,8 @@ def _parse_dt(v: Any) -> Optional[datetime]:
 
 
 def ingest(db: Session, cluster: Cluster, node: str, host_ip: Optional[str], agent_version: Optional[str],
-           collected_at: Any, report: Any, now: Optional[datetime] = None, source: str = "agent") -> int:
+           collected_at: Any, report: Any, now: Optional[datetime] = None, source: str = "agent",
+           snapshot_source: Optional[str] = None) -> int:
     """NIC 보고 1건 저장 — 저장한 인터페이스 수. ``report`` 가 없거나 형식이 틀리면 0(아무것도 바꾸지 않음).
 
     ``source`` = agent(에이전트 보고) | ssh(서비스 구성 ▸ NIC 현재 값 수집). 전체 저장 때마다 서비스 구성
@@ -157,7 +158,7 @@ def ingest(db: Session, cluster: Cluster, node: str, host_ip: Optional[str], age
     db.commit()
     from app.services.nic_watch import snapshot as SN
 
-    SN.store(db, cluster, node, ifaces, source, now)
+    SN.store(db, cluster, node, ifaces, snapshot_source or source, now)  # apply = PEP 적용 — 변경 알람 없음
     return len(ifaces)
 
 
