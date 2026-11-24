@@ -24,7 +24,7 @@ from typing import Any, Optional
 import paramiko
 
 from app.models.isilon_server import IsilonCommand, IsilonServer
-from app.services import ssh_runner
+from app.services import command_trace, ssh_runner
 from app.services.secret_box import decrypt as decrypt_secret
 
 logger = logging.getLogger(__name__)
@@ -281,6 +281,12 @@ def _run_one(client: "paramiko.SSHClient", cmd: IsilonCommand) -> dict[str, Any]
     try:
         # 안전장치: 저장 이후 손상/우회된 명령도 실행 직전 재검증.
         validate_isi_command(cmd.command)
+        try:
+            tp = client.get_transport()
+            peer = tp.getpeername()[0] if tp else "isilon"
+        except Exception:  # noqa: BLE001
+            peer = "isilon"
+        command_trace.record("ssh", str(peer), cmd.command)
         _stdin, stdout, stderr = client.exec_command(cmd.command, timeout=timeout, get_pty=False)
         out = _read_head(stdout, MAX_STDOUT_CHARS)
         err = _read_head(stderr, 4000)

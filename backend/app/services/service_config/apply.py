@@ -29,7 +29,7 @@ from app.models.service_config import ServiceConfigApplyRun, ServiceConfigVersio
 from app.services.service_config import current as C
 from app.services.service_config import view as V
 from app.services.ssh_runner import SSHTarget
-from app.services import ssh_runner
+from app.services import command_trace, ssh_runner
 
 STATIC_POD_SERVICES = ("kube-apiserver", "kube-controller-manager", "kube-scheduler")
 APPLY_SUPPORTED = ("linux", "cilium", "etcd", "containerd", *STATIC_POD_SERVICES, "kubelet")
@@ -428,7 +428,7 @@ def run_out(run: ServiceConfigApplyRun, with_logs: bool = True) -> dict[str, Any
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
     }
     if with_logs:
-        out["log_lines"] = run.log_lines or []
+        out["log_lines"] = command_trace.visible_lines(run.log_lines or [])
     return out
 
 
@@ -689,6 +689,13 @@ async def execute(db: Session, cluster: Cluster, run_id: UUID, plan: dict[str, A
                   creds: dict[str, Any], emit: Callable[[dict], None]) -> dict[str, Any]:
     run = db.query(ServiceConfigApplyRun).filter(ServiceConfigApplyRun.id == run_id).one()
     log = RunLog(emit)
+    # 노드에 나간 SSH 명령·kubectl 을 실행 로그(DB·SSE)에 cmd 줄로 남긴다 — 조회 시 관리자에게만 보인다.
+    with command_trace.bind_log(log.log):
+        return await _execute(db, cluster, run, plan, opts, creds, log)
+
+
+async def _execute(db: Session, cluster: Cluster, run: ServiceConfigApplyRun, plan: dict[str, Any],
+                   opts: dict[str, Any], creds: dict[str, Any], log: "RunLog") -> dict[str, Any]:
     try:
         if run.service == "linux":
             return await run_os(db, cluster, run, plan, opts, creds, log)

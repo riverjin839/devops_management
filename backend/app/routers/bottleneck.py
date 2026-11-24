@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.services import command_trace
 from app.services.sse import SSE_HEADERS as _SHARED_SSE_HEADERS
 from app.database import SessionLocal, get_db
 from app.models import Cluster, BottleneckRun, User
@@ -280,8 +281,13 @@ async def run_bottleneck_analysis_stream(
                 return p, r, int((time.time() - t0) * 1000)
 
             results: dict[str, object] = {}
-            for fut in asyncio.as_completed([_run(p) for p in probes]):
+            # 프로브가 클러스터에 날린 명령(kubectl exec 등)을 관리자 실행 로그에 남긴다(command_trace).
+            with command_trace.collecting() as cmds:
+                futs = asyncio.as_completed([asyncio.ensure_future(_run(p)) for p in probes])
+            for fut in futs:
                 p, r, ms = await fut
+                for evt in command_trace.drain_events(cmds):
+                    yield _sse(evt)
                 results[p.PROBE_KEY] = r
                 st = _status_str(r.status)
                 level = {"critical": "error", "warning": "warn", "pending": "warn"}.get(st, "info")

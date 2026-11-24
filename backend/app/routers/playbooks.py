@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
+from app.services import command_trace
 from app.database import get_db
 from app.models import AnsibleInventory, AnsiblePlaybookFile, Cluster, Playbook, PlaybookRun
 from app.models.user import User
@@ -306,7 +307,8 @@ def _progress(run: PlaybookRun, since: int) -> PlaybookRunProgress:
         finished_at=run.finished_at,
         cancel_requested=bool(run.cancel_requested),
         cancelled_by=run.cancelled_by,
-        log_lines=lines[since:],
+        # 실행 명령(cmd) 줄은 관리자에게만 — 거른 뒤에도 next 는 원본 줄 수라 이어 받기가 어긋나지 않는다.
+        log_lines=command_trace.visible_lines(lines[since:]),
         next=len(lines),
     )
 

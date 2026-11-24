@@ -14,7 +14,6 @@ import json
 import os
 import re
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from datetime import datetime
 from typing import Any, Callable
@@ -29,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import require_operator
 from app.database import get_db
 from app.models import Cluster, ClusterConfigSnapshot, User
+from app.services.command_trace import ContextThreadPoolExecutor
 from app.services.kubeconfig import ensure_kubeconfig_file as _ensure_kubeconfig_file_for
 from app.services.ssh_runner import SSHTarget, _exec_ssh  # noqa: PLC2701 — 내부 재사용
 from app.services.config_snapshot import (
@@ -346,7 +346,7 @@ async def _parallel_collect(
     results: list[Any] = []
     finished = 0
     _report_hosts_start(hosts)
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    with ContextThreadPoolExecutor(max_workers=workers) as pool:
         sem = asyncio.Semaphore(workers)
 
         async def bounded(h: str) -> Any:
