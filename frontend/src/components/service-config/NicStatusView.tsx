@@ -177,6 +177,7 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
           <span className="text-xs text-muted-foreground">
             노드 {data.summary.nodes}개{latest ? ` · 마지막 보고 ${formatRelativeTime(latest)}` : ''}
             {data.settings.enabled ? '' : ' · 수집 꺼짐'}
+            {data.overridden.length > 0 ? ` · 이 클러스터 기준 ${data.overridden.length}개 재정의` : ''}
           </span>
         )}
         <div className="ml-auto">
@@ -312,7 +313,7 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
           </MacCard>
         </>
       )}
-      <NicSettingsDialog open={settingsOpen} isAdmin={isAdmin} onClose={() => setSettingsOpen(false)} />
+      <NicSettingsDialog open={settingsOpen} isAdmin={isAdmin} clusterId={clusterId} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

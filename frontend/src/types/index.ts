@@ -7024,6 +7024,22 @@ export interface NicWatchSettings {
 export interface NicWatchSettingsOut extends NicWatchSettings {
   options: { kinds: string[]; bondModes: string[]; hashPolicies: string[]; lacpRates: string[]; features: { name: string; label: string }[] };
 }
+/** 클러스터별 NIC 판정 기준 — 공통 기준(global) 위에 이 클러스터가 재정의한 항목(overridden, 서버 필드명 snake_case)만 얹은 실효 기준(effective). */
+export interface NicClusterSettingsOut {
+  effective: NicWatchSettings;
+  global: NicWatchSettings;
+  overridden: string[];
+  options: NicWatchSettingsOut['options'];
+}
+/** 보고된 구성에서 뽑은 기준 제안 — 읽기 전용, 저장은 운영자가 한다. */
+export interface NicObserved {
+  nodeCount: number;
+  interfaces: Record<string, string[]>;
+  bondCount: number;
+  speeds: number[];
+  suggest: Partial<Pick<NicWatchSettings, 'expectedBondMode' | 'expectedHashPolicy' | 'expectedLacpRate' | 'minSpeedMbps'>>;
+}
+export interface NicOverrideSummary { clusterId: string; clusterName: string; fields: string[] }
 export interface NicClusterView {
   nodes: NicNodeInfo[];
   interfaces: NicInterfaceRow[];
@@ -7032,6 +7048,8 @@ export interface NicClusterView {
   pendingAgents: { node: string; agentVersion: string | null; reason: string }[];
   agentCount: number;
   settings: NicWatchSettings;
+  /** 이 클러스터가 공통 기준과 다르게 정한 항목(서버 필드명) */
+  overridden: string[];
 }
 
 // ── 공통 서비스(/common-services) — 여러 클러스터가 함께 쓰는 LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS ──

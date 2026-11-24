@@ -33,12 +33,8 @@ spec:
           type: RuntimeDefault
       containers:
       - name: agent
-        image: ghcr.io/riverjin839/devops_management-backend:latest
+        image: ghcr.io/riverjin839/devops_management/node-agent:latest
         imagePullPolicy: IfNotPresent
-        command:
-        - python
-        - -m
-        - app.node_param_agent
         env:
         - name: NODE_NAME
           valueFrom:
@@ -50,8 +46,6 @@ spec:
               fieldPath: status.hostIP
         - name: HOST_ROOT
           value: /host
-        - name: PYTHONDONTWRITEBYTECODE
-          value: '1'
         envFrom:
         - secretRef:
             name: node-param-agent-config
@@ -63,11 +57,11 @@ spec:
             - ALL
         resources:
           requests:
-            cpu: 10m
-            memory: 48Mi
+            cpu: 5m
+            memory: 8Mi
           limits:
             cpu: 100m
-            memory: 128Mi
+            memory: 64Mi
         volumeMounts:
         - name: etc-sysctl-conf
           mountPath: /host/etc/sysctl.conf

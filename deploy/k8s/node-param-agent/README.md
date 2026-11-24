@@ -4,7 +4,9 @@
 PEP 는 값이 바뀌거나, 기준값을 벗어나거나, 현재 값이 영구 설정(`/etc/sysctl.d` 등)과 다르면 **알람 인박스**로 알립니다.
 화면: K8s 허브 ▸ 점검 ▸ **OS 파라미터 감시** (`/k8s/<클러스터>/os-param-watch`).
 
-- 이미지는 PEP backend 이미지를 그대로 씁니다(`python -m app.node_param_agent`, 표준 라이브러리만 사용).
+- 이미지는 전용 에이전트 이미지 `ghcr.io/riverjin839/devops_management/node-agent`(정적 Rust 바이너리, distroless,
+  amd64/arm64, 소스 `agent-rs/`)입니다. backend 이미지를 쓰던 기존 설치는 PEP 화면이 Python 에이전트
+  (`python -m app.node_param_agent`) 방식으로 렌더하므로 그대로 동작하고, 이미지만 `…/node-agent` 로 바꾸면 전환됩니다.
   폐쇄망이면 사내 레지스트리 경로로 바꿉니다.
 - **무엇을 읽을지는 PEP 화면의 감시 규칙이 정합니다.** 에이전트는 보고 응답으로 감시 목록과 보고 주기를 받으므로
   규칙을 바꿀 때 에이전트를 다시 배포할 필요가 없습니다.
@@ -39,8 +41,10 @@ kubectl -n k8s-monitor-agent logs ds/node-param-agent --tail=20
 노드에서 무엇을 읽는지 보내지 않고 확인하려면:
 
 ```bash
-kubectl -n k8s-monitor-agent exec ds/node-param-agent -- \
-  python -m app.node_param_agent --dry-run --param net.core.somaxconn --param vm.swappiness
+# Rust 이미지(distroless)는 셸이 없어 exec 대신 debug 로 같은 이미지를 한 번 더 띄운다
+kubectl -n k8s-monitor-agent debug -it ds/node-param-agent --image=<node-agent 이미지> --target=agent -- \
+  /pep-node-agent --dry-run --nic --param net.core.somaxconn --param vm.swappiness
+# (backend 이미지를 쓰는 설치) kubectl exec ds/node-param-agent -- python -m app.node_param_agent --dry-run ...
 ```
 
 ## 권한 (최소화)

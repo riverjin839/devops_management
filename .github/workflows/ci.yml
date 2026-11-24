@@ -98,6 +98,27 @@ jobs:
       - name: Build
         run: npm run build
 
+  # 노드 에이전트(Rust) — 포맷·린트·테스트 + 이미지 빌드 검증(푸시 없음, musl 정적 빌드가 깨지지 않는지)
+  agent-rs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./agent-rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Image build (no push)
+        run: docker build -t pep-node-agent:ci .
+
   # Backend 테스트
   backend:
     runs-on: ubuntu-latest

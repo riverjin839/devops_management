@@ -2726,6 +2726,13 @@ export const nicWatchApi = {
   settings: () => api.get<import('@/types').NicWatchSettingsOut>('/nic-watch/settings'),
   updateSettings: (body: Partial<import('@/types').NicWatchSettings>) =>
     api.put<import('@/types').NicWatchSettingsOut>('/nic-watch/settings', body),
+  /** 클러스터별 판정 기준(공통 기준 위의 재정의). 저장·초기화는 admin. resetFields 는 서버 필드명(snake_case). */
+  clusterSettings: (clusterId: string) => api.get<import('@/types').NicClusterSettingsOut>(`/nic-watch/clusters/${clusterId}/settings`),
+  updateClusterSettings: (clusterId: string, body: Partial<import('@/types').NicWatchSettings> & { resetFields?: string[] }) =>
+    api.put<import('@/types').NicClusterSettingsOut>(`/nic-watch/clusters/${clusterId}/settings`, body),
+  clearClusterSettings: (clusterId: string) => api.delete<import('@/types').NicClusterSettingsOut>(`/nic-watch/clusters/${clusterId}/settings`),
+  observed: (clusterId: string) => api.get<import('@/types').NicObserved>(`/nic-watch/clusters/${clusterId}/observed`),
+  overrides: () => api.get<import('@/types').NicOverrideSummary[]>('/nic-watch/overrides'),
 };
 
 /** 공통 서비스(/common-services) — 인스턴스 등록·K8S 에서 가져오기·수집(SSE)·설정·변경·실행 이력·감시 설정. */
