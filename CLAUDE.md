@@ -300,7 +300,7 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
   (좌측 공백 0) — 행 전체에 좌측 패딩이나 `mx-auto` 를 주지 않는다.
 - **SSH/exec 콘솔은 콘솔 패턴 필수.** 좌(컨트롤)/우(결과) 한 로우, stdout/stderr 는
   `ExecOutputTabs`, 로그는 `LogViewer`(plain `<pre>` 금지), 최상단에서 `useTerminalEnvSync` 호출.
-  적용 화면: `/bulk-exec` `/mc` `/etcdctl` `/cilium-trace` `/kernel-params` `/isilon-nfs`
+  적용 화면: `/bulk-exec` `/mc` `/etcdctl` `/cilium-trace` `/isilon-nfs`
   (+ 신규 콘솔 전부). 세부 예외(`/isilon-nfs` 의 `ExecOutputTabs` 미적용 등)는 `DESIGN_SYSTEM.md` §12.6.
 - **실행 → 결과 화면은 로그 중심 패턴(`DESIGN_SYSTEM.md` §12.6.1).** 좌 제어(≤320px, 하단 고정 실행 바) / 우 상단
   실행 로그(`RunLogPanel fill`, 중심) / 우 하단 결과. 조회 명령은 확인 없이 실행·변경 명령만 danger 확인, 입력 중

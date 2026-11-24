@@ -21,7 +21,6 @@ import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
 import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
-import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
 import { ServiceConfigPage } from '@/pages/ServiceConfigPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
@@ -81,7 +80,6 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/batch-jobs': BatchJobsPage,
   '/mc': McClientPage,
   '/isilon-nfs': IsilonNfsPage,
-  '/kernel-params': KernelParamsPage,
   '/os-param-watch': NodeParamWatchPage,
   '/k8s-services': ServiceConfigPage,
   '/infra-topology': InfraTopologyPage,

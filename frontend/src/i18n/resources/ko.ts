@@ -41,7 +41,6 @@ export const ko = {
       batchJobs: '배치잡',
       mc: 'mc 클라이언트',
       isilonNfs: 'NFS 모니터링',
-      kernelParams: '커널 파라미터',
       osParamWatch: 'OS 파라미터 감시',
       serviceConfig: '서비스 구성',
       infraTopology: '인프라 토폴로지',

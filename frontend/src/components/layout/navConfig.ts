@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   Activity, Archive, ArrowRightLeft, BarChart3, BellRing, Blocks, BookMarked, BookOpen, Boxes, Calculator,
-  CalendarCheck2, ClipboardCheck, ClipboardList, Cog, Command, Container, Cpu, Database, Dog, Droplets,
+  CalendarCheck2, ClipboardCheck, ClipboardList, Cog, Command, Container, Database, Dog, Droplets,
   Eye, FileCode2, FileSpreadsheet, FileText, Files, Gauge, GitBranch, GitFork, HardDrive, Home, Hourglass,
   KeyRound, Layers, LayoutGrid, Library, Link2, ListChecks, ListTodo, ListTree, Map, Network,
   NotebookText, Palmtree, Radar, Rocket, Route, Rss, ScrollText, Server, Settings, Share2, ShieldCheck,
@@ -59,7 +59,6 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/batch-jobs':         { labelKey: 'batchJobs', defaultLabel: '배치잡',          icon: ListTree },
   '/mc':                 { labelKey: 'mc', defaultLabel: 'mc 클라이언트',  icon: Archive },
   '/isilon-nfs':         { labelKey: 'isilonNfs', defaultLabel: 'NFS 모니터링',   icon: HardDrive },
-  '/kernel-params':      { labelKey: 'kernelParams', defaultLabel: '커널 파라미터',  icon: Cpu },
   // OS 파라미터 감시 — 노드 에이전트가 보고한 sysctl 값의 변경·기준값 위반·영구 설정 불일치(K8s 허브 점검 탭).
   '/os-param-watch':     { labelKey: 'osParamWatch', defaultLabel: 'OS 파라미터 감시', icon: ShieldCheck },
   // 서비스 구성 — etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전(K8S 허브 구성 탭).

@@ -36,7 +36,6 @@ export const en: TranslationResource = {
       batchJobs: 'Batch Jobs',
       mc: 'mc Client',
       isilonNfs: 'NFS Monitoring',
-      kernelParams: 'Kernel Parameters',
       osParamWatch: 'OS Parameter Watch',
       serviceConfig: 'Service Config',
       infraTopology: 'Infra Topology',
