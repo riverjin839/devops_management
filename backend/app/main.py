@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -19,6 +20,8 @@ from app.services.request_context import (
     HEADER as REQUEST_ID_HEADER, get_request_id, install_logging, new_request_id,
 )
 from app.services.request_id_middleware import RequestIdMiddleware
+from app.services import command_trace
+from app.services.command_trace import CommandTraceMiddleware
 from app.services.memory_watch import MemoryWatchMiddleware
 from app.services.dc_inventory.errors import DcError
 from app.services.dc_inventory.importer import FileError as DcFileError
@@ -2575,6 +2578,15 @@ async def lifespan(app: FastAPI):
     # §config.py sync_threadpool_size 주석 참고.
     current_default_thread_limiter().total_tokens = settings.sync_threadpool_size
 
+    # 실행 명령 추적(관리자 "로그 보기") — subprocess 감사 훅 + run_in_executor(None) 가 contextvars 를 넘기게.
+    command_trace.install()
+    try:
+        asyncio.get_running_loop().set_default_executor(
+            command_trace.ContextThreadPoolExecutor(thread_name_prefix="pep-exec"),
+        )
+    except Exception:  # noqa: BLE001
+        _startup_log.warning("command_trace: default executor 교체 실패 — 스레드 안 명령은 실행 로그에 안 남을 수 있음")
+
     boot_state.begin()
     boot_state.pending_ddl_provider = lambda: list(_pending_ddl)
     _t = _time_mod.monotonic()
@@ -2696,7 +2708,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.106.1",
+    version="1.106.3",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2718,6 +2730,8 @@ if extra_origins:
 
 # 요청 ID — 가장 안쪽(gzip·CORS 보다 먼저 add)이라 5xx 응답 본문을 압축 전에 읽어 사유로 남긴다.
 app.add_middleware(RequestIdMiddleware)
+# 실행 명령 추적 — 관리자 요청에서 노드·클러스터에 나간 명령을 X-PEP-Commands 헤더로 돌려준다(services/command_trace.py).
+app.add_middleware(CommandTraceMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2725,7 +2739,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=[REQUEST_ID_HEADER],
+    expose_headers=[REQUEST_ID_HEADER, command_trace.HEADER],
 )
 
 
@@ -2923,7 +2937,7 @@ app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.106.1",
+        "version": "1.106.3",
         "status": "running"
     }
 

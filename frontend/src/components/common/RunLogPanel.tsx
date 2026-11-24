@@ -3,14 +3,17 @@
 // 어디에 보일지는 전역 설정(useLogWindowStore) — 기본은 우측 상단 새 창(PopoutWindow), "화면 안" 으로 바꿀 수 있다.
 // 단 로그 중심 화면(fill)은 항상 화면 안에 표시한다.
 // 새 창이 차단되면 화면 안 표시로 폴백하고, 사용자가 창을 닫으면 다음 실행이 시작될 때 다시 연다.
+// 관리자에게는 서버가 노드·클러스터에 실제로 날린 명령이 CMD 줄로 함께 쌓인다(lib/commandTrace) —
+// "명령" 토글로 숨길 수 있고(전 화면 공통), 비관리자에게는 서버가 보내지 않으며 화면도 거른다.
 import { useEffect, useId, useRef, useState } from 'react';
 import {
-  CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Loader2, PanelBottom, PictureInPicture2, ScrollText, X, XCircle,
+  CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Loader2, PanelBottom, PictureInPicture2, ScrollText, TerminalSquare, X, XCircle,
 } from 'lucide-react';
 import { LogViewer } from './LogViewer';
 import { PopoutWindow } from './PopoutWindow';
 import { formatRunLog, type RunLog } from '@/hooks/useRunLog';
 import { useLogWindowStore } from '@/stores/logWindowStore';
+import { useAuthStore } from '@/stores/authStore';
 
 interface Props {
   run: RunLog;
@@ -66,6 +69,9 @@ export function RunLogPanel({
 }: Props) {
   const mode = useLogWindowStore((s) => s.mode);
   const setMode = useLogWindowStore((s) => s.setMode);
+  const showCommands = useLogWindowStore((s) => s.showCommands);
+  const setShowCommands = useLogWindowStore((s) => s.setShowCommands);
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
   const popupName = useId().replace(/[^a-zA-Z0-9]/g, '');
   const [blocked, setBlocked] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -83,9 +89,12 @@ export function RunLogPanel({
 
   const idle = !run.running && run.lines.length === 0;
   if (idle && !fill) return null;
-  const last = run.lines[run.lines.length - 1];
-  const hasError = run.lines.some((l) => l.level === 'error');
-  const statusText = `${run.running ? '실행 중' : idle ? '대기' : hasError ? '오류 있음' : '완료'} · ${run.lines.length}줄`;
+  const cmdCount = run.lines.reduce((n, l) => (l.level === 'cmd' ? n + 1 : n), 0);
+  const lines = isAdmin && showCommands ? run.lines : run.lines.filter((l) => l.level !== 'cmd');
+  const last = lines[lines.length - 1];
+  const hasError = lines.some((l) => l.level === 'error');
+  const statusText = `${run.running ? '실행 중' : idle ? '대기' : hasError ? '오류 있음' : '완료'} · ${lines.length}줄`
+    + (isAdmin && cmdCount > 0 ? ` · 명령 ${cmdCount}건` : '');
   const title = run.title || '실행 로그';
 
   // 로그 중심 화면(fill — /etcdctl·/bulk-exec 등)은 로그가 화면의 중심이라 전역 설정과 무관하게 화면 안에 둔다.
@@ -93,7 +102,7 @@ export function RunLogPanel({
   const windowMode = !fill && mode === 'window' && !blocked;
   const popped = windowMode && show && !idle && !dismissed;
   const inlineLog = show && !windowMode;
-  const logText = idle ? idleHint : (formatRunLog(run.lines) || '로그 대기 중…');
+  const logText = idle ? idleHint : (formatRunLog(lines) || '로그 대기 중…');
 
   return (
     <section aria-label={`${run.title || '실행'} 로그`} className={`rounded-md border border-border bg-muted/20 ${fill ? 'flex flex-col min-h-0 flex-1' : ''}`}>
@@ -113,6 +122,20 @@ export function RunLogPanel({
             {show ? <ChevronDown className="w-3.5 h-3.5" aria-hidden /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden />}
             <ScrollText className="w-3.5 h-3.5" aria-hidden /> 로그 보기
           </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowCommands(!showCommands)}
+              aria-pressed={showCommands}
+              title={showCommands
+                ? '노드·클러스터에 실제로 나간 명령(CMD 줄) 숨기기 — 관리자 전용, 전 화면 공통'
+                : '노드·클러스터에 실제로 나간 명령(CMD 줄) 보기 — 관리자 전용, 전 화면 공통'}
+              aria-label={showCommands ? '실행 명령 숨기기' : '실행 명령 보기'}
+              className={`${btnCls} ${showCommands ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              <TerminalSquare className="w-3.5 h-3.5" aria-hidden /> 명령
+            </button>
+          )}
           {windowMode && show && !idle && (
             <button
               type="button"

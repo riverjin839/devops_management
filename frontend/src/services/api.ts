@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmProfile, LlmProfileModels, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
+import { publishFromHeaders } from '@/lib/commandTrace';
 import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
@@ -125,6 +126,8 @@ function retryDelay(error: unknown): number | null {
 // Response interceptor - snake_case → camelCase 자동 변환 + debug 로깅
 api.interceptors.response.use(
   (response) => {
+    // 관리자 요청이면 서버가 실제로 날린 명령을 헤더로 돌려준다 — 진행 중인 실행 로그에 CMD 줄로(lib/commandTrace).
+    publishFromHeaders(response.headers);
     if (response.data && typeof response.data === 'object' && !(response.data instanceof Blob)) {
       response.data = convertKeys(response.data);
     }
@@ -141,6 +144,7 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    publishFromHeaders(error?.response?.headers);
     const delay = retryDelay(error);
     if (delay != null) {
       await new Promise((r) => setTimeout(r, delay));

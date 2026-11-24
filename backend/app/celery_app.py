@@ -10,6 +10,10 @@ from datetime import datetime
 import asyncio
 
 from app.config import settings
+from app.services import command_trace
+
+# 실행 명령 추적 — 워커 안 subprocess(kubectl·ansible …)도 실행 로그 sink 가 꽂혀 있으면 기록된다.
+command_trace.install()
 
 # Celery 앱 생성
 celery_app = Celery(

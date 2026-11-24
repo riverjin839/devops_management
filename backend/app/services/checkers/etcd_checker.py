@@ -15,6 +15,7 @@ from typing import Optional
 from kubernetes.stream import stream as k8s_stream
 
 from app.models import StatusEnum, ClusterConfigSnapshot
+from app.services import command_trace
 from app.services.checkers.base import BaseChecker, CheckResult
 
 
@@ -72,18 +73,20 @@ class EtcdChecker(BaseChecker):
 
         pod_name = target.metadata.name
 
+        etcd_cmd = [
+            "etcdctl", "endpoint", "status",
+            "--cacert=/etc/kubernetes/pki/etcd/ca.crt",
+            "--cert=/etc/kubernetes/pki/etcd/server.crt",
+            "--key=/etc/kubernetes/pki/etcd/server.key",
+            "--write-out=json",
+        ]
+        command_trace.record("pod-exec", f"kube-system/{pod_name} -c etcd", etcd_cmd)
         try:
             resp = k8s_stream(
                 v1.connect_get_namespaced_pod_exec,
                 pod_name,
                 "kube-system",
-                command=[
-                    "etcdctl", "endpoint", "status",
-                    "--cacert=/etc/kubernetes/pki/etcd/ca.crt",
-                    "--cert=/etc/kubernetes/pki/etcd/server.crt",
-                    "--key=/etc/kubernetes/pki/etcd/server.key",
-                    "--write-out=json",
-                ],
+                command=etcd_cmd,
                 container="etcd",
                 stderr=True, stdout=True, stdin=False, tty=False,
                 _preload_content=True,

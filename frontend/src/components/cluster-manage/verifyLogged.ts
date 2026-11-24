@@ -4,7 +4,7 @@
 // `error{message}`. 클러스터 관리(/cluster-manage)와 설정 → 클러스터 탭이 함께 쓴다.
 // 중간에 끊으면(signal abort) 서버는 남은 단계를 실행하지 않고 cluster.status 도 바꾸지 않는다(감사: aborted).
 import { postSse } from '@/lib/sse';
-import { elapsed, type RunLog, type RunLoggedResult } from '@/hooks/useRunLog';
+import { elapsed, toRunLogLevel, type RunLog, type RunLoggedResult } from '@/hooks/useRunLog';
 import { formatApiError } from '@/lib/utils';
 import { camelizeKeys, clustersVerifyStreamUrl } from '@/services/api';
 
@@ -75,6 +75,9 @@ export async function verifyClusterLogged(
           run.setStep(check, label, 'done');
           run.log('warn', `${label} 건너뜀${tail}`);
         }
+      } else if (evt.type === 'log') {
+        // 관리자에게만 오는 실행 명령(cmd) 줄 — 각 단계 직후에 그 단계가 날린 kubectl 등(command_trace).
+        run.log(toRunLogLevel(evt.level), String(evt.message ?? ''));
       } else if (evt.type === 'done') {
         result = camelizeKeys<ClusterVerifyResult>(evt);
       } else if (evt.type === 'error') {

@@ -8,10 +8,23 @@
 
 ## [Unreleased]
 
-1.106.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.106.3 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Removed
 - **K8S 클러스터 허브 — 구성 ▸ 「버전 / 설정」 화면 삭제**: 서비스 구성이 같은 수집(K8S API·SSH)과 현재 값 보기를 대체해 옛 화면을 지웠다. 컴포넌트 전체 이력·두 스냅샷 비교·CSV 내보내기·3D 관계 그래프(`/versions/:id/graph`)·MinIO 수집 버튼도 함께 없어졌다. 옛 주소(`/versions`, `/versions/:id/graph`, `/k8s/:id/versions`)는 서비스 구성으로 이동한다. Backend: 수집 API(`routers/versions.py` `collect-*`)는 서비스 구성·점검(인증서 만료·etcd defrag)이 계속 써서 유지. Frontend: `VersionsPage`·`VersionGraphPage`·`CsvExportModal` 삭제, 허브 `RETIRED_HUB_VIEWS` 로 옛 뷰 id 연결.
+
+## [1.106.3] - 2026-11-24
+
+### Fixed
+- **사이드바 K8s 클러스터 목록 — 보던 화면 상태 유지** — 허브 화면(예: 서비스 `?service=`)에서 사이드바 목록으로 클러스터를 바꾸면 주소의 쿼리가 빠져 보던 선택이 풀리던 문제를 고쳤다. 허브의 클러스터 선택기처럼 쿼리를 그대로 넘긴다. Frontend: `components/layout/K8sClusterFlyoutBody.tsx`.
+- **실행 로그 — 실제로 나간 명령부터 표시(관리자 전용)**: 모든 "로그 보기"(실행 로그 패널)에서 관리자는 그 실행이 노드·클러스터에 실제로 날린 명령을 `CMD $ [ssh root@10.0.0.1:22] sysctl -e …` 줄로 먼저 본다(SSH·SFTP·kubectl/helm/ansible-playbook 등 로컬 프로세스·파드 exec). 비밀번호·토큰·Authorization·URL 자격증명은 가리고, kubeconfig 경로는 `<kubeconfig>`, heredoc 파일 내용은 앞 몇 줄만 남긴다. 실행 로그 헤더의 「명령」 토글로 숨길 수 있다(전 화면 공통, 관리자에게만 보임). 비관리자에게는 서버가 명령 줄을 보내지 않는다. Backend: `services/command_trace.py`(명령 길목 기록 — `ssh_runner`·`isilon_service`·`kubectl_exec`·`etcd_checker` + `subprocess.Popen` 감사 훅, `CommandTraceMiddleware` → 단건 응답 헤더 `X-PEP-Commands`, SSE `log{level:"cmd"}`, 이벤트 루프 기본 executor 가 contextvars 를 넘기게), DB 실행 로그(서비스 구성 적용·공통 서비스·플레이북·점검 매트릭스 수행)에 `cmd` 줄 저장 + 조회 시 비관리자 제외. Frontend: `lib/commandTrace.ts`(axios 인터셉터 → 진행 중 실행 로그), `RunLogLevel` `cmd`, `RunLogPanel` 「명령」 토글(`logWindowStore.showCommands`), `LogViewer` CMD 줄 색.
+
+## [1.106.2] - 2026-11-24
+
+### Fixed
+- **K8S 클러스터 허브 — 탭 이동 때도 터미널 세션 확인 · `[` `]` 단축키 수정**: k9s·노드 SSH 탭에서 세션이 열려 있거나 연결 중이면 다른 탭으로 옮길 때(클릭·`[` `]` 단축키) 「세션 끊고 이동」 확인 창이 뜬다. 닫힌 사이드 패널이 열린 대화상자로 잘못 세어져 허브 `[` `]` 단축키가 동작하지 않던 문제도 고쳤다. Frontend: `HubTabs` 이동 전 가드 호출, `useHubTabShortcuts` 대화상자 판정.
+- **실행 로그 새 창이 화면을 가리지 않게**: 「로그 보기」 새 창이 760×640(점검 매트릭스는 820×720) 고정 크기라 노트북 화면에서는 작업 화면을 거의 덮었다. 이제 앱 화면을 4등분한 오른쪽 위 1/4(1사분면) 크기·위치로 열린다(너무 작은 화면은 최소 480×320). Frontend: `PopoutWindow` 기본 크기·위치 계산.
+- **K8S 클러스터 허브 — 터미널 세션이 있을 때 클러스터 전환 확인**: 허브 k9s·노드 SSH 탭에서 세션이 열려 있거나 연결 중이면, 「클러스터 전환」이나 사이드바 클러스터 목록으로 다른 클러스터를 고를 때 「세션 끊고 전환」 확인 창이 다시 뜬다(허브로 옮기며 빠졌던 확인). 노드 SSH 도 k9s 처럼 연결 중인 세션에서 확인한다. Frontend: `stores/clusterSwitchGuardStore.ts`, `K8sClusterFlyoutBody` 이동 전 가드 호출.
 
 ## [1.106.1] - 2026-11-24
 

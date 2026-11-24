@@ -5,6 +5,8 @@ This file provides essential context for AI assistants (Claude and others) worki
 ---
 ## riverjin839  custom 요청 
 모든 "실행"버튼 이벤트에는 항상 상세,실시간 로그 출력이 함께 구현되어야 하고, 사용자  "로그 보기" 옵션을 결정할수있어야한다.
+모든 로그 보기에서 ADMIN 은 실제로 노드에 날린 명령부터 볼 수 있어야 한다 — 노드·클러스터에 명령을 보내는 새 길목은
+`services/command_trace.py` `record()` 로 기록한다(SSH·subprocess·파드 exec 은 이미 기록됨, 상세 `DESIGN_SYSTEM.md` §12.9.1).
 
 
 ## Project Overview

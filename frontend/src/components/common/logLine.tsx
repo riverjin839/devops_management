@@ -104,6 +104,8 @@ export function tokenize(line: string): React.ReactNode[] {
 // ── 라인 레벨 분류 (에러/경고 라인 색) ───────────────────────────────────────
 
 const LEVEL_STYLE: Array<{ re: RegExp; cls: string }> = [
+  // 실행 명령 줄(`CMD   $ [ssh root@host:22] …`) — 명령 안의 ERROR 같은 단어보다 먼저 본다.
+  { re: /\bCMD\s+\$ \[/,       cls: 'text-[color:var(--log-purple)]' },
   { re: /\b(FATAL|PANIC)\b/, cls: 'text-[color:var(--log-red)] font-semibold' },
   { re: /\b(ERROR|ERR)\b/,   cls: 'text-[color:var(--log-red)]' },
   { re: /\b(WARN(?:ING)?)\b/, cls: 'text-[color:var(--log-amber)]' },
