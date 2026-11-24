@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   LayoutGrid, Boxes, Gauge, TrendingUp, Activity, Bell, ScrollText, Zap, ClipboardCheck,
-  KeyRound, Tags, Dog, Package, GitCommit, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks,
+  KeyRound, Tags, Dog, Package, GitCommit, Database, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks,
 } from 'lucide-react';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
@@ -18,7 +18,6 @@ import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { NodeImagesPage } from '@/pages/NodeImagesPage';
 import { VersionsPage } from '@/pages/VersionsPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
-import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
 import { ServiceConfigPage } from '@/pages/ServiceConfigPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
@@ -93,7 +92,6 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'node-images', category: 'config', label: '노드 이미지', icon: Package, navKey: '/node-images', component: NodeImagesPage },
   { id: 'versions', category: 'config', label: '버전 / 설정', icon: GitCommit, navKey: '/versions', component: VersionsPage },
   { id: 'etcdctl', category: 'console', label: 'etcdctl', icon: Database, navKey: '/etcdctl', component: EtcdCtlPage },
-  { id: 'kernel-params', category: 'console', label: '커널 파라미터', icon: Cpu, navKey: '/kernel-params', component: KernelParamsPage },
   { id: 'k9s', category: 'console', label: 'k9s', icon: Dog, navKey: '/k9s', component: K9sPage },
   { id: 'node-ssh', category: 'console', label: '노드 SSH', icon: TerminalSquare, navKey: '/node-ssh', component: NodeSshPage },
 ];

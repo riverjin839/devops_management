@@ -640,7 +640,7 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 **예외 — SSH 웹 터미널 창(`SshTerminalWindow`, `/k9s`·`/node-ssh`)**: 터미널 크롬은 테마와 무관한 고정 다크(`bg-zinc-*`·`text-zinc-*`, `rounded-2xl`)다. 터미널 화면은 테마가 바뀌어도 같은 대비여야 하고 xterm 팔레트가 별도(Settings ▸ 터미널 Appearance)이기 때문이다. 드래그 창 좌표(`left`/`top`)만 인라인 `style` 을 쓴다. 이 창 안에서 상태·경고 색(`status-*`)은 토큰을 그대로 쓴다.
 
 **적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc` · etcdctl `/etcdctl` ·
-Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 모니터링(Isilon) `/isilon-nfs`
+Cilium BPF Trace `/cilium-trace` · NFS 모니터링(Isilon) `/isilon-nfs`
 (+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
 
 > `/isilon-nfs` 는 명령 1건이 stdout/stderr 두 스트림이 아니라 단일 출력(+선택적 error)만 갖는
@@ -714,9 +714,9 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
 - [ ] 결과가 모드별로 보존되는가, 스크롤이 카드 내부 한 겹뿐인가
 - [ ] 오류가 로그 + alert 한 곳인가
 
-적용 현황: §12.6 적용 화면 6개(`/etcdctl` `/bulk-exec` `/mc` `/cilium-trace` `/kernel-params` `/isilon-nfs`) 전부 적용 완료.
+적용 현황: §12.6 적용 화면 5개(`/etcdctl` `/bulk-exec` `/mc` `/cilium-trace` `/isilon-nfs`) 전부 적용 완료.
 화면 특성에 따른 차이 — `/isilon-nfs` 는 등록된 읽기 전용 명령만 실행하므로 위험 배지·확인 모달이 없고 좌측에 서버 레일이 따로 있다,
-`/kernel-params` 는 프리셋이 모두 조회 명령, `/mc`·`/kernel-params`·`/isilon-nfs` 는 모드 탭이 없어 결과 보관 단위가 프리셋·화면 하나다.
+`/mc`·`/isilon-nfs` 는 모드 탭이 없어 결과 보관 단위가 프리셋·화면 하나다.
 신규 실행형 화면은 위 체크리스트로 시작한다.
 
 ### 12.7 전역 상단바 (`components/layout/AppTopBar.tsx`) — 높이 규약

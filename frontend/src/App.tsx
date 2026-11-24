@@ -173,7 +173,7 @@ function AppShell() {
               <Route path="/cluster-overview" element={<Navigate to="/clusters" replace />} />
               {/* K8s 클러스터 허브(D-240) — 클러스터 레일 하나 + 탭으로 per-cluster K8s 화면을 모은다.
                   아래 옛 경로들(/clusters·/k8s-manage·/k8s-allocation·/cluster-trends·/observability·/k8s-events·
-                  /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/versions·/etcdctl·/kernel-params)은
+                  /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/versions·/etcdctl)은
                   해당 뷰로 redirect(클러스터·쿼리 보존). 3단계: /pod-bottleneck·/cilium-trace·/packet-flow·/ops-checks.
                   D-243: /node-labels·/k9s·/node-ssh 도 허브 뷰로. /pod-bottleneck/:id(실행 상세)·터미널 새 창(/k9s/popup·/node-ssh/popup)만 단독. */}
               <Route path="/k8s" element={<K8sHubPage />} />
@@ -222,7 +222,6 @@ function AppShell() {
               {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크가 홈 첫 탭이 아니라
                   배치잡 서브탭에 바로 떨어지도록 쿼리로 탭/서브뷰를 넘긴다(HomePage 가 읽고 지움, D-129). */}
               <Route path="/batch-jobs" element={<Navigate to="/?tab=platform&view=batch" replace />} />
-              <Route path="/kernel-params" element={<RedirectToHub view="kernel-params" />} />
               <Route path="/os-param-watch" element={<RedirectToHub view="os-param-watch" />} />
               <Route path="/k8s-services" element={<RedirectToHub view="services" />} />
               <Route path="/mc" element={<McClientPage />} />
