@@ -8,7 +8,7 @@
 실행 경로 2가지 (params.source 로 선택 — UI 설정 편집에서 변경):
 - **pod**      : kube-system 내 etcd pod 에서 exec (kubeadm 등 파드형 etcd).
 - **snapshot** : etcd 가 master 노드의 systemd 데몬으로 떠 있는 환경(파드 없음,
-  env 는 /etc/etcd.env). "버전 / 설정 관리(/versions)" 화면에서 SSH 로 수집해 둔
+  env 는 /etc/etcd.env). 수집 API(collect-etcdctl-config)가 SSH 로 수집해 둔
   ``etcdctl_config:{host}`` 스냅샷(endpoint_status_json)을 읽어 단편화율을 계산한다 —
   체커가 직접 SSH 하지 않으므로 자격증명을 params 에 저장할 필요가 없다.
 - **auto**(기본): pod 를 먼저 찾고, 없으면 snapshot 으로 폴백.
@@ -168,7 +168,7 @@ class EtcdDefragChecker(DeepCheckerBase):
         critical_frag: float,
         max_age_hours: int,
     ) -> DeepCheckOutcome:
-        """`버전 / 설정 관리` 화면이 SSH 로 수집해 둔 ``etcdctl_config:{host}`` 스냅샷의
+        """수집 API(collect-etcdctl-config)가 SSH 로 수집해 둔 ``etcdctl_config:{host}`` 스냅샷의
         endpoint_status_json 으로 단편화율을 계산한다.
 
         체커가 직접 SSH 하지 않는 이유: 자격증명을 정의 params(JSONB, 런북/로그에
@@ -176,7 +176,7 @@ class EtcdDefragChecker(DeepCheckerBase):
         미저장)을 그대로 쓴다. addon EtcdChecker 의 스냅샷 폴백과 같은 데이터 소스.
         """
         collect_hint = (
-            "'버전 / 설정 관리(/versions)' 화면에서 etcd 설정 수집(etcdctl_config)을 "
+            "수집 API `POST /api/v1/clusters/{id}/collect-etcdctl-config`로 etcd 설정 수집(etcdctl_config)을 "
             "먼저 실행하세요 — master 노드 SSH 로 /etc/etcd.env 를 source 해 "
             "endpoint status 를 수집합니다."
         )

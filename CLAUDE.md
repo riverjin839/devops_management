@@ -534,7 +534,7 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
 3. **자격증명은 params 에 저장하지 않는다.** params 는 JSONB 이고 런북·실행 로그에 노출된다.
    SSH 등 인증이 필요한 수집은 기존 UI 흐름(요청 시에만 자격증명 사용, 미저장)으로
    스냅샷을 남기고, 체커는 그 스냅샷을 읽는다 (예: `etcd_defrag` 의 snapshot 경로가
-   `/versions` 화면이 수집한 `etcdctl_config:{host}` 를 읽는 구조).
+   점검 런북 패널·서비스 구성의 SSH 수집 모달이 남긴 `etcdctl_config:{host}` 를 읽는 구조).
 4. **가시화가 편집보다 먼저다.** 무슨 명령이 나가는지 화면에서 볼 수 없으면 편집은 무의미하다
    — 새 체커/실행 경로를 추가하면 `services/check_matrix_runbook.py` 의 명령 목록도 같은
    커밋에서 갱신한다(테스트가 전 타입 커버리지를 검사한다).
