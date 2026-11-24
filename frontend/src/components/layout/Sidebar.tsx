@@ -29,7 +29,7 @@ import { useCommandPaletteStore } from '@/stores/commandPaletteStore';
 import { SelfAssigneePanel } from './SelfAssigneePanel';
 import { UserFeedbackPanel, USER_FEEDBACK_TAB_TITLE, type UserFeedbackTab } from './UserFeedbackPanel';
 import { FlyoutShell, FlyoutLink, FlyoutAction } from './NavFlyout';
-import { K8sClusterFlyoutBody } from './K8sClusterFlyoutBody';
+import { K8sClusterFlyoutBody, K8S_CLUSTER_SEARCH_ID } from './K8sClusterFlyoutBody';
 import { AddAppDialog } from './AddAppDialog';
 import { usePersonalSettingsTransfer } from './usePersonalSettingsTransfer';
 import { filterSectionsByAccess, installableAppById, sidebarAppSections } from './installableApps';
@@ -532,7 +532,11 @@ export function Sidebar() {
             {...focusProps}
             onClose={() => setK8sFlyoutAnchor(null)}
             onMouseEnter={cancelScheduledClose}
-            onMouseLeave={() => scheduleFlyoutClose(() => setK8sFlyoutAnchor(null))}
+            onMouseLeave={() => {
+              // 검색창에 입력 중이면 마우스가 패널을 벗어나도 닫지 않는다 — 닫기는 Esc·바깥 클릭·이동으로.
+              if (document.activeElement?.id === K8S_CLUSTER_SEARCH_ID) return;
+              scheduleFlyoutClose(() => setK8sFlyoutAnchor(null));
+            }}
           >
             <K8sClusterFlyoutBody onNavigate={() => setK8sFlyoutAnchor(null)} />
           </FlyoutShell>

@@ -12,6 +12,8 @@ import { useClusterSwitchGuardStore } from '@/stores/clusterSwitchGuardStore';
 
 /** 이 개수 이상이면 목록 위에 검색창을 띄운다. */
 const SEARCH_MIN = 7;
+/** 검색창 id — 사이드바가 입력 중인지 보고 hover 로 연 flyout 을 닫지 않는 데 쓴다. */
+export const K8S_CLUSTER_SEARCH_ID = 'k8s-cluster-flyout-search';
 
 /** 정상은 중립색 점, 비정상만 상태색(DESIGN_SYSTEM §12.12). pending 은 테두리만. */
 const DOT_CLASS: Record<Status, string> = {
@@ -75,7 +77,7 @@ export function K8sClusterFlyoutBody({ onNavigate }: { onNavigate: () => void })
           <label className="flex items-center gap-1.5 h-8 px-2 rounded-xl border border-border bg-background text-muted-foreground focus-within:border-primary">
             <Search className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
             <input
-              id="k8s-cluster-flyout-search"
+              id={K8S_CLUSTER_SEARCH_ID}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
