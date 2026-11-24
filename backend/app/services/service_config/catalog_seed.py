@@ -15,7 +15,7 @@
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -309,6 +309,23 @@ ITEMS: list[dict[str, Any]] = [
 ]
 
 
+# 수치형 항목의 끌기 범위(화면 막대) — (서비스, 키) → (최소, 최대). 운영자가 DB 행에서 고친 값은 덮지 않는다(비어 있을 때만 채움).
+RANGES: dict[tuple[str, str], tuple[Optional[str], Optional[str]]] = {
+    ("linux", "vm.swappiness"): ("0", "100"),
+    ("linux", "vm.overcommit_memory"): ("0", "2"),
+    ("linux", "net.ipv4.ip_forward"): ("0", "1"),
+    ("linux", "net.ipv4.tcp_tw_reuse"): ("0", "2"),
+    ("etcd", "quota-backend-bytes"): ("0", "17179869184"),
+    ("etcd", "heartbeat-interval"): ("10", "5000"),
+    ("etcd", "election-timeout"): ("50", "50000"),
+    ("kubelet", "imageGCHighThresholdPercent"): ("0", "100"),
+    ("kubelet", "imageGCLowThresholdPercent"): ("0", "100"),
+    ("kubelet", "maxPods"): ("1", "1024"),
+    ("kube-controller-manager", "node-cidr-mask-size"): ("8", "30"),
+    ("cilium", "cluster-pool-ipv4-mask-size"): ("8", "30"),
+}
+
+
 def seed_catalog(db: Session) -> int:
     """(service, key) 가 없는 항목만 추가한다 — 운영자가 고친 행·지운 항목 판단은 덮지 않는다(지운 항목은 enabled=False 로 끈다)."""
     from app.models.service_config import ServiceConfigItem
@@ -328,7 +345,15 @@ def seed_catalog(db: Session) -> int:
             source_keys=spec.get("source_keys"), sort_order=order[svc], enabled=True,
         ))
         added += 1
-    if added:
+    # 끌기 범위 — 새 행·기존 행 모두 비어 있을 때만 채운다.
+    filled = 0
+    for row in db.query(ServiceConfigItem).filter(ServiceConfigItem.min_value.is_(None),
+                                                  ServiceConfigItem.max_value.is_(None)).all():
+        rng = RANGES.get((row.service, row.key))
+        if rng:
+            row.min_value, row.max_value = rng
+            filled += 1
+    if added or filled:
         db.commit()
     return added
 

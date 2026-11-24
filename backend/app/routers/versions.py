@@ -813,10 +813,10 @@ async def collect_nic(
     """노드별 NIC 상태를 병렬로 읽어 저장. 노드 설정은 바꾸지 않는다(sysfs·/proc 읽기 + ethtool 조회만)."""
     from app.services.nic_watch import service as nic_svc
     from app.services.nic_watch import ssh_collect as NS
-    from app.services.nic_watch.settings import get_settings as nic_settings
+    from app.services.nic_watch.settings import get_effective as nic_effective
 
     cluster = _require_collect_target(db, cluster_id, payload)
-    cfg = nic_settings(db)
+    cfg = nic_effective(db, cluster_id)  # 공통 기준 + 이 클러스터 재정의(제외 이름·수집 종류)
     script = NS.build_script(cfg["exclude_names"])
     sudo = "sudo -n " if payload.use_sudo else ""
     cmd = f"{sudo}sh -c {shlex_quote(script)}"

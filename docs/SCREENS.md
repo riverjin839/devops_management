@@ -1085,6 +1085,29 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 공통 서비스 (`/common-services`)
+
+- **파일**: `frontend/src/pages/CommonServicesPage.tsx` (+ `components/common-services/{InstanceDialog,WatchSettingsDialog,InstanceViews,labels}`, 레일은 `components/service-config/ServiceConfigRail` 재사용)
+- **목적 / UX**: 여러 K8S 클러스터가 함께 쓰는 서비스(LDAP AD · KEYCLOAK · JENKINS · ARGOCD · NEXUS)를 인스턴스로 등록하고, **설정값을 가져와 보고(배포 수준 + 앱 설정), 바뀌면 감지(변경 이력·알람)하고, 수집 실행 로그를 남긴다.** 1단계는 읽기 전용 — 버전 관리·편집·적용은 없다. 서비스는 등록 클러스터 안 워크로드(**K8S 에서 가져오기**), 일반 노드의 Podman 컨테이너(SSH), 클러스터 밖 외부 시스템(AD 등)일 수 있다.
+- **UI 구성**: `PageShell density="hub"` + `PageHeader`(우측 **감시 설정**). 테두리 컨테이너 안 좌측 서비스 레일(상태 점 — 수집 실패 critical·일부 실패 warning) + 우측:
+  - 서비스 이름(ⓘ 설명) · 인스턴스 `SegTabs` · **+ 등록**(operator). 인스턴스가 없으면 `EmptyState`.
+  - 인스턴스 헤더: 상태 배지(정상은 중립색) · 호스팅 위치(K8S 클러스터·NS/워크로드 / Podman 호스트·컨테이너 / 외부) · 엔드포인트 · 사용 클러스터 배지 · 마지막 수집 · 마지막 오류. 버튼 **접속 테스트**(저장 없이 같은 단계 실행) · **지금 수집** · 편집 · 삭제(danger 확인) — 모두 `useCanOperate`(K8S 호스팅이면 그 클러스터 operate) 비활성 + 사유.
+  - 실행하면 그 자리에 `RunLogPanel`(SSE 실시간 log·step, **로그 보기 토글 `useLogPref('common-services-collect')`**), 끝나면 토스트 1회(변경 N건) + 화면 무효화.
+  - `SegTabs mode="tabs"` **설정**(검색 · 컴포넌트별 `MacCard` 표 키·값, 24시간 안 바뀐 키는 "N분 전 변경 · 전 → 후") / **변경 이력**(감지 시각·컴포넌트·키·전 → 후·경로(주기/수동)) / **수집 로그**(실행 목록 → 단계 배지 + 저장된 실행 로그 `LogViewer`).
+  - `InstanceDialog`: 이름·설명 → 호스팅 위치 `SegTabs`(서비스가 지원하는 것만) → K8S: 클러스터·NS·워크로드 종류·이름 + **K8S 에서 가져오기**(카탈로그 이미지·이름 패턴으로 후보 워크로드 + 같은 셀렉터 Service 주소) / Podman: SSH 호스트·포트·컨테이너 → 엔드포인트·TLS 검증 → 서비스별 설정(카탈로그 `param_fields`, label·ⓘ help) → 접속 정보(목적별 fieldset, 쓰기 전용 — "저장됨, 비우면 유지", 삭제 토글) → 사용 클러스터 칩 → 주기 수집 토글.
+  - `WatchSettingsDialog`(admin 편집, 그 외 읽기): 주기 수집 켜기·주기(분)·설정 변경 알람·수집 실패 알람(연속 N회, 복구 시 닫힘)·심각도.
+  - URL `?service=&instance=&tab=config|changes|runs`.
+- **Frontend**: `hooks/useCommonServices.ts`(`useCommonServiceCatalog`·`useCommonServiceStatus`·`useCommonServiceInstances`·`useCommonServiceConfig`·`useCommonServiceChanges`·`useCommonServiceRuns`·`useCommonServiceRun`·`useSaveCommonService`·`useDeleteCommonService`·`useDiscoverCommonServices`·watch-settings 훅 — 60초 다시 읽기), api.ts `commonServicesApi`, SSE 는 `streamLogged` + `commonServicesApi.runStreamUrl`. `params` 는 `[{key, value}]` 목록으로 주고받는다(응답 camelCase 변환이 `auth_realm` 같은 키를 바꾸지 않게).
+- **Backend**: 라우터 `backend/app/routers/common_services.py`(`/api/v1/common-services`, `_auth`, feature `/common-services`):
+  - `GET /catalog` · `GET /status` · `GET|POST /instances` · `GET|PUT|DELETE /instances/{id}`(쓰기 operator + 호스팅 클러스터 operate, 감사 `common_service.create|update|delete` — 자격증명은 변경 여부만) · `POST /discover`(operator + 클러스터 read).
+  - `POST /instances/{id}/run/stream?kind=collect|test`(operator, SSE — 첫 이벤트 `{type:"run", run_id}`, 같은 인스턴스 실행 중이면 409, 감사 `common_service.collect|test`) · `GET /instances/{id}/config|changes|runs|runs/{run_id}` · `GET|PUT /watch-settings`(PUT admin, AppSetting `common_services.watch`).
+  - 숨김 클러스터(`hidden_cluster_ids`)에 호스팅된 인스턴스는 목록·조회에서 빠진다.
+  - 서비스 `services/common_services/`: `catalog`(서비스·호스팅·param/자격증명 필드 — UI-First) · `flatten`(평탄화 — 이름 있는 객체 목록은 이름 경로, 비밀처럼 보이는 키는 `(숨김 · 해시)`로 값 대신 저장해 변경만 감지, 해시·diff, 순수 함수) · `collectors`(배포: K8S 워크로드 spec·env(Secret 참조는 이름만)·마운트 ConfigMap / Podman `podman inspect`. 앱: Keycloak Admin API realm·클라이언트·IdP / Jenkins `/api/json`·플러그인·JCasC ConfigMap / ArgoCD `argocd-cm`류 ConfigMap + 토큰 있으면 클러스터·저장소 / Nexus 저장소·blob store·보안 realm·익명 + Podman 이면 `nexus.properties` / LDAP AD rootDSE·도메인 정책 속성(`ldap3` 읽기 전용 바인드) — 단계 실패는 다음 단계로(fail-safe)) · `service`(CRUD·실행 로그 `RunLog`(단계마다 커밋 + SSE)·스냅샷(해시가 바뀔 때만)·변경 이력·알람(`CommonServiceConfigChanged`, `CommonServiceUnreachable` — 세이브포인트로 격리)·주기 판정·후보 찾기).
+  - 모델 `models/common_service.py`: `CommonServiceInstance` · `CommonServiceCredential`(`secret` EncryptedText, 백업 기본 마스킹) · `CommonServiceLink` · `CommonServiceSnapshot`(로그성 400일) · `CommonServiceChange`(400일) · `CommonServiceRun`(365일).
+  - Celery Beat `common-services-watch-dispatcher`(매분) → `collect_common_service_one`(주기가 지난 `watch_enabled` 인스턴스).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### LAKE 서비스 (`/lake-services`)
 
 > **2026-10-14 (D-128)**: 목록 카드·상세의 "지금 점검" 이 실행 로그(상태·응답 ms·메시지·details 키·점검 시각, 비활성 409 는 경고)를 띄운다 — 공용 `components/lake-services/runLakeCheckLogged.ts`.
@@ -1217,7 +1240,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
     섹션별 `MacCard`(접기) 표 — 열 **키 · VALUE · 반영 방식 · 상태**:
     - 키: 키 이름 + 짧은 이름(label). 항목 도움말은 키 옆 ⓘ(`InfoHint`). 아래에 **의존 규칙 결과**(권장(제안값 + "제안 적용")·필수(저장 막힘 / 기존 위반 경고)·영향).
     - VALUE: 편집 입력(형식별 — bool/enum 선택, 숫자, 텍스트. 그룹 화면은 **재정의 값**, 비우면 "상속: 기본값") + ⓘ(노드 현재 값 요약·기본 그룹 값·커널·제품 기본값) + 바뀌면 강조·"이전 → 새"·행 되돌리기.
-      아래 줄은 노드 현재 값이 **입력 값과 다를 때만**: 모두 같은 다른 값이면 "노드 0 · 3개"(경고색), 노드마다 다르면 "노드 N가지 값" 펼침(값별 노드), 수집 값이 없으면 "노드 값 없음". 편집 중엔 초안 값과 비교한다.
+      **수치형(int·size)** 이고 설정 값이나 노드 값이 숫자면 아래에 `NumericBars` — 설정(편집, 끌기·←/→·PgUp/PgDn·Home/End, `role="slider"`)·노드(값별 줄, 다르면 경고색)·기본 막대를 위아래로, 수치는 오른쪽 가로, 눈금 0~값의 약 2배(끝까지 끌면 늘어남, 항목 `min_value`/`max_value` 가 있으면 그 범위). size 는 GiB/MiB 표시·MiB 단위. 막대 폭은 SVG.
+      그 밖의 형식은 아래 줄에 노드 현재 값이 **입력 값과 다를 때만**: 모두 같은 다른 값이면 "노드 0 · 3개"(경고색), 노드마다 다르면 "노드 N가지 값" 펼침(값별 노드), 수집 값이 없으면 "노드 값 없음". 편집 중엔 초안 값과 비교한다.
   - 상시 설명 문장은 전부 ⓘ 툴팁(서비스 이름 옆 서비스 설명 · 노드 그룹 규칙 · V1 없음 카드 · 미적용/드리프트 배너 설명 · 하단 '저장' 안내 · 요약 탭 카드 설명). 본문은 값·건수·상태·결과만(DESIGN_SYSTEM §12.12-10).
   - 하단 고정 바: 변경 N건 · 의존 제안/필수 위반 수 · 변경 취소 · **저장…**(operator). 초안은 300ms 디바운스로 `POST /service-config/evaluate` 를 불러 행에 결과를 붙인다. 서비스·그룹·버전·클러스터를 바꿀 때 편집 중이면 "저장하지 않은 변경을 버릴까요?" 확인.
   - **저장 전 확인** `SaveVersionDialog`: 직접 바꾼 값 · 같이 바꾸기를 권하는 값(이 화면에서 고칠 수 있는 권장·필수, 체크해서 포함) · 지켜야 저장되는 조건(남은 위반이 있으면 저장 잠금, 다른 서비스에서 고칠 위반은 경고) · 적용할 때 일어나는 일(영향) · 변경 메모 → "V{n} 로 저장 (적용은 따로)". 409(그사이 다른 저장)면 안내 후 새로 읽기.
@@ -1239,15 +1263,15 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - **NIC**(9번째 서비스, `?service=nic`) — 탭 **설정 / 상태 / 요약**. 설정·요약은 다른 서비스와 같은 화면(설정 버전·비교·되돌리기·노드 그룹·드리프트 배너·변경 이력·알람). 적용(노드 반영)은 아직 없다 — 적용 버튼은 사유와 함께 비활성(설계 `docs/02-design/nic-apply.md` 2-b).
     설정 키: `ring.rx`·`ring.tx`·`channels.combined`(값 형식 `int_or_max` — 숫자 또는 `max`, 입력 칸에 `max` 제안) · `offload.*` 6개(on/off) · `bond.xmit_hash_policy`·`bond.lacp_rate`·`bond.miimon`. 반영 방식 `하위 인터페이스 큐 재설정 (1개씩)`/`즉시 반영`.
     노드 현재 값은 `nic:{node}` 스냅샷(대상 = 본딩과 그 하위, NIC 설정에서 glob 으로 바꿀 수 있음): ring·채널은 `현재/최대`, 인터페이스마다 다르면 `ens1f0=… ens1f1=…`. 기대 값 `max` 는 `현재 = 최대` 면 일치(백엔드 `current.same_value`, 화면 `ServiceConfigSections.sameValue` 같은 규칙). V1 가져오기는 `현재/최대` 의 현재 값을 쓴다.
-    현재 값 수집: 툴바 **SSH 로 수집** → `NicCollectModal`(대상 노드·동시 실행 수 기본 20·SSH 자격증명(저장 안 함) — 노드에서 조회 명령만: sysfs·`/proc/net/bonding`·`ethtool -g -l -k -i -S`, 실행 로그 `RunLogPanel` + 로그 보기 토글 `useLogPref('service-config-collect')`, 호스트별 결과·원본 출력) → `POST /clusters/{id}/collect-nic/stream`(SSE). 결과는 에이전트 보고와 같은 `node_nic_states`(source `ssh` — 보고 끊김 판정 제외) + `nic:{node}` 스냅샷. 노드 파라미터 에이전트(1.3.0 이상이면 채널 수 포함)가 있으면 1분마다 같은 경로로 들어온다(채널 수를 보고하지 않는 출처는 이전 값을 유지).
+    현재 값 수집: 툴바 **SSH 로 수집** → `NicCollectModal`(대상 노드·동시 실행 수 기본 20·SSH 자격증명(저장 안 함) — 노드에서 조회 명령만: sysfs·`/proc/net/bonding`·`ethtool -g -l -k -i -S`, 실행 로그 `RunLogPanel` + 로그 보기 토글 `useLogPref('service-config-collect')`, 호스트별 결과·원본 출력) → `POST /clusters/{id}/collect-nic/stream`(SSE). 결과는 에이전트 보고와 같은 `node_nic_states`(source `ssh` — 보고 끊김 판정 제외) + `nic:{node}` 스냅샷. 노드 파라미터 에이전트(Rust 2.1.0 이상이면 채널 수 포함)가 있으면 1분마다 같은 경로로 들어온다(채널 수를 보고하지 않는 출처는 이전 값을 유지).
     **상태** 탭 = `NicStatusView embedded`: 노드 파라미터 에이전트·SSH 수집이 보낸 인터페이스 상태.
     헤더(노드 수·마지막 보고 · **NIC 설정**) / NIC 를 보고하지 않는 노드(구버전 에이전트 등 사유) / **경고** `MacCard`(위험·확인 필요·참고 건수, '참고 포함' 토글 — 수준 배지 · 노드·인터페이스 · 제목 · 상세 · 조치 힌트) /
     **인터페이스** 표(검색(이름 일부 또는 glob)·종류·경고만 필터와 페이지(100행)는 **서버에서** — 노드 수백 대 클러스터용 · 인터페이스(종류·상위 본딩·드라이버) · 상태 · 속도 · MTU · 본딩/LACP(모드·해시·rate·Aggregator, 하위는 Aggregator·상대 MAC) · Ring(현재/최대) · 드롭/분 · CRC·끊김 · 주요 offload · 판정).
     행을 펼치면 그때 상세를 따로 읽어(`GET …/nodes/{node}/interfaces/{iface}`) 그 행의 경고 + 드라이버·펌웨어·autoneg·본딩 하위 상태 표 + 전체 offload(ethtool -k 이름, fixed 표시) + 전체 카운터(`drv:` = ethtool -S). 판정 수준이 있으면 레일 NIC 아이콘에 상태 점.
     판정: 본딩(모드·해시 정책·LACP rate 기대 값, 링크 감시 꺼짐, 하위 다운·속도·MTU 차이, LACP 집계 실패(활성 Aggregator 밖 하위 — 하위 행에도 표시)·상대 MAC 0(협상 안 됨)·하위마다 상대 다름(MLAG 안내)) · 링크(다운, half duplex, 최소 속도, 플래핑) · VLAN MTU > 부모 · 창(기본 15분) 동안 증가한 NIC 드롭(큐별·합계 카운터 중 최대 증가분, xdp 제외 — ring 여유가 있으면 `ethtool -G` 제안)·CRC · offload 기대 값(기본 LRO off) · 노드 간 같은 이름 인터페이스의 MTU·속도·본딩 설정·offload·펌웨어 차이(다수 값 기준) · 보고 끊김.
-    `NicSettingsDialog`(admin): 수집 켜기·인터페이스 종류·포함/제외 이름(glob — 에이전트 다음 보고부터) · 본딩/LACP 기대 값(비우면 검사 안 함) · 최소 속도·증가율 창·드롭/CRC/끊김 임계치·보고 끊김 · 노드 간 비교 · offload 기대 값 목록.
-    Frontend `useNicWatch(clusterId, {q, kind, onlyFlagged, offset, limit})`(60초 다시 읽기, 이전 페이지 유지)·`useNicWatchSummary`(레일 상태 점 — `limit=0`, 요약만)·`useNicInterfaceDetail`·`useNicWatchSettings`·`useUpdateNicWatchSettings`(`hooks/useNicWatch.ts`), api.ts `nicWatchApi`. 이름이 키인 값(카운터·offload·본딩 하위)은 응답 camelCase 변환에 깨지지 않게 목록으로 받는다.
-    Backend `GET /nic-watch/clusters/{id}?q=&kind=&only_flagged=&offset=&limit=`(`_cluster_scoped` — 요약·경고 앞 300건·가벼운 행, 노드 목록은 보내지 않음, 판정은 클러스터별 20초 캐시) · `GET /nic-watch/clusters/{id}/nodes/{node}/interfaces/{iface}`(행 상세) · `GET|PUT /nic-watch/settings`(PUT admin, AppSetting `nic_watch.settings`, 감사 `nic_watch.settings.update`) — `routers/nic_watch.py`, 수신은 `POST /node-params/agent/report` 의 `nic`(실패해도 파라미터 보고는 성공, 응답 `nic` 에 수집 대상), 저장 `services/nic_watch/service.py`(`NodeNicState`, 5분 간격 카운터 표본 — 카운터 말고 바뀐 게 없으면 5분 동안은 받은 시각만 갱신), 판정 `analyze.py`(조회 때마다 현재 설정으로 다시 계산), 에이전트 `node_param_agent/nic.py`.
+    `NicSettingsDialog`(admin) — **「이 클러스터」/「공통 기준」 두 탭**. 공통 기준은 모든 클러스터의 기본값, 이 클러스터 탭은 항목마다 "공통 값 · 재정의/공통 따름 · 공통으로 되돌리기"를 보이고 바꾼 항목만 재정의로 저장한다(나머지는 공통을 따라 공통 기준을 바꾸면 따라간다). "관측 값으로 채우기" = 보고된 구성(본딩 모드·해시·LACP 최빈값, 최소 속도, 본딩 없으면 본딩 기준 비움)을 제안(저장 전 확인). 인터페이스 이름은 입력 불필요 — 종류로 자동 수집. 공통 탭 하단에 재정의한 클러스터 목록. 항목: 수집 켜기·인터페이스 종류·포함/제외 이름(glob — 에이전트 다음 보고부터) · 본딩/LACP 기대 값(비우면 검사 안 함) · 최소 속도·증가율 창·드롭/CRC/끊김 임계치·보고 끊김 · 노드 간 비교 · offload 기대 값 목록. · 설정 값 대상(본딩과 그 하위 | 이름 glob — 서비스 구성 NIC 설정 탭이 값을 읽는 인터페이스, 재정의 가능).
+    Frontend `useNicWatch(clusterId, {q, kind, onlyFlagged, offset, limit})`(60초 다시 읽기, 이전 페이지 유지)·`useNicWatchSummary`(레일 상태 점 — `limit=0`, 요약만)·`useNicInterfaceDetail`·`useNicWatchSettings`·`useUpdateNicWatchSettings`·클러스터 재정의 훅(`hooks/useNicWatch.ts`), api.ts `nicWatchApi`. 이름이 키인 값(카운터·offload·본딩 하위)은 응답 camelCase 변환에 깨지지 않게 목록으로 받는다.
+    Backend `GET /nic-watch/clusters/{id}?q=&kind=&only_flagged=&offset=&limit=`(`_cluster_scoped` — 요약·경고 앞 300건·가벼운 행, 노드 목록은 보내지 않음, 판정은 클러스터별 20초 캐시 — 설정·재정의를 바꾸면 비움) · `GET /nic-watch/clusters/{id}/nodes/{node}/interfaces/{iface}`(행 상세) · `GET|PUT /nic-watch/settings`(PUT admin, AppSetting `nic_watch.settings`, 감사 `nic_watch.settings.update`) · 클러스터별 재정의 `GET|PUT|DELETE /nic-watch/clusters/{id}/settings`(PUT·DELETE admin, AppSetting `nic_watch.cluster_overrides`, 감사 `nic_watch.cluster_settings.update|clear`, 에이전트 보고 응답의 수집 대상과 판정이 모두 실효 기준=공통+재정의) · `GET /nic-watch/clusters/{id}/observed`(기준 제안) · `GET /nic-watch/overrides` — `routers/nic_watch.py`, 수신은 `POST /node-params/agent/report` 의 `nic`(실패해도 파라미터 보고는 성공, 응답 `nic` 에 수집 대상), 저장 `services/nic_watch/service.py`(`NodeNicState`, 5분 간격 카운터 표본 — 카운터 말고 바뀐 게 없으면 5분 동안은 받은 시각만 갱신), 판정 `analyze.py`(조회 때마다 실효 기준 = 공통 + 클러스터 재정의 + NIC 설정 버전 값으로 다시 계산), 제안 `learn.py`, 에이전트 `agent-rs/src/nic.rs`(Python `node_param_agent/nic.py` 와 같은 보고 계약).
   - 모달을 닫으며 URL 쿼리를 바꾸는 동작(그룹 만들기·삭제, 버리고 이동)은 `afterModalClose` 로 모달 history 기록이 회수된 뒤에 한다(`common/modalHistory.ts` 의 `history.back()` 이 바꾼 쿼리를 되돌리던 문제).
 - **Frontend**: `useServiceConfigServices`, `useServiceConfigView(clusterId, service, version, groupId)`, `useServiceConfigEvaluate`(디바운스 초안), `useSaveServiceConfigVersion`, `useServiceConfigCompare`, `useRevertServiceConfig`, `useSaveServiceConfigGroup`·`useDeleteServiceConfigGroup`, `useImportServiceConfig`, `useInvalidateServiceConfig`(`hooks/useServiceConfig.ts`), `useUrlParams({service, version, group})`, `useDebouncedValue`. api.ts `serviceConfigApi.*` — 설정 값은 `[{key, value}]` 목록으로 보낸다(요청 인터셉터가 객체 키를 snake_case 로 바꿔 `SystemdCgroup` 같은 키가 망가지므로).
 - **Backend**: 라우터 `backend/app/routers/service_config.py`(`_cluster_scoped`):
@@ -1279,7 +1303,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - JWT(`_cluster_scoped`): `GET /node-params/clusters/{id}/nodes` · `/changes` · `/manifest`, `DELETE /node-params/clusters/{id}/agents/{agent_id}`(operator), `GET/POST /node-params/rules` · `PUT/DELETE /node-params/rules/{id}`(operator, 공통 규칙은 admin, 클러스터 규칙은 그 클러스터 operate), `GET/PUT /node-params/settings`(PUT admin). 감사 `node_params.rule.*`·`node_params.agent.delete`·`node_params.settings.update`.
   - 서비스 `services/node_param_watch/`(`rules` 순수 판정 · `service` 보고 처리·상태·워치독·기본 규칙 시드 · `settings` AppSetting `node_param_watch.settings` · `manifest`). 모델 `models/node_param_watch.py`(`NodeParamWatchRule`·`NodeParamAgent`), 값 이력은 `cluster_config_snapshots`(component `node_params:{node}`, 값이 바뀔 때만 새 행) + `os_param_changes`(`extra.source="agent"`).
   - 알람(`alert_router.route_and_notify` 재사용): `NodeParamChanged`(변경 1회=1건) · `NodeParamBaselineViolation` · `NodeParamNotPersisted`(상태 전이 때만 열고 해소되면 resolved) · `NodeParamAgentOffline`(Celery Beat `node-param-agent-watchdog` 5분).
-  - 에이전트: `python -m app.node_param_agent`(backend 이미지 재사용, 표준 라이브러리만), 배포 번들 `deploy/k8s/node-param-agent/`.
+  - 에이전트: 전용 Rust 이미지 `…/node-agent`(`agent-rs/`, 정적 바이너리 — 노드 500대 기준 상주 메모리·이미지 크기 최소화). `agent_image` 가 backend 이미지면 Python 에이전트(`python -m app.node_param_agent`)로 렌더(하위 호환). 배포 번들 `deploy/k8s/node-param-agent/`.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

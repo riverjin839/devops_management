@@ -23,7 +23,7 @@ from app.models.cluster import Cluster
 from app.models.node_nic import NodeNicState
 from app.models.node_param_watch import NodeParamAgent
 from app.services.nic_watch import analyze as A
-from app.services.nic_watch.settings import get_settings
+from app.services.nic_watch.settings import get_cluster_settings
 
 MIN_AGENT_VERSION = "1.2.0"
 HISTORY_SPACING = timedelta(minutes=5)
@@ -173,10 +173,9 @@ def _ver_tuple(v: Optional[str]) -> tuple[int, ...]:
         return (0,)
 
 
-def effective_settings(db: Session, cluster: Cluster) -> dict[str, Any]:
-    """판정 기준 = 설정 값. 서비스 구성 nic 의 기본 그룹 최신 버전이 있으면 그 값(해시 정책·LACP rate·offload)이 우선이다 —
+def _with_version(db: Session, cluster: Cluster, cfg: dict[str, Any]) -> dict[str, Any]:
+    """서비스 구성 nic 의 기본 그룹 최신 버전이 있으면 그 값(해시 정책·LACP rate·offload)이 판정 기준에 우선한다 —
     두 곳이 어긋나 같은 노드에 반대 경고가 뜨지 않게. 노드 그룹 재정의는 드리프트(서비스 구성)가 본다."""
-    cfg = get_settings(db)
     try:
         from app.services.service_config import view as V
 
@@ -197,14 +196,20 @@ def effective_settings(db: Session, cluster: Cluster) -> dict[str, Any]:
     return out
 
 
+def effective_settings(db: Session, cluster: Cluster) -> dict[str, Any]:
+    """판정 기준 = 공통 기준 → 이 클러스터 재정의 → NIC 설정 버전 값(있으면) 순으로 덮는다."""
+    return _with_version(db, cluster, get_cluster_settings(db, cluster.id)["effective"])
+
+
 def _analysis(db: Session, cluster: Cluster, now: Optional[datetime] = None) -> dict[str, Any]:
     """판정 전체(모든 노드·인터페이스). ``now`` 를 주지 않으면 클러스터별로 잠시 캐시한다(설정이 바뀌면 무효)."""
-    cfg = effective_settings(db, cluster)
+    cs = get_cluster_settings(db, cluster.id)  # 공통 기준 + 이 클러스터 재정의
+    cfg = _with_version(db, cluster, cs["effective"])
     key = str(cluster.id)
     if now is None:
         with _cache_lock:
             hit = _cache.get(key)
-        if hit and hit[0] > time.monotonic() and hit[1]["settings"] == cfg:
+        if hit and hit[0] > time.monotonic() and hit[1]["settings"] == cfg and hit[1].get("overridden") == cs["overridden"]:
             return hit[1]
     at = now or datetime.utcnow()
     rows = db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).all()
@@ -223,6 +228,7 @@ def _analysis(db: Session, cluster: Cluster, now: Optional[datetime] = None) -> 
          for a in agents if a.node not in reported), key=lambda x: x["node"])
     out["agent_count"] = len(agents)
     out["settings"] = cfg
+    out["overridden"] = cs["overridden"]  # 이 클러스터가 공통과 다르게 정한 항목
     if now is None:
         with _cache_lock:
             _cache[key] = (time.monotonic() + VIEW_CACHE_SEC, out)
@@ -281,6 +287,7 @@ def cluster_view(db: Session, cluster: Cluster, now: Optional[datetime] = None, 
         "pending_agents": full["pending_agents"],
         "agent_count": full["agent_count"],
         "settings": full["settings"],
+        "overridden": full.get("overridden", []),
     }
 
 

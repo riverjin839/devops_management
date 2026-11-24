@@ -6733,6 +6733,9 @@ export interface ServiceConfigRow {
   unit: string | null;
   options: string[] | null;
   defaultValue: string | null;
+  /** 수치형 막대 끌기 범위(선택). */
+  minValue?: string | null;
+  maxValue?: string | null;
   restartScope: ServiceConfigRestartScope;
   /** 선택 범위의 실효 값(그룹이면 재정의 ?? 기본). */
   versionValue: string | null;
@@ -7066,6 +7069,22 @@ export interface NicWatchSettings {
 export interface NicWatchSettingsOut extends NicWatchSettings {
   options: { kinds: string[]; bondModes: string[]; hashPolicies: string[]; lacpRates: string[]; features: { name: string; label: string }[] };
 }
+/** 클러스터별 NIC 판정 기준 — 공통 기준(global) 위에 이 클러스터가 재정의한 항목(overridden, 서버 필드명 snake_case)만 얹은 실효 기준(effective). */
+export interface NicClusterSettingsOut {
+  effective: NicWatchSettings;
+  global: NicWatchSettings;
+  overridden: string[];
+  options: NicWatchSettingsOut['options'];
+}
+/** 보고된 구성에서 뽑은 기준 제안 — 읽기 전용, 저장은 운영자가 한다. */
+export interface NicObserved {
+  nodeCount: number;
+  interfaces: Record<string, string[]>;
+  bondCount: number;
+  speeds: number[];
+  suggest: Partial<Pick<NicWatchSettings, 'expectedBondMode' | 'expectedHashPolicy' | 'expectedLacpRate' | 'minSpeedMbps'>>;
+}
+export interface NicOverrideSummary { clusterId: string; clusterName: string; fields: string[] }
 export interface NicClusterView {
   interfaces: NicInterfaceRow[];
   interfacesTotal: number;
@@ -7078,4 +7097,145 @@ export interface NicClusterView {
   pendingAgents: { node: string; agentVersion: string | null; reason: string }[];
   agentCount: number;
   settings: NicWatchSettings;
+  /** 이 클러스터가 공통 기준과 다르게 정한 항목(서버 필드명) */
+  overridden: string[];
+}
+
+// ── 공통 서비스(/common-services) — 여러 클러스터가 함께 쓰는 LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS ──
+export type CommonServiceHostKind = 'k8s' | 'podman' | 'external';
+export type CommonServiceCredPurpose = 'app_api' | 'ssh' | 'ldap_bind';
+export interface CommonServiceParamField {
+  key: string;
+  label: string;
+  type: 'string' | 'int' | 'bool' | 'list';
+  default: unknown;
+  help: string;
+}
+export interface CommonServiceDef {
+  key: string;
+  label: string;
+  icon: string;
+  description: string;
+  hostKinds: CommonServiceHostKind[];
+  defaultHostKind: CommonServiceHostKind;
+  endpointPlaceholder: string;
+  credentials: { purpose: CommonServiceCredPurpose; label: string; help: string }[];
+  paramFields: CommonServiceParamField[];
+}
+export interface CommonServiceParam { key: string; value: unknown }
+export interface CommonServiceInstance {
+  id: string;
+  serviceType: string;
+  name: string;
+  description: string | null;
+  endpointUrl: string | null;
+  tlsVerify: boolean;
+  hostKind: CommonServiceHostKind;
+  clusterId: string | null;
+  clusterName: string | null;
+  namespace: string | null;
+  workloadKind: string | null;
+  workloadName: string | null;
+  sshHost: string | null;
+  sshPort: number | null;
+  containerName: string | null;
+  params: CommonServiceParam[];
+  watchEnabled: boolean;
+  status: 'unknown' | 'ok' | 'partial' | 'error';
+  lastCollectedAt: string | null;
+  lastError: string | null;
+  failCount: number;
+  credentials: { purpose: CommonServiceCredPurpose; authType: string; username: string | null; hasSecret: boolean }[];
+  links: { clusterId: string; clusterName: string | null; relation: string | null }[];
+  createdBy: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+export interface CommonServiceCredentialInput {
+  purpose: CommonServiceCredPurpose;
+  authType: 'password' | 'token' | 'private_key';
+  username?: string | null;
+  /** 비우면 저장된 값 유지(쓰기 전용). */
+  secret?: string | null;
+  clear?: boolean;
+}
+export interface CommonServiceInstanceInput {
+  serviceType: string;
+  name: string;
+  description?: string | null;
+  endpointUrl?: string | null;
+  tlsVerify: boolean;
+  hostKind: CommonServiceHostKind;
+  clusterId?: string | null;
+  namespace?: string | null;
+  workloadKind?: string | null;
+  workloadName?: string | null;
+  sshHost?: string | null;
+  sshPort?: number | null;
+  containerName?: string | null;
+  params: CommonServiceParam[];
+  watchEnabled: boolean;
+  credentials: CommonServiceCredentialInput[];
+  links: { clusterId: string; relation?: string | null }[];
+}
+export interface CommonServiceCandidate {
+  serviceType: string;
+  namespace: string;
+  workloadKind: string;
+  workloadName: string;
+  images: string[];
+  replicas: number | null;
+  endpointUrl: string | null;
+}
+export interface CommonServiceConfigItem {
+  key: string;
+  value: string | null;
+  changed?: { old: string | null; new: string | null; at: string | null };
+}
+export interface CommonServiceConfig {
+  components: { component: string; collectedAt: string | null; meta: Record<string, unknown>; items: CommonServiceConfigItem[] }[];
+}
+export interface CommonServiceChange {
+  id: string;
+  component: string;
+  key: string;
+  oldValue: string | null;
+  newValue: string | null;
+  source: 'schedule' | 'manual';
+  detectedAt: string | null;
+}
+export interface CommonServiceRunSummary {
+  components?: number;
+  keys?: number;
+  changed?: number;
+  changes?: { component: string; key: string; old: string | null; new: string | null }[];
+  errors?: string[];
+}
+export interface CommonServiceRun {
+  id: string;
+  kind: 'collect' | 'test';
+  trigger: 'manual' | 'schedule';
+  status: 'running' | 'succeeded' | 'partial' | 'failed';
+  startedBy: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  summary: CommonServiceRunSummary;
+  steps: { name: string; label: string; status: string; message: string }[];
+  logLines?: [string, string, string][];
+}
+export interface CommonServiceRunResult extends CommonServiceRunSummary {
+  runId: string;
+  status: CommonServiceRun['status'];
+}
+export interface CommonServiceWatchSettings {
+  enabled: boolean;
+  intervalMin: number;
+  changeAlert: boolean;
+  changeSeverity: 'info' | 'warning' | 'critical';
+  unreachableAlert: boolean;
+  unreachableAfter: number;
+  unreachableSeverity: 'info' | 'warning' | 'critical';
+}
+export interface CommonServiceStatusMap {
+  services: Record<string, { count: number; level: 'ok' | 'warning' | 'critical'; reasons: string[] }>;
 }

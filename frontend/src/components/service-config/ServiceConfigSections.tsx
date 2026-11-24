@@ -7,6 +7,8 @@ import { ChevronDown, ChevronRight, Info, Lightbulb, RotateCcw, ShieldAlert } fr
 import { MacCard } from '@/components/ui/MacCard';
 import { InfoHint, StatusBadge } from '@/components/common';
 import { KeySignal } from './KeySignal';
+import { NumericBars } from './NumericBars';
+import { parseNum } from './numericFormat';
 import type { StatusVariant } from '@/components/common';
 import type {
   ServiceConfigItemStatus, ServiceConfigKeySignal, ServiceConfigRestartScope, ServiceConfigRow, ServiceConfigRuleResult,
@@ -234,6 +236,10 @@ export function ServiceConfigSections({
                       const changed = now !== before;
                       const rowHints = hints[r.key] ?? [];
                       const placeholder = groupMode ? (r.baseValue ? `상속: ${r.baseValue}` : '상속(값 없음)') : '';
+                      const effective = groupMode ? (now || (r.baseValue ?? '')) : now;
+                      // 수치형이고 설정 값이나 노드 값이 숫자로 읽히면 막대(설정·노드·기본)로 — 노드 값 줄은 막대가 대신한다.
+                      const numeric = (r.valueType === 'int' || r.valueType === 'size')
+                        && [effective, ...r.current.groups.map((g) => g.value)].some((v) => parseNum(v) != null);
                       return (
                         <tr key={r.id} className={`border-b border-border last:border-0 ${changed ? 'bg-primary/5' : ''}`}>
                           <td className={TD}>
@@ -263,7 +269,11 @@ export function ServiceConfigSections({
                                 {before || (groupMode ? '상속' : '없음')} → {now || (groupMode ? '상속' : '없음')}
                               </span>
                             ) : null}
-                            <NodeValueLine row={r} compare={groupMode ? (now || (r.baseValue ?? '')) : now} />
+                            {numeric ? (
+                              <NumericBars row={r} value={effective} editable={editable} onChange={(v) => onChange(r.key, v)} />
+                            ) : (
+                              <NodeValueLine row={r} compare={effective} />
+                            )}
                           </td>
                           <td className={`${TD} text-xs text-muted-foreground`}>{RESTART_LABEL[r.restartScope] ?? r.restartScope}</td>
                           <td className={TD}>

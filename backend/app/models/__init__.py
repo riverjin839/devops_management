@@ -70,6 +70,14 @@ from app.models.service_config import (
     ServiceConfigRule,
     ServiceConfigVersion,
 )
+from app.models.common_service import (
+    CommonServiceChange,
+    CommonServiceCredential,
+    CommonServiceInstance,
+    CommonServiceLink,
+    CommonServiceRun,
+    CommonServiceSnapshot,
+)
 from app.models.sprint import Sprint
 from app.models.project import Project
 from app.models.service_topology import ServiceTopologyLink, ServiceTopologyExternalNode
@@ -182,6 +190,12 @@ __all__ = [
     "ServiceConfigGroup",
     "ServiceConfigApplyRun",
     "ServiceConfigChange",
+    "CommonServiceInstance",
+    "CommonServiceCredential",
+    "CommonServiceLink",
+    "CommonServiceSnapshot",
+    "CommonServiceChange",
+    "CommonServiceRun",
     "Sprint",
     "Project",
     "ServiceTopologyLink",

@@ -1,0 +1,25 @@
+[package]
+name = "pep-node-agent"
+version = "2.1.0"
+edition = "2021"
+description = "PEP 노드 에이전트 — sysctl·설정 파일·NIC 상태를 PEP 로 보고한다 (Python node_param_agent 의 Rust 구현)"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+glob = "0.3"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+ureq = { version = "2", default-features = false, features = ["json", "tls"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging", "tls12"] }
+rustls-pemfile = "2"
+webpki-roots = "0.26"
+libc = "0.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -48,7 +48,7 @@ MTU, 본딩 모드·하위 인터페이스 구성, IRQ affinity·RSS·coalescing
 |---|---|---|
 | 설치 | 없음 | 클러스터마다 노드 파라미터 에이전트 DaemonSet |
 | 언제 | 사람이 **현재 값 수집** 을 누를 때(자격증명 미저장이라 자동 주기 없음) | 1분마다 |
-| 설정 값(ring·channels·offload·본딩) | 됨 | 됨(채널 수는 에이전트에 아직 없음 — 필요해지면 1.3.0) |
+| 설정 값(ring·channels·offload·본딩) | 됨 | 됨(채널 수는 Rust 에이전트 2.1.0 부터) |
 | 드롭·CRC 증가·플래핑 | 두 번 수집한 사이의 증가량만 | 계속 |
 | PEP 밖 변경 알람 | 다음 수집 때 | 바로 |
 
@@ -106,7 +106,7 @@ NIC 는 레일 구분선 아래 읽기 전용 항목에서 **서비스 목록의
 - 평탄화: 키별 값이 대상 인터페이스에서 모두 같으면 그 값, 다르면 `mixed`(드리프트). 인터페이스별 원값은 스냅샷 `per_iface`.
 - **`max` 비교**: 기대 값 `max` = 각 인터페이스 현재 값이 그 인터페이스 최대값과 같으면 일치. `status.py` 드리프트 비교에 서비스별 비교 함수(`nic` 만)를 둔다.
 - 대상 인터페이스(NIC 설정 `nic_watch.settings` 의 `target_mode`·`target_glob` — 2-a 구현): `bond_members`(기본 — 본딩 하위 물리 인터페이스 + 그 본딩, 본딩이 없으면 링크가 올라온 물리 인터페이스) | `glob`. 관리용 1G NIC 는 본딩에 없으면 자연히 빠진다.
-- 2-a 구현 메모: 평탄화·`max` 비교는 `services/nic_watch/snapshot.py`·`service_config/current.same_value`, SSH 수집은 `routers/versions.py` `collect-nic`(스크립트·파서 `services/nic_watch/ssh_collect.py`), 출처는 `node_nic_states.source`(ssh 는 보고 끊김 판정 제외). 채널 수는 에이전트 1.3.0 부터 보고하고, 보고하지 않는 출처는 이전 값을 유지한다.
+- 2-a 구현 메모: 평탄화·`max` 비교는 `services/nic_watch/snapshot.py`·`service_config/current.same_value`, SSH 수집은 `routers/versions.py` `collect-nic`(스크립트·파서 `services/nic_watch/ssh_collect.py`), 출처는 `node_nic_states.source`(ssh 는 보고 끊김 판정 제외). 채널 수는 Rust 에이전트 2.1.0(Python 1.3.0) 부터 보고하고, 보고하지 않는 출처는 이전 값을 유지한다.
 
 ---
 

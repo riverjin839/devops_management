@@ -130,13 +130,13 @@ def carry_over(prev_flat: dict[str, Any], new_flat: dict[str, Any], measured: li
 def store(db: Session, cluster: Cluster, node: str, ifaces: list[dict[str, Any]], source: str,
           now: Optional[datetime] = None) -> bool:
     """``nic:{node}`` 스냅샷 저장 + 변경 감지 + (저장됐으면) nic 드리프트 알람 동기화. 실패는 삼키고 False."""
-    from app.services.nic_watch.settings import get_settings
+    from app.services.nic_watch.settings import get_effective
     from app.services.service_config import watch as W
 
     now = now or datetime.utcnow()
     comp = f"{COMPONENT_PREFIX}{node}"
     try:
-        cfg = get_settings(db)
+        cfg = get_effective(db, cluster.id)  # 공통 기준 + 이 클러스터 재정의
         snap = flatten(ifaces, cfg.get("target_mode") or "bond_members", cfg.get("target_glob") or [])
         last = (db.query(ClusterConfigSnapshot)
                 .filter(ClusterConfigSnapshot.cluster_id == cluster.id, ClusterConfigSnapshot.component == comp)

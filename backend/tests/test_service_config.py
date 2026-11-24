@@ -1573,3 +1573,22 @@ def test_agent_read_files(tmp_path):
     assert "error" in out["kubelet"]
     again = AG.read_files(targets, tmp_path, {"containerd": out["containerd"]["sha256"]})
     assert "content" not in again["containerd"]  # 해시가 같으면 내용 생략
+
+
+def test_numeric_ranges_seeded_and_in_view(db, linux_v1):
+    from app.models.service_config import ServiceConfigItem
+    from app.services.service_config import view as V
+    from app.services.service_config.catalog_seed import seed_catalog
+
+    rows = {r["key"]: r for s in V.build_view(db, linux_v1, "linux")["sections"] for r in s["items"]}
+    assert (rows["vm.swappiness"]["min_value"], rows["vm.swappiness"]["max_value"]) == ("0", "100")
+    assert rows["net.core.somaxconn"]["max_value"] is None
+    # 운영자가 고친 범위는 다시 시드해도 덮지 않는다
+    it = db.query(ServiceConfigItem).filter(ServiceConfigItem.service == "linux", ServiceConfigItem.key == "vm.swappiness").one()
+    it.max_value = "50"
+    db.commit()
+    seed_catalog(db)
+    db.refresh(it)
+    assert it.max_value == "50"
+    it.max_value = "100"
+    db.commit()

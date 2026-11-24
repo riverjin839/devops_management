@@ -675,3 +675,86 @@ def test_collect_nic_endpoint_with_fake_ssh(db, cluster, monkeypatch):
         app.dependency_overrides.clear()
         db.query(ClusterConfigSnapshot).filter(ClusterConfigSnapshot.cluster_id == cluster.id).delete(synchronize_session=False)
         db.commit()
+
+
+# ── 클러스터별 판정 기준(공통 기준 위의 재정의) ──────────────────────────────
+
+def test_merge_effective_override_wins_and_invalid_falls_back():
+    from app.services.nic_watch.settings import merge_effective, validate_override
+
+    g = normalize({"expected_bond_mode": "802.3ad", "min_speed_mbps": 0, "drop_warn_per_min": 10})
+    eff = merge_effective(g, {"min_speed_mbps": 25000, "expected_bond_mode": "active-backup", "nope": 1})
+    assert eff["min_speed_mbps"] == 25000 and eff["expected_bond_mode"] == "active-backup"
+    assert eff["expected_hash_policy"] == g["expected_hash_policy"]   # 재정의하지 않은 항목은 공통을 따른다
+    assert "nope" not in eff
+    assert merge_effective(g, None) == g
+    # 범위를 벗어난 숫자·모르는 선택지는 공통 값으로 정리된다
+    assert validate_override(g, {"min_speed_mbps": -5, "expected_bond_mode": "bogus", "drop_warn_per_min": 50, "x": 1}) == {
+        "min_speed_mbps": g["min_speed_mbps"], "expected_bond_mode": g["expected_bond_mode"], "drop_warn_per_min": 50}
+
+
+def test_bond_mode_judged_by_cluster_effective_cfg():
+    """같은 보고라도 클러스터 기준이 802.3ad 면 active-backup 은 경고, 기준이 active-backup 이면 정상."""
+    from app.services.nic_watch.settings import merge_effective
+
+    g = normalize(None)
+    bond = {**_phys("bond0"), "kind": "bond", "bond": {"mode": "active-backup", "xmit_hash_policy": None, "lacp_rate": None,
+                                                    "miimon": 100, "slaves": ["ens1f0"], "slave_state": {}, "active": {}}}
+    by = {"bond0": bond, "ens1f0": _phys("ens1f0")}
+    strict = A._bond_findings("w1", bond, g, by)  # noqa: SLF001
+    ok = A._bond_findings("w1", bond, merge_effective(g, {"expected_bond_mode": "active-backup"}), by)  # noqa: SLF001
+    assert "bond_mode" in {f["code"] for f in strict}
+    assert "bond_mode" not in {f["code"] for f in ok}
+
+
+def test_observe_learns_modes_speeds_and_no_bond():
+    from app.services.nic_watch.learn import observe
+
+    bond = lambda mode: {"name": "bond0", "kind": "bond", "bond": {"mode": mode, "xmit_hash_policy": "layer3+4", "lacp_rate": "fast"}}  # noqa: E731
+    phys = lambda n, sp: {"name": n, "kind": "physical", "speed": sp, "operstate": "up"}  # noqa: E731
+    states = [{"node": "a", "interfaces": [bond("802.3ad"), phys("ens1f0", 25000), phys("ens1f1", 25000)]},
+              {"node": "b", "interfaces": [bond("802.3ad"), phys("ens1f0", 25000), phys("ens1f1", 10000)]},
+              {"node": "c", "interfaces": [bond("active-backup"), phys("ens1f0", 25000)]}]
+    o = observe(states)
+    assert o["suggest"]["expected_bond_mode"] == "802.3ad"          # 최빈값
+    assert o["suggest"]["expected_hash_policy"] == "layer3+4" and o["suggest"]["expected_lacp_rate"] == "fast"
+    assert o["suggest"]["min_speed_mbps"] == 10000                  # 섞여 있으면 가장 느린 값
+    assert o["interfaces"]["bond"] == ["bond0"] and o["node_count"] == 3
+    none = observe([{"node": "x", "interfaces": [phys("eth0", 1000)]}])
+    assert none["suggest"]["expected_bond_mode"] == "" and none["bond_count"] == 0  # 본딩 없음 → 검사 안 함
+    assert observe([])["suggest"] and observe([])["node_count"] == 0
+
+
+def test_cluster_override_roundtrip_agent_config_and_view(db, cluster, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app.main import app
+    from app.services.nic_watch import service as svc
+    from app.services.nic_watch.settings import (
+        clear_cluster_override,
+        get_cluster_settings,
+        get_effective,
+        override_summary,
+        set_cluster_override,
+    )
+
+    cs = get_cluster_settings(db, cluster.id)
+    assert cs["overridden"] == [] and cs["effective"] == cs["global"]
+    out = set_cluster_override(db, cluster.id, {"min_speed_mbps": 25000, "exclude_names": ["lo", "ens9*"], "bogus": 1})
+    assert out["overridden"] == ["exclude_names", "min_speed_mbps"]
+    assert out["effective"]["min_speed_mbps"] == 25000 and out["global"]["min_speed_mbps"] == 0
+    assert override_summary(db)[str(cluster.id)] == ["exclude_names", "min_speed_mbps"]
+    # 다른 클러스터는 영향이 없다
+    assert get_effective(db, uuid.uuid4())["min_speed_mbps"] == 0
+    # 에이전트 보고 응답의 수집 대상이 이 클러스터 재정의를 따른다
+    monkeypatch.setattr(settings, "node_param_ingest_token", "s3cret")
+    r = TestClient(app).post("/api/v1/node-params/agent/report", headers={"Authorization": "Bearer s3cret"},
+                             json={"cluster": str(cluster.id), "node": "w1", "agent_version": "2.0.0", "runtime": {}, "persistent": {}})
+    assert r.status_code == 200 and r.json()["nic"]["exclude_names"] == ["lo", "ens9*"]
+    assert svc.cluster_view(db, cluster)["overridden"] == ["exclude_names", "min_speed_mbps"]
+    # 일부만 되돌리고, 전부 지우면 공통을 따른다
+    out = set_cluster_override(db, cluster.id, {}, reset=["exclude_names"])
+    assert out["overridden"] == ["min_speed_mbps"]
+    assert clear_cluster_override(db, cluster.id)["overridden"] == []
+    assert override_summary(db) == {}
