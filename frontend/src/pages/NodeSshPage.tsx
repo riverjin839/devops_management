@@ -1,566 +1,537 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useMutation } from '@tanstack/react-query';
 import {
-  TerminalSquare, Key, Play, ShieldAlert, ExternalLink, Search, Loader2,
-  CheckCircle, XCircle, Wifi, Clock, Plug, RotateCw,
+  ChevronLeft, ChevronRight, Key, Loader2, Play, Plug, Radio, ShieldAlert, SlidersHorizontal, TerminalSquare,
 } from 'lucide-react';
 import { useClusterRouteParam } from '@/hooks/useClusterRouteParam';
 import { useClusters } from '@/hooks/useCluster';
 import {
-  ClusterSidebar, ConfirmDialog, ErrorState, PageShell, SelectClusterEmptyState, EmptyState, LoadingState,
+  ClusterSidebar, ConfirmDialog, EmptyState, ErrorState, PageShell, RunLogPanel, SegTabs, useToast,
 } from '@/components/common';
 import { PageHeader } from '@/components/common/PageHeader';
-import { MacCard } from '@/components/ui/MacCard';
-import { NodeSshTerminal, type NodeSshConnectParams, type SshTerminalStatus } from '@/components/k8s';
+import {
+  NodeSshTerminal, type NodeSshConnectParams, type SshTerminalControl, type SshTerminalEvent, type SshTerminalStatus,
+} from '@/components/k8s';
+import {
+  CELL_CLASS, MAX_SESSIONS, NodeMultiSelect, SshFavoritesChips, SshFavoritesDialog, SshFavoritesMenu,
+  favoriteIsDanger, firstFreeSlot, pageCount, quadrantOfCell, slotForCell, slotPosition, type FavoritePick, type SshTarget,
+} from '@/components/node-ssh';
+import { useK8sHub } from '@/lib/k8sHub';
 import { openNodeSshPopout } from '@/lib/nodeSshPopout';
-import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
-import { useCanOperate } from '@/hooks/useCanOperate';
-import { isGuardedLevel, levelLabel, useOperationLevels } from '@/hooks/useOperationLevels';
+import { judgeCommand } from '@/lib/dangerCommand';
 import { formatApiError } from '@/lib/utils';
-import { bulkExecApi, nodeSshApi, type NodeSshTestResult, type NodeSummary } from '@/services/api';
+import { useTerminalEnvSync } from '@/hooks/useTerminalEnvSync';
+import { CLUSTER_OPERATE_REQUIRED_HINT, useCanOperate, useMyClusterAccess } from '@/hooks/useCanOperate';
+import { isGuardedLevel, levelLabel, useOperationLevels } from '@/hooks/useOperationLevels';
+import { useRunLog, type RunLogHandle } from '@/hooks/useRunLog';
+import { useLogPref } from '@/hooks/useLogPref';
+import { useSshFavorites } from '@/hooks/useSshFavorites';
+import { nodeSshApi } from '@/services/api';
+import type { SshFavorite } from '@/types';
 
-const TEST_STATUS_META: Record<
-  NodeSshTestResult['status'],
-  { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }
-> = {
-  ok:            { label: '연결 성공', cls: 'bg-status-healthy/10 text-status-healthy border-status-healthy/30', icon: CheckCircle },
-  error:         { label: '오류',      cls: 'bg-status-critical/10 text-status-critical border-status-critical/30',             icon: XCircle },
-  timeout:       { label: '시간 초과',  cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',       icon: Clock },
-  auth_error:    { label: '인증 실패', cls: 'bg-status-warning/10 text-status-warning border-status-warning/30',    icon: ShieldAlert },
-  connect_error: { label: '연결 실패', cls: 'bg-status-unknown/10 text-status-unknown border-status-unknown/30',       icon: Wifi },
-};
+interface SshSession {
+  id: string;
+  slot: number;
+  target: SshTarget;
+  params: NodeSshConnectParams;
+}
 
-const POPUP_BLOCKED_MSG = '팝업이 차단되었습니다. 브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 시도하세요.';
-const HANDOFF_FAILED_MSG = '새 창에 접속 정보를 전달하지 못했습니다 — "다시 열기"를 눌러 다시 여세요.';
+interface PendingFavorite {
+  fav: SshFavorite;
+  data: string;
+  sessionIds: string[];
+}
+
+const INPUT = 'px-2.5 py-1.5 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary';
+let sessionSeq = 0;
+
+function targetLabel(t: SshTarget): string {
+  return t.nodeName ?? t.host;
+}
 
 /**
- * 개별 노드 SSH 터미널 — 클러스터 노드 하나를 골라 **로그인 셸**을 웹 터미널로 연다.
- * k9s 콘솔이 control-plane 의 k9s TUI 만 띄우는 것과 달리 여기는 범용 셸이라
- * 로그 확인·서비스 상태 점검 같은 임의 작업을 그대로 할 수 있다.
+ * SSH — 노드(여러 클러스터 포함) 여러 대에 **로그인 셸**을 화면 안 분할 칸으로 연다(최대 4분할, 넘치면 쪽 넘김).
  *
- * 재사용하는 base 툴: 노드 목록은 mc/bulk-exec 와 같은 `bulkExecApi.nodeList`,
- * 터미널 창은 k9s 와 같은 `SshTerminalWindow`(→ 백엔드 `services/ssh_pty`),
- * 창 간 handoff 는 `lib/terminalPopout.ts`(저장소 없는 postMessage). SSH 인증정보는 저장하지 않는다.
- * 보호 레벨(운영레벨 `guarded`) 클러스터는 연결 전에 대상·계정을 한 번 더 확인한다(정책 4).
+ * - 대상은 허브 2행 「SSH」 탭 옆 리스트박스(`NodeMultiSelect`, 허브 `toolbarSlot` 포털)에서 고른다. 다른 K8S 클러스터 노드도 된다.
+ * - 세션은 Ⅰ → Ⅳ → Ⅱ → Ⅲ 사분면 순으로 칸에 들어가고, 5번째부터 다음 쪽(`components/node-ssh/quadrants.ts`).
+ *   다른 쪽 세션도 연결은 유지된다(마운트한 채 숨김). 허브에서 클러스터를 바꿔도 다시 마운트하지 않는다(`keepAcrossClusters`).
+ * - 터미널 창 ★ 메뉴·칩 바 = 서버에 저장되는 즐겨찾기 명령(`/ssh-favorites`, 기본 = 옛 커널 파라미터 프리셋).
+ * - 연결·재연결·즐겨찾기 보내기는 실행 로그(`RunLogPanel`, 「로그 보기」 토글)에 노드별로 쌓인다.
+ * SSH 인증정보는 저장하지 않는다(세션 메모리에만 — 재연결용). 보호 레벨 클러스터는 연결 전에 대상·계정을 확인한다.
  */
 export function NodeSshPage() {
   const clustersQ = useClusters();
   const clusters = useMemo(() => clustersQ.data ?? [], [clustersQ.data]);
-  // K8s 허브 콘솔 ▸ 노드 SSH(`/k8s/:clusterId/node-ssh`, D-243)로 마운트된다 — 허브 안에서는 허브가 고른 클러스터.
+  const hub = useK8sHub();
   const { clusterId, selectCluster } = useClusterRouteParam('/node-ssh', clusters);
   const fid = useId();
-  const f = (k: string) => `${fid}-${k}`;
-  const { canOperate, hint, withHint, ariaWithHint } = useCanOperate(clusterId || null);
+  const toast = useToast();
+  const { canOperate: roleOk, hint: roleHint, withHint, ariaWithHint, role } = useCanOperate(null);
+  const access = useMyClusterAccess(role !== 'admin');
   const { data: levels } = useOperationLevels();
-  const cluster = useMemo(() => clusters.find((c) => c.id === clusterId), [clusters, clusterId]);
-  const guarded = isGuardedLevel(levels, cluster?.operationLevel);
-  const levelText = levelLabel(levels, cluster?.operationLevel) || '미지정';
+  const favoritesQ = useSshFavorites();
+  const favorites = useMemo(() => favoritesQ.data ?? [], [favoritesQ.data]);
 
-  // 선택한 클러스터의 운영등급에 따라 터미널 Appearance 활성 프로파일(개발/운영)을 결정.
   useTerminalEnvSync(clusters, clusterId || null);
 
-  // 노드 목록 — mc 클라이언트/노드 일괄 실행과 동일한 엔드포인트를 재사용.
-  const nodesQ = useQuery({
-    queryKey: ['bulk-exec', 'nodes', clusterId],
-    queryFn: () => bulkExecApi.nodeList(clusterId).then((r) => r.data),
-    enabled: !!clusterId,
-    staleTime: 60_000,
-  });
-
-  const [nodeFilter, setNodeFilter] = useState('');
-  const [selectedNodeName, setSelectedNodeName] = useState('');
-  const [customHost, setCustomHost] = useState('');
-  const [port, setPort] = useState(22);
+  // ── 접속 정보(새 연결 전부에 같이 쓴다 — 저장하지 않음) ──
+  const [selected, setSelected] = useState<SshTarget[]>([]);
   const [username, setUsername] = useState('root');
+  const [port, setPort] = useState(22);
   const [authMode, setAuthMode] = useState<'password' | 'key'>('password');
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [initialCommand, setInitialCommand] = useState('');
-  const [session, setSession] = useState<NodeSshConnectParams | null>(null);
-  const [termStatus, setTermStatus] = useState<SshTerminalStatus | null>(null);
-  const [popoutMsg, setPopoutMsg] = useState('');
-  // handoff 실패 시 "다시 열기" 용 — 메모리에만 두고 클러스터 전환·재시도 때 비운다.
-  const [retryParams, setRetryParams] = useState<NodeSshConnectParams | null>(null);
-  const [pendingConnect, setPendingConnect] = useState<'inline' | 'popout' | null>(null);
-  const [pendingCluster, setPendingCluster] = useState<{ id: string | null } | null>(null);
-  const clusterIdRef = useRef(clusterId);
-  clusterIdRef.current = clusterId;
+  const [optionsOpen, setOptionsOpen] = useState(false);
 
-  // 클러스터가 바뀌면 대상/자격증명을 초기화한다(다른 클러스터에 그대로 붙지 않도록).
-  useEffect(() => {
-    setSelectedNodeName('');
-    setCustomHost('');
-    setNodeFilter('');
-    setPassword('');
-    setPrivateKey('');
-    setRetryParams(null);
-    setPopoutMsg('');
-  }, [clusterId]);
+  // ── 세션·배치 ──
+  const [sessions, setSessions] = useState<SshSession[]>([]);
+  const [statuses, setStatuses] = useState<Record<string, SshTerminalStatus>>({});
+  const [page, setPage] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [maximizedId, setMaximizedId] = useState<string | null>(null);
+  const [broadcast, setBroadcast] = useState(false);
+  const [favDialogOpen, setFavDialogOpen] = useState(false);
+  const [pendingConnect, setPendingConnect] = useState<SshTarget[] | null>(null);
+  const [pendingFav, setPendingFav] = useState<PendingFavorite | null>(null);
 
-  const nodes = useMemo(() => nodesQ.data?.nodes ?? [], [nodesQ.data]);
-  const filteredNodes = useMemo(() => {
-    const q = nodeFilter.trim().toLowerCase();
-    if (!q) return nodes;
-    return nodes.filter((n: NodeSummary) =>
-      n.name.toLowerCase().includes(q) || (n.internalIp ?? '').includes(q));
-  }, [nodes, nodeFilter]);
+  const runLog = useRunLog();
+  const [showLog, setShowLog] = useLogPref('node-ssh-connect');
+  const handles = useRef(new Map<string, RunLogHandle>());
+  const controls = useRef(new Map<string, { current: SshTerminalControl | null }>());
+  const controlRef = (id: string) => {
+    let r = controls.current.get(id);
+    if (!r) { r = { current: null }; controls.current.set(id, r); }
+    return r;
+  };
 
-  // 첫 노드 자동선택 — k9s 와 달리 master 를 우선하지 않는다(범용 셸이므로).
-  useEffect(() => {
-    if (!selectedNodeName && nodes.length > 0) setSelectedNodeName(nodes[0].name);
-  }, [nodes, selectedNodeName]);
+  const blockedReason = useCallback((cid: string): string | undefined => {
+    if (!roleOk) return roleHint;
+    const level = access.data?.[cid];
+    return level !== undefined && level !== 'operate' ? CLUSTER_OPERATE_REQUIRED_HINT : undefined;
+  }, [roleOk, roleHint, access.data]);
 
-  const selectedNode = useMemo(
-    () => nodes.find((n: NodeSummary) => n.name === selectedNodeName),
-    [nodes, selectedNodeName],
+  const used = useMemo(() => new Set(sessions.map((s) => s.slot)), [sessions]);
+  const pages = pageCount(used);
+  useEffect(() => { if (page > pages - 1) setPage(pages - 1); }, [page, pages]);
+
+  const slotLabel = useCallback((slot: number) => {
+    const p = slotPosition(slot);
+    return pages > 1 ? `${p.page + 1}쪽 ${p.quadrant}` : p.quadrant;
+  }, [pages]);
+  const openLabels = useMemo(() => new Map(sessions.map((s) => [s.target.key, slotLabel(s.slot)])), [sessions, slotLabel]);
+  const newTargets = useMemo(
+    () => selected.filter((t) => !sessions.some((s) => s.target.key === t.key)),
+    [selected, sessions],
   );
-  const effectiveHost = customHost.trim() || selectedNode?.internalIp || selectedNode?.externalIp || '';
-  const effectiveNodeName = customHost.trim() ? '' : (selectedNode?.name ?? '');
+  const credsOk = !!username.trim() && (authMode === 'password' ? !!password : !!privateKey.trim());
+  const blockedNew = newTargets.find((t) => t.clusterId && blockedReason(t.clusterId));
+  const capacity = MAX_SESSIONS - sessions.length;
+  const connectHint = !roleOk ? roleHint
+    : newTargets.length === 0 ? (selected.length ? '고른 노드는 이미 열려 있습니다' : '대상 노드를 고르세요')
+    : !credsOk ? `${authMode === 'password' ? '비밀번호' : '개인키'}를 입력하세요`
+    : blockedNew ? `${targetLabel(blockedNew)} — ${CLUSTER_OPERATE_REQUIRED_HINT}`
+    : capacity <= 0 ? `세션은 ${MAX_SESSIONS}개까지 열 수 있습니다`
+    : undefined;
+  const canConnect = !connectHint;
 
-  const canConnect = !!effectiveHost && !!username
-    && (authMode === 'password' ? !!password : !!privateKey.trim());
+  const clusterOf = (t: SshTarget) => clusters.find((c) => c.id === t.clusterId);
+  const guardedOf = (t: SshTarget) => isGuardedLevel(levels, clusterOf(t)?.operationLevel);
 
+  // ── 연결 ──
+  const doConnect = (targets: SshTarget[]) => {
+    const taken = new Set(used);
+    const created: SshSession[] = [];
+    for (const t of targets) {
+      const slot = firstFreeSlot(taken);
+      if (slot < 0) {
+        runLog.log('warn', `세션 상한(${MAX_SESSIONS}개)이라 ${targetLabel(t)} 은(는) 열지 않았습니다`);
+        break;
+      }
+      taken.add(slot);
+      sessionSeq += 1;
+      const id = `ssh-${Date.now()}-${sessionSeq}`;
+      const params: NodeSshConnectParams = {
+        nodeName: t.nodeName, host: t.host, port, username: username.trim(), authMode, password, privateKey,
+        initialCommand: initialCommand.trim() || undefined, clusterId: t.clusterId ?? undefined,
+      };
+      handles.current.set(id, runLog.begin(
+        `${targetLabel(t)} 연결`,
+        `${params.username}@${t.host}:${port} · ${t.clusterName} · ${authMode === 'password' ? '비밀번호' : '개인키'} 인증 · 칸 ${slotPosition(slot).quadrant}`,
+      ));
+      created.push({ id, slot, target: t, params });
+    }
+    if (created.length === 0) return;
+    setSessions((prev) => [...prev, ...created]);
+    setPage(slotPosition(created[0].slot).page);
+    setActiveId(created[0].id);
+    setMaximizedId(null);
+  };
+  const requestConnect = () => {
+    if (!canConnect) return;
+    const targets = newTargets.slice(0, Math.max(0, capacity));
+    if (targets.some(guardedOf)) setPendingConnect(targets);
+    else doConnect(targets);
+  };
+
+  const onEvent = (s: SshSession) => (e: SshTerminalEvent) => {
+    if (e.reconnect) {
+      handles.current.get(s.id)?.end();
+      handles.current.set(s.id, runLog.begin(`${targetLabel(s.target)} 재연결`, e.message));
+      return;
+    }
+    const h = handles.current.get(s.id);
+    h?.log(e.level, e.message);
+    e.steps?.forEach((st) => h?.setStep(st.name, st.label, st.status));
+    if (e.end) h?.end();
+  };
+
+  const closeSession = (id: string) => {
+    handles.current.get(id)?.end();
+    handles.current.delete(id);
+    controls.current.delete(id);
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    setStatuses((prev) => { const next = { ...prev }; delete next[id]; return next; });
+    setMaximizedId((m) => (m === id ? null : m));
+    setActiveId((a) => (a === id ? null : a));
+  };
+
+  const popOut = (s: SshSession) => {
+    const win = openNodeSshPopout({ params: s.params }, (delivered) => {
+      if (!delivered) toast.error('새 창에 접속 정보를 전달하지 못했습니다', '이 칸의 세션은 그대로 두었습니다.');
+    });
+    if (!win) {
+      toast.error('팝업이 차단되었습니다', '브라우저에서 이 사이트의 팝업을 허용한 뒤 다시 시도하세요.');
+      return;
+    }
+    runLog.log('info', `[${targetLabel(s.target)}] 세션을 새 창으로 옮겼습니다`);
+    closeSession(s.id);
+  };
+
+  // ── 보이는 칸 ──
+  const single = sessions.length === 1 || maximizedId !== null;
+  const isVisible = (s: SshSession) => (
+    maximizedId ? s.id === maximizedId : sessions.length === 1 ? true : slotPosition(s.slot).page === page
+  );
+  const visibleIds = sessions.filter(isVisible).map((s) => s.id);
+  const openCount = Object.values(statuses).filter((v) => v === 'open').length;
+
+  // ── 즐겨찾기 보내기 ──
+  const deliver = (fav: SshFavorite, data: string, ids: string[]) => {
+    const run = data.endsWith('\r');
+    let sent = 0;
+    for (const id of ids) {
+      const s = sessions.find((x) => x.id === id);
+      const ok = controls.current.get(id)?.current?.send(data) ?? false;
+      if (s) runLog.log(ok ? 'info' : 'warn', `[${targetLabel(s.target)}] 즐겨찾기 「${fav.name}」 ${ok ? (run ? '입력 후 실행' : '입력') : '보내지 못함 — 연결돼 있지 않음'}`);
+      if (ok) sent += 1;
+    }
+    if (ids.length === 1) controls.current.get(ids[0])?.current?.focus();
+    if (sent === 0) toast.error('명령을 보내지 못했습니다', '연결된 창이 없습니다.');
+  };
+  const pickFavorite = (from: string) => ({ fav, insertOnly }: FavoritePick) => {
+    const text = fav.command.replace(/\s+$/, '');
+    const run = !insertOnly && fav.runMode === 'run';
+    const data = run ? `${text}\r` : text;
+    const ids = broadcast ? visibleIds.filter((id) => statuses[id] === 'open') : [from];
+    if (run && favoriteIsDanger(fav)) setPendingFav({ fav, data, sessionIds: ids });
+    else deliver(fav, data, ids);
+  };
+
+  // ── 연결 테스트(터미널 없이 첫 대상의 자격증명만 확인) ──
+  const testTarget = newTargets[0] ?? selected[0];
   const testM = useMutation({
     mutationFn: () => nodeSshApi.test({
-      host: effectiveHost,
-      port,
-      username,
+      host: testTarget?.host ?? '', port, username: username.trim(),
       password: authMode === 'password' ? password : undefined,
       privateKey: authMode === 'key' ? privateKey : undefined,
     }).then((r) => r.data),
   });
-
-  // 대상·자격증명이 바뀌면 이전 테스트 결과 배지를 지운다 — 다른 대상의 결과로 읽히지 않게(D-174 ④).
   const resetTest = testM.reset;
-  useEffect(() => {
-    resetTest();
-  }, [effectiveHost, port, username, authMode, password, privateKey, resetTest]);
+  useEffect(() => { resetTest(); }, [testTarget?.key, port, username, authMode, password, privateKey, resetTest]);
 
-  const buildParams = (): NodeSshConnectParams => ({
-    nodeName: effectiveNodeName || undefined,
-    host: effectiveHost,
-    port,
-    username,
-    authMode,
-    password,
-    privateKey,
-    initialCommand: initialCommand.trim() || undefined,
-    clusterId: clusterId || undefined,
-  });
-
-  const openPopout = (params: NodeSshConnectParams): Window | null => {
-    setPopoutMsg('');
-    setRetryParams(null);
-    const cid = clusterId;
-    const win = openNodeSshPopout({ params }, (delivered) => {
-      if (delivered || clusterIdRef.current !== cid) return;
-      setRetryParams(params);
-      setPopoutMsg(HANDOFF_FAILED_MSG);
-    });
-    if (!win) setPopoutMsg(POPUP_BLOCKED_MSG);
-    return win;
-  };
-
-  const doConnect = (mode: 'inline' | 'popout') => {
-    if (!canConnect || !canOperate) return;
-    if (mode === 'inline') {
-      setPopoutMsg('');
-      setRetryParams(null);
-      setSession(buildParams());
-    } else {
-      // 폼에서 바로 별도 창으로 연결 (인라인 세션은 만들지 않음).
-      openPopout(buildParams());
-    }
-  };
-
-  // 보호 레벨이면 연결 전 확인(정책 4), 그 외는 즉시 연결.
-  const requestConnect = (mode: 'inline' | 'popout') => {
-    if (!canConnect || !canOperate) return;
-    if (guarded) setPendingConnect(mode);
-    else doConnect(mode);
-  };
-
-  // 인라인 세션을 별도 창으로 이동 — 성공 시 메인 창 세션은 닫는다(중복 세션 방지).
-  const popOutSession = () => {
-    if (!session) return;
-    if (openPopout(session)) {
-      setSession(null);
-      setTermStatus(null);
-    }
-  };
-
-  const changeCluster = (id: string | null) => {
-    selectCluster(id);
-    setSession(null);
-    setTermStatus(null);
-  };
-
-  // 열린 세션이 있으면 클러스터 전환 전에 확인한다(D-177).
-  const requestClusterChange = (id: string | null) => {
-    if (session && termStatus === 'open') setPendingCluster({ id });
-    else changeCluster(id);
-  };
-
-  const popoutNotice = popoutMsg ? (
-    <div className="flex items-center gap-2 flex-wrap" role="status">
-      <p className="text-xs text-status-warning flex items-center gap-1">
-        <ShieldAlert className="w-3 h-3" aria-hidden="true" /> {popoutMsg}
-      </p>
-      {retryParams && (
+  // ── 툴바(허브 2행 SSH 탭 옆) ──
+  const toolbar = (
+    <div className="flex items-center gap-2 flex-wrap">
+      <NodeMultiSelect
+        clusters={clusters}
+        currentClusterId={clusterId}
+        selected={selected}
+        onChange={setSelected}
+        openLabels={openLabels}
+        blockedReason={blockedReason}
+      />
+      <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        사용자
+        <input value={username} onChange={(e) => setUsername(e.target.value)} className={`${INPUT} w-24`} aria-label="SSH 사용자" />
+      </label>
+      {authMode === 'password' ? (
+        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          비밀번호
+          <input
+            type="password" value={password} autoComplete="off"
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') requestConnect(); }}
+            className={`${INPUT} w-32`} aria-label="SSH 비밀번호"
+          />
+        </label>
+      ) : (
+        <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+          <Key className="w-3 h-3" aria-hidden="true" /> 개인키 {privateKey.trim() ? '입력됨' : '없음'}
+        </span>
+      )}
+      <div className="relative">
         <button
           type="button"
-          onClick={() => openPopout(retryParams)}
-          disabled={!canOperate}
-          title={withHint('같은 접속 정보로 새 창을 다시 엽니다')}
-          aria-label={ariaWithHint('다시 열기')}
-          className="px-2 py-1 text-xs font-medium rounded-xl border border-border text-foreground hover:bg-secondary disabled:opacity-50 flex items-center gap-1"
+          onClick={() => setOptionsOpen((v) => !v)}
+          aria-expanded={optionsOpen}
+          aria-haspopup="dialog"
+          className={`px-2.5 py-1.5 text-sm rounded-xl border inline-flex items-center gap-1 ${optionsOpen ? 'bg-secondary border-border' : 'border-border hover:bg-secondary'}`}
         >
-          <RotateCw className="w-3 h-3" aria-hidden="true" /> 다시 열기
+          <SlidersHorizontal className="w-3.5 h-3.5" aria-hidden="true" /> 인증·포트·접속 후 실행
         </button>
-      )}
+        {optionsOpen && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setOptionsOpen(false)} aria-hidden />
+            <div role="dialog" aria-label="접속 옵션"
+              onKeyDown={(e) => { if (e.key === 'Escape') setOptionsOpen(false); }}
+              className="absolute left-0 top-full mt-1 z-40 w-[360px] max-w-[calc(100vw_-_32px)] bg-popover text-popover-foreground border border-border rounded-md shadow-lg p-3 flex flex-col gap-3">
+              <div>
+                <p id={`${fid}-auth`} className="text-sm text-muted-foreground mb-1">인증 방식</p>
+                <SegTabs<'password' | 'key'>
+                  label="인증 방식" value={authMode} onChange={setAuthMode}
+                  options={[['password', '비밀번호'], ['key', '개인키']]}
+                />
+              </div>
+              {authMode === 'key' && (
+                <div>
+                  <label htmlFor={`${fid}-pkey`} className="block text-sm text-muted-foreground mb-1">개인키(PEM)</label>
+                  <textarea id={`${fid}-pkey`} rows={4} value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                    className={`${INPUT} w-full text-xs font-mono resize-none`} />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <div className="w-24">
+                  <label htmlFor={`${fid}-port`} className="block text-sm text-muted-foreground mb-1">포트</label>
+                  <input id={`${fid}-port`} type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)} className={`${INPUT} w-full`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label htmlFor={`${fid}-init`} className="block text-sm text-muted-foreground mb-1">접속 후 실행 <span className="text-xs">(선택)</span></label>
+                  <input id={`${fid}-init`} value={initialCommand} onChange={(e) => setInitialCommand(e.target.value)}
+                    placeholder="sudo -i · cd /var/log" className={`${INPUT} w-full font-mono`} />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => testM.mutate()}
+                  disabled={!testTarget || !credsOk || !roleOk || testM.isPending}
+                  title={withHint('터미널을 열지 않고 첫 대상의 호스트·자격증명만 확인')}
+                  aria-label={ariaWithHint('연결 테스트')}
+                  className="px-3 py-1.5 text-sm rounded-xl border border-border hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {testM.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Plug className="w-3.5 h-3.5" aria-hidden="true" />}
+                  연결 테스트{testTarget ? ` — ${targetLabel(testTarget)}` : ''}
+                </button>
+                {testM.data && (
+                  <span className={`text-xs ${testM.data.status === 'ok' ? 'text-muted-foreground' : 'text-status-critical'}`}>
+                    {testM.data.status === 'ok' ? `연결 성공 · ${testM.data.durationMs}ms` : (testM.data.error ?? testM.data.status)}
+                  </span>
+                )}
+                {testM.isError && <span className="text-xs text-status-critical">테스트 실패: {formatApiError(testM.error)}</span>}
+              </div>
+              <p className="text-xs text-muted-foreground">SSH 인증정보는 이 화면의 세션에만 쓰고 저장하지 않습니다.</p>
+            </div>
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={requestConnect}
+        disabled={!canConnect}
+        title={connectHint ?? '고른 노드 중 아직 열리지 않은 노드마다 분할 칸을 엽니다'}
+        aria-label={connectHint ? `연결 — ${connectHint}` : '연결'}
+        className="px-3 py-1.5 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-1.5"
+      >
+        <Play className="w-3.5 h-3.5" aria-hidden="true" />
+        연결{newTargets.length > 0 ? ` (${Math.min(newTargets.length, Math.max(capacity, 0))}개 새로)` : ''}
+      </button>
     </div>
-  ) : null;
-
-  const testMeta = testM.data ? TEST_STATUS_META[testM.data.status] : null;
-  const TestIcon = testMeta?.icon;
+  );
 
   return (
     <div className="app-min-h-screen bg-background">
       <PageShell density="console" as="div" className="flex gap-3">
         <div className="sticky top-3 self-start">
-          <ClusterSidebar
-            clusters={clusters}
-            selectedId={clusterId || null}
-            onSelect={requestClusterChange}
-            iconOnly
-          />
+          <ClusterSidebar clusters={clusters} selectedId={clusterId || null} onSelect={selectCluster} iconOnly />
         </div>
 
-        <div className="flex-1 min-w-0 space-y-3">
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
           <PageHeader
             icon={TerminalSquare}
-            title="노드 SSH 터미널"
-            description="개별 노드에 SSH 로그인 셸을 열어 웹 터미널로 사용"
-            actions={effectiveHost ? (
-              <span className="text-sm px-2 py-0.5 rounded-full bg-secondary text-muted-foreground border border-border font-mono">
-                → {username}@{effectiveHost}:{port}
-              </span>
-            ) : undefined}
+            title="SSH"
+            description="노드 여러 대(다른 클러스터 포함)에 로그인 셸을 열어 화면 안에서 최대 4분할로 사용"
           />
 
-          {clustersQ.isError ? (
-            <ErrorState
-              error={clustersQ.error}
-              title="클러스터 목록을 불러오지 못했습니다"
-              onRetry={() => { void clustersQ.refetch(); }}
-            />
-          ) : !clusterId ? (
-            <SelectClusterEmptyState description="왼쪽에서 클러스터를 고르면 노드 목록과 접속 정보를 입력할 수 있습니다." />
-          ) : session ? (
-            <>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                SSH 세션이 <b className="text-foreground">플로팅 창</b>으로 열려 있습니다 —
-                창 상단바를 <b className="text-foreground">드래그해 위치를 이동</b>하고, 우하단 모서리를 끌어 크기를 조절할 수 있습니다.
-                세션은 최대 1시간 유지되며 남은 시간은 창 상단에 표시됩니다. 다른 메뉴로 이동하면 세션이 끊기므로 계속 쓰려면 창 상단바의
-                <b className="text-foreground"> 새 창으로 빼기</b>(별도 브라우저 창)를 이용하세요.
-              </p>
-              {popoutNotice}
-              <NodeSshTerminal
-                params={session}
-                onClose={() => { setSession(null); setTermStatus(null); }}
-                onPopOut={popOutSession}
-                onStatusChange={setTermStatus}
+          {hub?.toolbarSlot ? createPortal(toolbar, hub.toolbarSlot) : toolbar}
+
+          {clustersQ.isError && (
+            <ErrorState error={clustersQ.error} title="클러스터 목록을 불러오지 못했습니다" onRetry={() => { void clustersQ.refetch(); }} />
+          )}
+
+          {/* 세션 바 — 개수·동시 보내기·쪽 넘김·보기 */}
+          <div className="flex items-center gap-2 flex-wrap text-sm">
+            <span className="text-muted-foreground">세션 {sessions.length}/{MAX_SESSIONS} · 연결됨 {openCount}</span>
+            {broadcast && (
+              <button type="button" onClick={() => setBroadcast(false)}
+                title="즐겨찾기 명령을 지금 보이는 모든 창에 보냅니다 — 누르면 끕니다"
+                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-status-warning/40 bg-status-warning/10 text-status-warning">
+                <Radio className="w-3 h-3" aria-hidden="true" /> 동시 보내기 켜짐
+              </button>
+            )}
+            <span className="ml-auto inline-flex items-center gap-1.5">
+              <button type="button" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0 || single}
+                title="이전 쪽" aria-label="이전 쪽" className="p-1.5 rounded-xl border border-border hover:bg-secondary disabled:opacity-40">
+                <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <span className="min-w-[3rem] text-center font-medium tabular-nums" aria-live="polite">{page + 1} / {pages}</span>
+              <button type="button" onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1 || single}
+                title="다음 쪽" aria-label="다음 쪽" className="p-1.5 rounded-xl border border-border hover:bg-secondary disabled:opacity-40">
+                <ChevronRight className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <SegTabs<'grid' | 'single'>
+                label="보기" className="ml-1"
+                value={maximizedId ? 'single' : 'grid'}
+                onChange={(v) => setMaximizedId(v === 'single' ? (activeId ?? visibleIds[0] ?? null) : null)}
+                options={[['grid', '4분할'], ['single', '1칸']]}
               />
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                선택한 노드에 SSH 로 접속해 <b className="text-foreground">로그인 셸을 그대로</b> 웹 터미널(tty + resize)로 씁니다 —
-                <code className="font-mono">journalctl</code>, <code className="font-mono">top</code>, <code className="font-mono">vi</code> 같은 인터랙티브 명령도 동작합니다.
-                SSH 인증정보는 이 세션에만 사용되고 저장되지 않습니다(operator 이상 권한 필요).
-                <br />
-                여러 노드에 <b className="text-foreground">같은 명령을 한 번에</b> 돌려야 한다면 <b className="text-foreground">노드 일괄 실행</b>,
-                클러스터 리소스를 TUI 로 탐색하려면 <b className="text-foreground">k9s 콘솔</b>을 쓰세요.
-                {guarded && (
-                  <>
-                    <br />이 클러스터는 <b className="text-foreground">보호 레벨({levelText})</b>이라 연결 전에 대상과 계정을 한 번 더 확인합니다.
-                  </>
-                )}
-              </p>
+            </span>
+          </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-                {/* 대상 노드 */}
-                <MacCard title="대상 노드" className="space-y-3">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={nodeFilter}
-                      onChange={(e) => setNodeFilter(e.target.value)}
-                      placeholder="노드 이름 / IP 검색"
-                      aria-label="노드 검색"
-                      className="w-full pl-8 pr-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
+          <RunLogPanel run={runLog} show={showLog} onShowChange={setShowLog} idleHint="연결하면 노드별 연결 단계·종료 사유와 즐겨찾기 보내기가 여기 쌓입니다." />
 
-                  <div className="max-h-64 overflow-y-auto rounded-xl border border-border divide-y divide-border">
-                    {nodesQ.isLoading && (
-                      <LoadingState compact />
-                    )}
-                    {nodesQ.isError && (
-                      <ErrorState
-                        compact
-                        error={nodesQ.error}
-                        title="노드 목록을 불러오지 못했습니다"
-                        onRetry={() => { void nodesQ.refetch(); }}
-                      />
-                    )}
-                    {!nodesQ.isLoading && !nodesQ.isError && filteredNodes.length === 0 && (
-                      <EmptyState
-                        compact
-                        icon={Search}
-                        title="조건에 맞는 노드가 없습니다."
-                        description="검색어를 바꾸거나 아래에 호스트를 직접 입력하세요."
-                      />
-                    )}
-                    {filteredNodes.map((n: NodeSummary) => {
-                      const active = !customHost.trim() && n.name === selectedNodeName;
-                      return (
-                        <button
-                          key={n.name}
-                          type="button"
-                          aria-pressed={active}
-                          onClick={() => { setSelectedNodeName(n.name); setCustomHost(''); }}
-                          className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
-                            active ? 'bg-primary/10' : 'hover:bg-secondary'
-                          }`}
-                        >
-                          <span
-                            aria-hidden="true"
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.ready ? 'bg-muted-foreground/40' : 'bg-status-critical'}`}
-                            title={n.ready ? '준비됨' : '준비 안 됨'}
-                          />
-                          <span className="sr-only">{n.ready ? '준비됨' : '준비 안 됨'} —</span>
-                          <span className={`text-sm truncate ${active ? 'text-foreground font-medium' : 'text-foreground/80'}`}>
-                            {n.name}
-                          </span>
-                          <span className="text-xs font-mono text-muted-foreground ml-auto shrink-0">
-                            {n.internalIp ?? '—'}
-                          </span>
-                          {n.roles.includes('control-plane') && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-chart-7/15 text-chart-7-text border border-chart-7/30 shrink-0">
-                              컨트롤 플레인
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div>
-                    <label htmlFor={f('host')} className="block text-sm text-muted-foreground mb-1">
-                      호스트 직접 입력 <span className="text-xs text-muted-foreground">(비우면 위에서 고른 노드 사용)</span>
-                    </label>
-                    <input
-                      id={f('host')}
-                      type="text"
-                      value={customHost}
-                      onChange={(e) => setCustomHost(e.target.value)}
-                      placeholder="예: 192.168.10.11 (클러스터 밖 서버도 가능)"
-                      className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label htmlFor={f('user')} className="block text-sm text-muted-foreground mb-1">사용자</label>
-                      <input
-                        id={f('user')}
-                        type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-                        className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor={f('port')} className="block text-sm text-muted-foreground mb-1">포트</label>
-                      <input
-                        id={f('port')}
-                        type="number" value={port} onChange={(e) => setPort(Number(e.target.value) || 22)}
-                        className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </div>
-                  </div>
-                </MacCard>
-
-                {/* 인증 + 실행 옵션 */}
-                <MacCard title="인증 · 실행" className="space-y-4">
-                  <div>
-                    <p id={f('auth')} className="block text-sm text-muted-foreground mb-1">인증 방식</p>
-                    <div className="flex items-center bg-secondary/60 rounded-xl p-[3px] gap-px" role="group" aria-labelledby={f('auth')}>
-                      {(['password', 'key'] as const).map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          aria-pressed={authMode === m}
-                          onClick={() => setAuthMode(m)}
-                          className={`flex-1 px-2 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                            authMode === m ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          {m === 'password' ? '비밀번호' : '개인키'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {authMode === 'password' ? (
-                    <div>
-                      <label htmlFor={f('pw')} className="block text-sm text-muted-foreground mb-1">SSH 비밀번호</label>
-                      <input
-                        id={f('pw')}
-                        type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                        autoComplete="off"
-                        className="w-full px-3 py-2 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label htmlFor={f('pkey')} className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
-                        <Key className="w-3 h-3" aria-hidden="true" /> 개인키(PEM)
-                      </label>
-                      <textarea
-                        id={f('pkey')}
-                        value={privateKey} onChange={(e) => setPrivateKey(e.target.value)}
-                        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" rows={4}
-                        className="w-full px-3 py-2 text-xs font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label htmlFor={f('initcmd')} className="block text-sm text-muted-foreground mb-1">
-                      접속 후 실행 <span className="text-xs text-muted-foreground">(선택 — 셸에 한 줄로 입력됩니다)</span>
-                    </label>
-                    <input
-                      id={f('initcmd')}
-                      type="text" value={initialCommand} onChange={(e) => setInitialCommand(e.target.value)}
-                      placeholder="예: sudo -i · cd /var/log · journalctl -u kubelet -f"
-                      className="w-full px-3 py-2 text-sm font-mono bg-background border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => requestConnect('inline')}
-                      disabled={!canConnect || !canOperate}
-                      title={withHint('이 화면의 플로팅 창으로 SSH 연결')}
-                      aria-label={ariaWithHint('연결')}
-                      className="flex-1 px-3 py-2 text-sm font-medium rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1.5"
-                    >
-                      <Play className="w-4 h-4" /> 연결
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => requestConnect('popout')}
-                      disabled={!canConnect || !canOperate}
-                      title={withHint('별도 브라우저 창으로 열기 — 메인 화면에서 다른 페이지로 이동하며 함께 사용')}
-                      aria-label={ariaWithHint('새 창으로 열기')}
-                      className="px-3 py-2 text-sm font-medium rounded-xl border border-border text-foreground hover:bg-secondary disabled:opacity-50 flex items-center justify-center gap-1.5"
-                    >
-                      <ExternalLink className="w-4 h-4" /> 새 창으로 열기
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => testM.mutate()}
-                      disabled={!canConnect || !canOperate || testM.isPending}
-                      title={withHint('터미널을 열지 않고 호스트/자격증명만 확인')}
-                      aria-label={ariaWithHint('연결 테스트')}
-                      className="px-3 py-2 text-sm font-medium rounded-xl border border-border text-foreground hover:bg-secondary disabled:opacity-50 flex items-center justify-center gap-1.5"
-                    >
-                      {testM.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />}
-                      테스트
-                    </button>
-                  </div>
-
-                  {testMeta && TestIcon && testM.data && (
-                    <p className="flex items-center gap-2 flex-wrap">
-                      <span className={`inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full border font-medium ${testMeta.cls}`}>
-                        <TestIcon className="w-3 h-3" /> {testMeta.label}
+          {/* 분할 칸 — 세션은 다른 쪽에 있어도 마운트한 채 숨긴다(연결 유지). */}
+          <div className="grid grid-cols-2 grid-rows-2 gap-2 h-[calc(100vh_-_16rem)] min-h-[520px]">
+            {sessions.map((s) => {
+              const visible = isVisible(s);
+              const pos = slotPosition(s.slot);
+              const status = statuses[s.id];
+              const cluster = clusterOf(s.target);
+              return (
+                <div
+                  key={s.id}
+                  className={`min-w-0 min-h-0 ${!visible ? 'hidden' : single ? 'col-span-2 row-span-2 col-start-1 row-start-1' : CELL_CLASS[pos.cell]}`}
+                >
+                  <NodeSshTerminal
+                    params={s.params}
+                    embedded
+                    active={activeId === s.id}
+                    onActivate={() => setActiveId(s.id)}
+                    badge={(
+                      <span className={`text-xs font-bold px-1.5 py-px rounded shrink-0 ${activeId === s.id ? 'bg-primary text-primary-foreground' : 'bg-zinc-700 text-zinc-200'}`}>
+                        {slotLabel(s.slot)}
                       </span>
-                      <span className="text-xs font-mono text-muted-foreground">
-                        {testM.data.host} · {testM.data.durationMs}ms
-                      </span>
-                      {testM.data.error && <span className="text-xs text-status-critical">{testM.data.error}</span>}
-                    </p>
-                  )}
-                  {testM.isError && (
-                    <p className="text-xs text-status-critical">테스트 실패: {formatApiError(testM.error)}</p>
-                  )}
+                    )}
+                    contextLabel={cluster ? `${cluster.name}${guardedOf(s.target) ? ` · ${levelLabel(levels, cluster.operationLevel)}` : ''}` : s.target.clusterName}
+                    controlRef={controlRef(s.id)}
+                    headerActions={(
+                      <SshFavoritesMenu
+                        favorites={favorites}
+                        loading={favoritesQ.isLoading}
+                        onPick={pickFavorite(s.id)}
+                        onEdit={() => setFavDialogOpen(true)}
+                        broadcast={broadcast}
+                        onBroadcastChange={setBroadcast}
+                        disabled={status !== 'open'}
+                      />
+                    )}
+                    toolbar={<SshFavoritesChips favorites={favorites} onPick={pickFavorite(s.id)} disabled={status !== 'open'} />}
+                    onToggleMaximize={sessions.length > 1 ? () => setMaximizedId((m) => (m === s.id ? null : s.id)) : undefined}
+                    maximized={maximizedId === s.id}
+                    onEvent={onEvent(s)}
+                    onStatusChange={(st) => setStatuses((prev) => (prev[s.id] === st ? prev : { ...prev, [s.id]: st }))}
+                    onPopOut={() => popOut(s)}
+                    onClose={() => closeSession(s.id)}
+                  />
+                </div>
+              );
+            })}
 
-                  {!canOperate ? (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <ShieldAlert className="w-3 h-3" aria-hidden="true" /> {hint}
-                    </p>
-                  ) : !canConnect && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <ShieldAlert className="w-3 h-3" aria-hidden="true" /> 노드(또는 호스트)와 {authMode === 'password' ? '비밀번호' : '개인키'}를 입력하세요.
-                    </p>
-                  )}
-                  {popoutNotice}
-                </MacCard>
+            {sessions.length === 0 && (
+              <div className="col-span-2 row-span-2 rounded-md border border-dashed border-border flex items-center justify-center">
+                <EmptyState
+                  icon={TerminalSquare}
+                  title="열린 SSH 세션이 없습니다"
+                  description="위 「대상 노드」에서 노드를 고르고(다른 클러스터 노드도 됩니다) 비밀번호를 넣은 뒤 연결하세요. 세션은 Ⅰ → Ⅳ → Ⅱ → Ⅲ 칸 순서로 열리고, 4개가 넘으면 다음 쪽에 열립니다."
+                />
               </div>
-            </>
+            )}
+
+            {sessions.length > 1 && !maximizedId && [0, 1, 2, 3].map((cell) => (
+              used.has(slotForCell(page, cell)) ? null : (
+                <div key={`empty-${cell}`} className={`${CELL_CLASS[cell]} min-h-0 rounded-md border border-dashed border-border flex items-center justify-center`}>
+                  <EmptyState compact icon={TerminalSquare} title={`${quadrantOfCell(cell)} 비어 있음`} description="다음 연결이 이 칸에 열립니다." />
+                </div>
+              )
+            ))}
+          </div>
+
+          {!roleOk && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <ShieldAlert className="w-3 h-3" aria-hidden="true" /> {roleHint}
+            </p>
           )}
         </div>
       </PageShell>
 
+      <SshFavoritesDialog open={favDialogOpen} favorites={favorites} onClose={() => setFavDialogOpen(false)} />
+
       <ConfirmDialog
         open={pendingConnect !== null}
         title="보호 레벨 클러스터에 접속"
-        description="이 클러스터는 보호 레벨입니다. 접속 대상과 계정을 확인한 뒤 연결하세요."
-        confirmLabel={pendingConnect === 'popout' ? '새 창으로 연결' : '연결'}
+        description="보호 레벨 클러스터의 노드가 들어 있습니다. 접속 대상과 계정을 확인한 뒤 연결하세요."
+        confirmLabel={`${pendingConnect?.length ?? 0}개 연결`}
         onCancel={() => setPendingConnect(null)}
         onConfirm={() => {
-          const mode = pendingConnect;
+          const targets = pendingConnect;
           setPendingConnect(null);
-          if (mode) doConnect(mode);
+          if (targets) doConnect(targets);
         }}
       >
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-          <dt className="text-muted-foreground">클러스터</dt>
-          <dd className="text-foreground">{cluster?.name ?? clusterId} · {levelText}</dd>
-          <dt className="text-muted-foreground">대상</dt>
-          <dd className="font-mono text-foreground break-all">
-            {username}@{effectiveHost}:{port}{effectiveNodeName ? ` (${effectiveNodeName})` : ' (직접 입력)'}
-          </dd>
-          <dt className="text-muted-foreground">인증</dt>
-          <dd className="text-foreground">{authMode === 'password' ? '비밀번호' : '개인키'}</dd>
-          {initialCommand.trim() && (
-            <>
-              <dt className="text-muted-foreground">접속 후 실행</dt>
-              <dd className="font-mono text-foreground break-all">{initialCommand.trim()}</dd>
-            </>
-          )}
-          <dt className="text-muted-foreground">읽기 전용</dt>
-          <dd className="text-foreground">해당 없음 — 로그인 셸은 계정 권한 그대로 동작합니다</dd>
-        </dl>
+        <ul className="text-sm flex flex-col gap-1 max-h-60 overflow-y-auto">
+          {(pendingConnect ?? []).map((t) => {
+            const c = clusterOf(t);
+            return (
+              <li key={t.key} className="font-mono break-all">
+                {username}@{t.host}:{port} <span className="font-sans text-muted-foreground">
+                  · {targetLabel(t)} · {c?.name ?? t.clusterName}{guardedOf(t) ? ` · ${levelLabel(levels, c?.operationLevel)}` : ''}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-2 text-xs text-muted-foreground">로그인 셸은 계정 권한 그대로 동작합니다(읽기 전용 없음).</p>
       </ConfirmDialog>
 
       <ConfirmDialog
-        open={pendingCluster !== null}
+        open={pendingFav !== null}
         danger
-        title="클러스터 전환"
-        description={session
-          ? `연결된 SSH 세션을 끊습니다 — ${session.username}@${session.host}:${session.port}. 실행 중인 원격 작업이 함께 종료됩니다.`
-          : undefined}
-        confirmLabel="세션 끊고 전환"
-        onCancel={() => setPendingCluster(null)}
+        title="변경 명령 실행"
+        description={pendingFav ? `「${pendingFav.fav.name}」은(는) 조회 명령이 아닙니다 — ${judgeCommand(pendingFav.fav.command, 'shell').reason ?? '노드 상태를 바꿀 수 있습니다'}. ${pendingFav.sessionIds.length}개 창에서 바로 실행합니다.` : undefined}
+        confirmLabel="실행"
+        onCancel={() => setPendingFav(null)}
         onConfirm={() => {
-          const next = pendingCluster;
-          setPendingCluster(null);
-          if (next) changeCluster(next.id);
+          const p = pendingFav;
+          setPendingFav(null);
+          if (p) deliver(p.fav, p.data, p.sessionIds);
         }}
-      />
+      >
+        {pendingFav && <pre className="text-xs font-mono whitespace-pre-wrap break-all bg-secondary rounded-md p-2">{pendingFav.fav.command}</pre>}
+      </ConfirmDialog>
+
     </div>
   );
 }
+

@@ -32,7 +32,7 @@ export const en: TranslationResource = {
       clusterManage: 'Cluster Management',
       versions: 'Versions / Config',
       bulkExec: 'Bulk Node Exec',
-      nodeSsh: 'Node SSH Terminal',
+      nodeSsh: 'SSH',
       etcdctl: 'etcdctl Console',
       batchJobs: 'Batch Jobs',
       mc: 'mc Client',

@@ -670,7 +670,10 @@ Cilium BPF Trace `/cilium-trace` · NFS 모니터링(Isilon) `/isilon-nfs`
 돌아오는 게 아니라 대화형 tty 라 위 1~3 항목(좌/우 로우, `ExecOutputTabs`, `LogViewer`)이 적용되지 않는다.
 대신 **공용 `SshTerminalWindow`**(`components/k8s/SshTerminalWindow.tsx`)를 쓴다 — xterm.js ↔ WebSocket 브리지,
 드래그 이동 플로팅 창 + 우하단 리사이즈, 헤더의 재연결/새 창으로 빼기/전체화면/종료, `lib/terminalPopout.ts`
-기반 별도 창 handoff, **Ctrl+C 복사 / Ctrl+V 붙여넣기**(`lib/terminalClipboard.ts`)가 여기 다 들어있다. 화면은 접속 폼(`ClusterSidebar iconOnly` + `MacCard`)과 init 프레임만
+기반 별도 창 handoff, **Ctrl+C 복사 / Ctrl+V 붙여넣기**(`lib/terminalClipboard.ts`)가 여기 다 들어있다.
+**`embedded` 모드**(SSH 멀티 분할, 2026-11-24): 플로팅·드래그·창 전체화면 대신 부모 칸을 채우고(`rounded-md`, 입력 대상 칸은
+`ring-primary`), 헤더에 `badge`(칸 표기)·`headerActions`(즐겨찾기 ★ 메뉴)·`toolbar`(칩 바) 슬롯, ⤢ 는 `onToggleMaximize`(이 칸만 크게),
+바깥 입력은 `controlRef`(`SshTerminalControl.send`). 칸 안 메뉴는 칸이 `overflow-hidden` 이라 body 포털 + 고정 좌표(좌표만 인라인 style). 화면은 접속 폼(`ClusterSidebar iconOnly` + `MacCard`)과 init 프레임만
 만든다. 4·5 항목은 그대로 지킨다 — `useTerminalEnvSync` 호출(터미널 색/글꼴이 `useXtermTheme` 로 xterm 에도
 적용된다), 연결 테스트 결과는 `STATUS_META` 배지. 새 SSH 터미널 화면을 xterm 부터 직접 붙이는 코드는 금지.
 

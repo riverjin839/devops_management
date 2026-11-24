@@ -37,7 +37,7 @@ export const ko = {
       clusterManage: '클러스터 관리',
       versions: '버전 / 설정',
       bulkExec: '노드 일괄 실행',
-      nodeSsh: '노드 SSH 터미널',
+      nodeSsh: 'SSH',
       etcdctl: 'etcdctl 콘솔',
       batchJobs: '배치잡',
       mc: 'mc 클라이언트',

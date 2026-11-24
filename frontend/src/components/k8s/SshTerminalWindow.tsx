@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import { RotateCw, X, Maximize2, Minimize2, ExternalLink, Clipboard, Timer } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -24,6 +24,13 @@ export interface SshTerminalEvent {
   reconnect?: boolean;
   /** 연결 단계 칩(웹소켓 → SSH 인증) 갱신. */
   steps?: Array<{ name: string; label: string; status: 'running' | 'done' | 'failed' }>;
+}
+
+/** 바깥(즐겨찾기 명령 등)에서 터미널로 입력을 보내는 핸들 — `controlRef` 로 받는다. */
+export interface SshTerminalControl {
+  /** 열린 세션이면 stdin 으로 보내고 true, 아니면 false. */
+  send: (data: string) => boolean;
+  focus: () => void;
 }
 
 export interface SshTerminalWindowProps {
@@ -62,6 +69,22 @@ export interface SshTerminalWindowProps {
   contextWarn?: boolean;
   /** 서버 세션 상한(초) — `services/ssh_pty.py` `MAX_SESSION_SECONDS` 와 같다. 연장은 없다. */
   maxSessionSeconds?: number;
+  /** 화면 안 분할 칸에 붙는다 — 부모 크기를 채우고 드래그·창 전체화면이 없다(SSH 멀티 콘솔). */
+  embedded?: boolean;
+  /** 헤더 맨 앞 표식(예: 분면 번호). */
+  badge?: ReactNode;
+  /** 헤더 오른쪽 버튼들 앞에 붙는 화면별 컨트롤(예: 즐겨찾기 메뉴). */
+  headerActions?: ReactNode;
+  /** 헤더 아래 한 줄(예: 즐겨찾기 칩 바). */
+  toolbar?: ReactNode;
+  /** embedded 에서 ⤢ 버튼 — 이 칸만 크게 보기 토글. */
+  onToggleMaximize?: () => void;
+  maximized?: boolean;
+  /** embedded 에서 지금 입력 대상인 칸이면 강조. */
+  active?: boolean;
+  /** 칸을 누르면 — 화면이 입력 대상 칸을 바꾼다. */
+  onActivate?: () => void;
+  controlRef?: MutableRefObject<SshTerminalControl | null>;
 }
 
 /** 서버 PTY 세션 상한(1시간, 정책 9) — 마지막 5분은 경고한다. */
@@ -110,6 +133,7 @@ export function SshTerminalWindow({
   label, labelClassName = '', subtitle, target, url, init,
   onClose, onPopOut, fill, closeNotes, onStatusChange, onEvent, contextLabel, contextWarn,
   maxSessionSeconds = SSH_SESSION_MAX_SECONDS,
+  embedded, badge, headerActions, toolbar, onToggleMaximize, maximized, active, onActivate, controlRef,
 }: SshTerminalWindowProps) {
   const [status, setStatus] = useState<SshTerminalStatus>('connecting');
   // 세션 시작 시각(WS open) — 서버 상한까지 남은 시간을 헤더에 보여준다(D-177).
@@ -308,6 +332,21 @@ export function SshTerminalWindow({
     sendResize();
   }, [appearance, sendResize]);
 
+  // 바깥에서 입력을 보내는 핸들 — 즐겨찾기 명령이 이 칸 터미널에 그대로 타이핑한 것처럼 보낸다.
+  useEffect(() => {
+    if (!controlRef) return;
+    controlRef.current = {
+      send: (data: string) => {
+        const ws = wsRef.current;
+        if (ws?.readyState !== WebSocket.OPEN) return false;
+        ws.send(JSON.stringify({ type: 'stdin', data }));
+        return true;
+      },
+      focus: () => termRef.current?.focus(),
+    };
+    return () => { controlRef.current = null; };
+  }, [controlRef]);
+
   // 최초 + url 변경 시 (재)연결
   useEffect(() => {
     connect();
@@ -367,14 +406,14 @@ export function SshTerminalWindow({
   useEffect(() => {
     const id = setTimeout(() => { fitRef.current?.fit(); sendResize(); }, 60);
     return () => clearTimeout(id);
-  }, [fullscreen, sendResize]);
+  }, [fullscreen, maximized, sendResize]);
 
   // 터미널 크롬(zinc)은 테마와 무관한 고정 다크 — 상태는 정상 중립, 오류만 강조.
   const statusColor = status === 'error' ? 'text-status-critical' : 'text-zinc-400';
   const clipboardHint = clipboardHintText();
 
   // 기본(인라인) 모드는 드래그로 이동 가능한 플로팅 창 — 헤더가 드래그 핸들이다.
-  const floating = !fill && !fullscreen;
+  const floating = !fill && !fullscreen && !embedded;
 
   const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!floating) return;
@@ -396,7 +435,11 @@ export function SshTerminalWindow({
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
   };
 
-  const rootClass = fill
+  const rootClass = embedded
+    ? `bg-zinc-900 text-zinc-100 rounded-md border flex flex-col overflow-hidden h-full w-full min-h-0 min-w-0 ${
+      active ? 'border-primary ring-2 ring-primary' : 'border-zinc-700'
+    }`
+    : fill
     ? 'bg-zinc-900 text-zinc-100 flex flex-col h-screen w-screen'
     : fullscreen
       ? 'fixed inset-0 z-50 bg-zinc-900 flex flex-col'
@@ -410,6 +453,7 @@ export function SshTerminalWindow({
       className={rootClass}
       // 좌표만 동적(드래그) — 크기는 클래스, 사용자가 우하단으로 바꾼 크기는 브라우저가 유지한다.
       style={floating ? { left: pos.x, top: pos.y } : undefined}
+      onPointerDownCapture={onActivate}
     >
       <div
         onPointerDown={onHeaderPointerDown}
@@ -417,11 +461,12 @@ export function SshTerminalWindow({
         onPointerUp={onHeaderPointerUp}
         onPointerCancel={onHeaderPointerUp}
         title={floating ? '드래그해서 창 이동' : undefined}
-        className={`flex items-center gap-2 px-4 py-2.5 border-b border-zinc-700 bg-zinc-800 text-zinc-100 ${
+        className={`flex items-center gap-2 ${embedded ? 'px-3 py-1.5' : 'px-4 py-2.5'} border-b border-zinc-700 bg-zinc-800 text-zinc-100 min-w-0 ${
           floating ? 'cursor-move select-none touch-none' : ''
         }`}
       >
-        <span className={`text-sm font-semibold ${labelClassName}`}>{label}</span>
+        {badge}
+        <span className={`text-sm font-semibold shrink-0 ${labelClassName}`}>{label}</span>
         {contextLabel && (
           <span
             className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
@@ -449,11 +494,16 @@ export function SshTerminalWindow({
         )}
         {/* 복사/붙여넣기 단축키는 발견되기 어려워(터미널마다 규칙이 달라서) 헤더에 노출한다.
             좁은 창에서는 숨기고 아이콘 title 로만 남긴다. */}
-        <span className="ml-auto hidden xl:inline text-xs text-zinc-500 truncate" title={clipboardHint}>
-          <Clipboard className="w-3 h-3 inline-block mr-1 -mt-px" />{clipboardHint}
-        </span>
-        <button type="button" onClick={requestReconnect} title="재연결" aria-label="재연결"
-          className="xl:ml-2 ml-auto p-1 rounded hover:bg-zinc-700 text-zinc-400">
+        {embedded ? (
+          <span className="ml-auto" />
+        ) : (
+          <span className="ml-auto hidden xl:inline text-xs text-zinc-500 truncate" title={clipboardHint}>
+            <Clipboard className="w-3 h-3 inline-block mr-1 -mt-px" />{clipboardHint}
+          </span>
+        )}
+        {headerActions}
+        <button type="button" onClick={requestReconnect} title="재연결" aria-label={`재연결 — ${targetLabel}`}
+          className={`${embedded ? '' : 'xl:ml-2 ml-auto'} p-1 rounded hover:bg-zinc-700 text-zinc-400`}>
           <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
         </button>
         {onPopOut && !fill && (
@@ -462,7 +512,14 @@ export function SshTerminalWindow({
             <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         )}
-        {!fill && (
+        {embedded && onToggleMaximize && (
+          <button type="button" onClick={onToggleMaximize} title={maximized ? '분할 보기로' : '이 칸만 크게'}
+            aria-label={`${maximized ? '분할 보기로' : '이 칸만 크게'} — ${targetLabel}`}
+            className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
+            {maximized ? <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" /> : <Maximize2 className="w-3.5 h-3.5" aria-hidden="true" />}
+          </button>
+        )}
+        {!fill && !embedded && (
           <button type="button" onClick={() => setFullscreen((v) => !v)} title={fullscreen ? '전체화면 해제' : '전체화면'}
             aria-label={fullscreen ? '전체화면 해제' : '전체화면'}
             className="p-1 rounded hover:bg-zinc-700 text-zinc-400">
@@ -474,6 +531,7 @@ export function SshTerminalWindow({
           <X className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
+      {toolbar}
       <div ref={mountRef} className="flex-1 min-h-0 p-2 [&_.xterm]:h-full" />
       <ConfirmDialog
         open={confirmReconnect}

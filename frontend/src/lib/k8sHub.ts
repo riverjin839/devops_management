@@ -17,6 +17,8 @@ export interface K8sHubEmbed {
   clusterId: string;
   /** 허브 레일에서 클러스터를 바꾼다 — 현재 뷰·쿼리를 유지한 채 URL 만 바꾼다. */
   selectCluster: (id: string | null) => void;
+  /** 허브 2행 탭(화면 세그먼트) 바로 옆 자리 — 화면이 `createPortal` 로 컨트롤을 꽂는다(SSH 대상 노드 선택). */
+  toolbarSlot: HTMLElement | null;
 }
 
 export const K8sHubContext = createContext<K8sHubEmbed | null>(null);

@@ -55,7 +55,7 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/cluster-manage':     { labelKey: 'clusterManage', defaultLabel: '클러스터 관리',  icon: Server },
   '/versions':           { labelKey: 'versions', defaultLabel: '버전 / 설정',     icon: Tag },
   '/bulk-exec':          { labelKey: 'bulkExec', defaultLabel: '노드 일괄 실행', icon: Terminal },
-  '/node-ssh':           { labelKey: 'nodeSsh', defaultLabel: '노드 SSH 터미널', icon: TerminalSquare },
+  '/node-ssh':           { labelKey: 'nodeSsh', defaultLabel: 'SSH', icon: TerminalSquare },
   '/etcdctl':            { labelKey: 'etcdctl', defaultLabel: 'etcdctl 콘솔',   icon: Database },
   '/batch-jobs':         { labelKey: 'batchJobs', defaultLabel: '배치잡',          icon: ListTree },
   '/mc':                 { labelKey: 'mc', defaultLabel: 'mc 클라이언트',  icon: Archive },
