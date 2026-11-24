@@ -21,6 +21,7 @@ export const en: TranslationResource = {
       dailyCheckReview: 'Check Results Review',
       dailyCheckSettings: 'Check Items',
       lakeServices: 'LAKE Services',
+      commonServices: 'Common Services',
       podBottleneck: 'Pod Bottleneck Diagnosis',
       docs: 'Knowledge Hub',
       playbooks: 'Playbooks',
@@ -196,6 +197,9 @@ export const en: TranslationResource = {
       readOnly: 'Read',
       openHub: 'Open cluster hub',
       register: 'Register cluster',
+      abnormalOnly: 'Only {{count}} unhealthy',
+      showAll: 'Show all {{count}}',
+      switch: 'Switch cluster',
     },
   },
   home: {

@@ -8,10 +8,35 @@
 
 ## [Unreleased]
 
-1.103.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.106.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Removed
 - **K8S 클러스터 허브 — 구성 ▸ 「버전 / 설정」 화면 삭제**: 서비스 구성이 같은 수집(K8S API·SSH)과 현재 값 보기를 대체해 옛 화면을 지웠다. 컴포넌트 전체 이력·두 스냅샷 비교·CSV 내보내기·3D 관계 그래프(`/versions/:id/graph`)·MinIO 수집 버튼도 함께 없어졌다. 옛 주소(`/versions`, `/versions/:id/graph`, `/k8s/:id/versions`)는 서비스 구성으로 이동한다. Backend: 수집 API(`routers/versions.py` `collect-*`)는 서비스 구성·점검(인증서 만료·etcd defrag)이 계속 써서 유지. Frontend: `VersionsPage`·`VersionGraphPage`·`CsvExportModal` 삭제, 허브 `RETIRED_HUB_VIEWS` 로 옛 뷰 id 연결.
+
+## [1.106.0] - 2026-11-24
+
+### Changed
+- **서비스 구성 — 수치형 설정 막대 그래프·끌어서 값 변경**: 정수·크기 항목은 VALUE 칸에 설정 값·노드 현재 값·기본값을 위아래 막대로 비교하고(수치는 오른쪽, 노드마다 다르면 값별 막대·경고색), 설정 막대를 끌거나 키보드(←/→·PgUp/PgDn·Home/End)로 값을 바꾼다. 눈금은 값에 맞춰 잡히고 끝까지 끌면 늘어나며, swappiness·imageGC %·maxPods·CIDR 마스크 등은 정해진 범위 안에서만 움직인다(항목 `min_value`/`max_value`, DB 행). Frontend: `NumericBars`. Backend: `service_config_items.min_value`·`max_value`(+ 시드 범위).
+
+## [1.105.0] - 2026-11-24
+
+### Added
+- **공통 서비스(`/common-services`) — 1단계: 등록 · 설정값 가져오기 · 변경 감지 · 실행 로그**: 여러 K8S 클러스터가 함께 쓰는 LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS 를 인스턴스로 등록한다(등록 클러스터 안 워크로드는 「K8S 에서 가져오기」, 일반 노드 Podman 컨테이너는 SSH, 클러스터 밖은 주소 직접 입력, 사용 클러스터 지정). 「지금 수집」·「접속 테스트」는 실시간 실행 로그(로그 보기 토글)로 배포 설정(워크로드 spec·env·ConfigMap / podman inspect)과 앱 설정(Keycloak realm·클라이언트·IdP, Jenkins 시스템·플러그인·JCasC, ArgoCD ConfigMap·클러스터·저장소, Nexus 저장소·보안·nexus.properties, AD rootDSE·도메인 정책)을 읽고, 직전 값과 다르면 변경 이력·알람으로 남긴다. 주기 수집(기본 30분)·알람은 「감시 설정」(admin). 비밀처럼 보이는 값은 해시로만 저장해 변경만 감지한다. Backend: `routers/common_services.py`, `services/common_services/`, `models/common_service.py`(접속 정보는 암호화 저장·백업 마스킹), Celery `common-services-watch-dispatcher`. Frontend: `CommonServicesPage`, `components/common-services/`, 서비스 레일은 서비스 구성 레일 재사용.
+
+### Added
+
+- **NIC 클러스터별 판정 기준** — 클러스터마다 본딩 구성(bond0/bond1, bond0만, ens·eth0)과 속도가 달라 공통 기준 한 벌로는 오탐이 나던 문제. 설정 화면에 「이 클러스터 / 공통 기준」 탭을 두고, 이 클러스터에서 바꾼 항목만 재정의로 저장한다(나머지는 공통을 따름, 항목별 되돌리기·전체 지우기). "관측 값으로 채우기"가 보고된 구성에서 본딩 모드·해시·LACP·최소 속도를 제안하고 본딩이 없으면 본딩 기준을 비운다. 에이전트 수집 대상과 판정이 모두 클러스터 실효 기준을 따른다. Backend: `nic_watch/settings.py`(`nic_watch.cluster_overrides`, `merge_effective`), `learn.py`, `GET|PUT|DELETE /nic-watch/clusters/{id}/settings`·`/observed`·`/overrides`(감사 로그). Frontend: `NicSettingsDialog`.
+- **노드 에이전트 Rust 구현** — DaemonSet 에이전트(`node_param_agent`)를 정적 바이너리로 다시 구현하는 `agent-rs/` 크레이트 추가. sysctl 런타임·영구 설정 값, 서비스 설정 파일 해시/내용, 보고 루프를 Python 에이전트와 같은 환경 변수·보고 프로토콜로 처리한다(서버 무변경, `--dry-run` 출력이 Python 과 동일). NIC 상태 수집(본딩/LACP·링크·MTU·ring·offload·드롭 카운터, ethtool GET ioctl)도 같은 보고 계약으로 구현. 전용 이미지(`…/node-agent`, distroless·amd64/arm64)를 릴리스에서 빌드하고, 설치 매니페스트·`deploy/k8s/node-param-agent/` 가 이 이미지를 기본으로 쓴다(노드당 requests 48Mi → 8Mi). `agent_image` 를 backend 이미지로 둔 기존 설치는 Python 에이전트 방식으로 그대로 렌더된다. CI 에 `agent-rs` 잡(fmt·clippy·test·이미지 빌드) 추가. 서비스 구성 설정 파일(containerd·kubelet)과 sysctl.d 가 바뀌면 보고 주기를 기다리지 않고 inotify 로 바로 보고한다(대상 파일 이름만 깨우고 최소 5초 간격).
+
+## [1.104.0] - 2026-11-23
+
+### Changed
+- **K8S 클러스터 허브 — 클러스터 목록 중복 정리 · k9s·노드 SSH·노드 라벨 흡수**: 사이드바 K8S 클러스터 아이콘의 클러스터 목록과 허브 안 클러스터 레일이 동시에 보이던 것을 정리했다. 허브 레일을 없애고 클러스터 이름 옆 **「클러스터 전환」**으로 같은 목록을 연다. 목록 상단에 「비정상 N개만 보기」 토글이 생겼다. 콘솔 탭의 "터미널" 실행 카드는 **k9s**·**노드 SSH** 탭이 돼 허브 안에서 바로 접속하고, 노드 라벨은 툴바의 「이 클러스터 / 전체 클러스터」로 전체 클러스터를 한 표로 본다. 옛 `/k9s`·`/node-ssh`·`/node-labels` 주소는 허브 탭으로 연결되고 메뉴·즐겨찾기에서는 K8S 클러스터 하나로 합쳐진다(터미널 새 창은 그대로). Frontend: `HubClusterSwitcher`, `K8sClusterFlyoutBody` 비정상 필터, `HubTerminalsView` 삭제. Backend: `home_prefs.RETIRED_PATH_ALIASES` 에 세 경로 추가.
+
+## [1.103.1] - 2026-11-23
+
+### Changed
+- **로그 중심 화면은 실행 로그를 화면 안에 유지** — `/etcdctl`·`/bulk-exec`·`/mc`·`/cilium-trace`·`/kernel-params`·`/isilon-nfs` 처럼 로그가 화면 중심인 실행 화면(`RunLogPanel fill`)은 "실행 로그 표시" 설정이 새 창이어도 화면 안에 그대로 표시한다(이 화면들에선 창 전환 버튼도 숨김). 필요하면 로그 툴바의 "새 창으로 열기" 로 따로 띄울 수 있다.
 
 ## [1.103.0] - 2026-11-23
 

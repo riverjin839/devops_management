@@ -137,6 +137,12 @@ celery_app.conf.beat_schedule = {
         "task": "app.celery_app.dispatch_service_config_watch",
         "schedule": crontab(minute="*"),
     },
+    # 공통 서비스(LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS) 설정 변경 감지 — 감시 주기(AppSetting common_services.watch,
+    # 기본 30분)가 지난 인스턴스를 인스턴스별 태스크로 팬아웃 → 저장된 접속 정보로 수집·변경 이력·알람.
+    "common-services-watch-dispatcher": {
+        "task": "app.celery_app.dispatch_common_services_watch",
+        "schedule": crontab(minute="*"),
+    },
     # 노드 OS 파라미터 에이전트 무응답 감시 — 마지막 보고가 설정(offline_minutes)보다 오래된
     # 노드에 '에이전트 무응답' 알람(열려 있으면 그대로). 에이전트가 죽으면 변경을 감지할 수 없으므로.
     "node-param-agent-watchdog": {
@@ -1315,6 +1321,53 @@ def collect_service_config_watch_one(self, cluster_id: str):
     except Exception as e:  # noqa: BLE001
         db.rollback()
         logging.getLogger(__name__).exception("collect_service_config_watch_one failed %s: %s", cluster_id, e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.dispatch_common_services_watch", ignore_result=True)
+def dispatch_common_services_watch(self):
+    """공통 서비스 변경 감지 디스패처 — 감시 주기가 지난 인스턴스를 인스턴스별 태스크로 팬아웃."""
+    import logging
+    from datetime import datetime
+
+    from app.database import SessionLocal
+    from app.services.common_services import service as S
+
+    db = SessionLocal()
+    try:
+        due = S.due_instances(db, datetime.utcnow())
+        for inst in due:
+            # 다음 분 디스패치가 같은 인스턴스를 또 보내지 않게 시도 시각을 먼저 찍는다(결과는 수집이 덮어씀).
+            inst.last_collected_at = datetime.utcnow()
+        db.commit()
+        for inst in due:
+            collect_common_service_one.apply_async(args=[str(inst.id)], countdown=_dispatch_jitter())
+        return {"dispatched": [i.name for i in due]}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).exception("dispatch_common_services_watch failed: %s", e)
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="app.celery_app.collect_common_service_one", time_limit=300,
+                 soft_time_limit=270, ignore_result=True)
+def collect_common_service_one(self, instance_id: str):
+    """공통 서비스 인스턴스 1개 주기 수집(저장된 접속 정보) → 스냅샷·변경 이력·알람·실행 로그."""
+    import logging
+
+    from app.database import SessionLocal
+    from app.services.common_services import service as S
+
+    db = SessionLocal()
+    try:
+        return S.collect_scheduled(db, instance_id)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).exception("collect_common_service_one failed %s: %s", instance_id, e)
         return {"error": str(e)[:200]}
     finally:
         db.close()

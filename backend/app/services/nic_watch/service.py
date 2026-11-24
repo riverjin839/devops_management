@@ -14,7 +14,7 @@ from app.models.cluster import Cluster
 from app.models.node_nic import NodeNicState
 from app.models.node_param_watch import NodeParamAgent
 from app.services.nic_watch import analyze as A
-from app.services.nic_watch.settings import get_settings
+from app.services.nic_watch.settings import get_cluster_settings
 
 MIN_AGENT_VERSION = "1.2.0"
 HISTORY_SPACING = timedelta(minutes=5)
@@ -136,7 +136,8 @@ def _ver_tuple(v: Optional[str]) -> tuple[int, ...]:
 def cluster_view(db: Session, cluster: Cluster, now: Optional[datetime] = None) -> dict[str, Any]:
     """화면용 — 노드·인터페이스·경고·요약 + NIC 를 아직 보고하지 않는 에이전트(구버전·수집 꺼짐)."""
     now = now or datetime.utcnow()
-    cfg = get_settings(db)
+    cs = get_cluster_settings(db, cluster.id)  # 공통 기준 + 이 클러스터 재정의
+    cfg = cs["effective"]
     rows = db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).all()
     states = [{"node": r.node, "host_ip": r.host_ip, "agent_version": r.agent_version, "collected_at": r.collected_at,
                "received_at": r.received_at, "interfaces": r.interfaces or [], "errors": r.errors or [],
@@ -152,6 +153,7 @@ def cluster_view(db: Session, cluster: Cluster, now: Optional[datetime] = None) 
          for a in agents if a.node not in reported), key=lambda x: x["node"])
     out["agent_count"] = len(agents)
     out["settings"] = cfg
+    out["overridden"] = cs["overridden"]  # 이 클러스터가 공통과 다르게 정한 항목
     return out
 
 

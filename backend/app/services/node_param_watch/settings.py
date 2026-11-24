@@ -17,8 +17,9 @@ DEFAULTS: dict[str, Any] = {
     "interval_sec": 60,
     # 마지막 보고 뒤 이 시간(분)이 지나면 '에이전트 무응답' 알람. 0 = 끔.
     "offline_minutes": 10,
-    # 설치 매니페스트 기본값 — 폐쇄망이면 사내 레지스트리 경로로 바꾼다.
-    "agent_image": "ghcr.io/riverjin839/devops_management-backend:latest",
+    # 설치 매니페스트 기본값 — 폐쇄망이면 사내 레지스트리 경로로 바꾼다. 전용 Rust 에이전트 이미지(정적 바이너리).
+    # backend 이미지를 지정해 둔 기존 설치는 Python 에이전트 방식으로 렌더된다(manifest.is_python_agent_image).
+    "agent_image": "ghcr.io/riverjin839/devops_management/node-agent:latest",
     "agent_namespace": "k8s-monitor-agent",
     # 에이전트가 접속할 PEP API 주소(…/api/v1). 비우면 화면을 연 주소로 채운다.
     "ingest_base_url": "",

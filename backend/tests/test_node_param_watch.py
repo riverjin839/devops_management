@@ -175,6 +175,30 @@ def test_manifest_is_least_privilege():
         "/etc/containerd", "/var/lib/kubelet"}  # 서비스 구성 변경 감지용 설정 파일 디렉터리
 
 
+def test_manifest_rust_agent_image_has_no_command_and_small_footprint():
+    import yaml
+
+    text = render_manifest(cluster_id=str(CID), cluster_name="prod-a", api_base_url="https://pep/api/v1",
+                           image="ghcr.io/x/devops_management/node-agent:2.0.0", namespace="k8s-monitor-agent", tls_verify=True)
+    c = [d for d in yaml.safe_load_all(text) if d][2]["spec"]["template"]["spec"]["containers"][0]
+    assert "command" not in c  # ENTRYPOINT 가 바이너리
+    assert {e["name"] for e in c["env"]} == {"NODE_NAME", "HOST_IP", "HOST_ROOT"}
+    assert c["resources"]["requests"]["memory"] == "8Mi"
+    assert c["securityContext"]["readOnlyRootFilesystem"] is True
+
+
+@pytest.mark.parametrize("image,python", [
+    ("ghcr.io/riverjin839/devops_management-backend:latest", True),   # 예전 기본값 — Python 방식 유지
+    ("reg.local/pep/backend@sha256:abc", True),
+    ("ghcr.io/riverjin839/devops_management/node-agent:latest", False),
+    ("reg.local:5000/pep-node-agent:1.0", False),
+])
+def test_agent_image_runtime_detection(image, python):
+    from app.services.node_param_watch.manifest import is_python_agent_image
+
+    assert is_python_agent_image(image) is python
+
+
 # ── 보고 처리(실제 DB) ───────────────────────────────────────────────────────
 
 @pytest.fixture

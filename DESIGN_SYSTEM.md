@@ -614,7 +614,7 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 
 **K8s 클러스터 허브 임베드 — `lib/k8sHub.ts` (D-240):** per-cluster K8s 화면은 `/k8s/:clusterId/:view` 허브의 서브뷰로도 마운트된다.
 허브가 `K8sHubContext` 를 제공하면 ① `useClusterRouteParam()` 은 URL 을 건드리지 않고 허브의 `clusterId`/`selectCluster` 를 돌려주고
-② `ClusterSidebar` 는 null(레일은 허브가 하나만) ③ `PageShell` 은 `div` + 밀도 패딩 없음(허브의 `<main>` 안) ④ `PageHeader` 는 h2 + `back` 숨김
+② `ClusterSidebar` 는 null(허브는 레일을 그리지 않는다 — D-243 부터 클러스터 선택은 사이드바 "K8s 클러스터" flyout·헤더 「클러스터 전환」) ③ `PageShell` 은 `div` + 밀도 패딩 없음(허브의 `<main>` 안) ④ `PageHeader` 는 h2 + `back` 숨김
 이다(옛 `LogViewTabs` 는 허브 2행 탭이 대체해 삭제). 그래서 새 per-cluster 화면도 이 세 공용 요소와 `useClusterRouteParam` 만 쓰면 허브에 들어갈 수 있다 —
 클러스터를 `useState`/`?cluster=` 로 따로 들고 있으면 허브에서 허브의 선택을 따르지 못하므로(`K8sEventsPage` 는 `useK8sHub()` 로 보강), 신규 화면은 훅을 쓴다.
 허브 뷰는 path 세그먼트이고 뷰 내부 탭은 `useUrlParams` 쿼리라 키가 겹치지 않는다. 허브 탭바는 공용 `components/common/SegTabs` `mode="tabs"`.
@@ -687,7 +687,7 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
 | 영역 | 내용 | 규칙 |
 |---|---|---|
 | 좌 (320px, 제어) | 접히는 `대상·인증` 섹션 + 명령/옵션 입력 + **하단 고정 실행 바** | 입력은 이 한 열에 모은다. 자주 안 바꾸는 값(대상·인증·env·경로·시간 제한)은 접고 **요약 한 줄**(`root@10.0.0.1:22 · 비밀번호`)만 보인다. 실행 버튼은 스크롤과 무관하게 항상 보인다. |
-| 우 상단 (flex 3, **중심**) | 실행 로그 — `<RunLogPanel fill />` | 실행 전에도 같은 자리에 "대기" 상태로 존재. 줄이 쌓이면 맨 아래로 따라간다(`follow`). "로그 보기" 토글(`useLogPref`)은 유지(CLAUDE.md). |
+| 우 상단 (flex 3, **중심**) | 실행 로그 — `<RunLogPanel fill />` | 실행 전에도 같은 자리에 "대기" 상태로 존재. 줄이 쌓이면 맨 아래로 따라간다(`follow`). "로그 보기" 토글(`useLogPref`)은 유지(CLAUDE.md). 전역 "실행 로그 표시"가 새 창이어도 화면 안에 둔다(§12.9.1). |
 | 우 하단 (flex 2) | 결과 — 상태 배지 + exit/소요 + 실행된 명령 + `ExecOutputTabs` | 실행 전 플레이스홀더(`EmptyState compact`). 바깥에 `max-h` 를 또 걸지 않는다(스크롤 중첩 금지). |
 
 **동작 규칙**
@@ -844,7 +844,8 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 이 로그 본문을 우측 상단 새 창(`common/PopoutWindow` — 같은 React 트리 portal,
   `<head>` 스타일·`<html>` 테마 속성 복사·동기화)에 띄우고 화면 안에는 상태 줄과 "새 창" 버튼만 남긴다. 팝업 차단 시 화면 안으로 폴백(경고 줄),
   사용자가 창을 닫으면 다음 실행 시작 때 다시 연다. `LogViewer` 는 툴바 "새 창으로 열기"(`allowPopout`, 기본 true). 새 로그 패널도
-  표시 위치를 직접 정하지 말고 이 설정을 따른다. 설정 화면: Settings → 화면 UI 설정 → 실행 로그 표시(`components/settings/LogDisplaySetting.tsx`).
+  표시 위치를 직접 정하지 말고 이 설정을 따른다. **예외: 로그 중심 화면(`RunLogPanel fill`, §12.6.1)은 설정과 무관하게 항상 화면 안**
+  (창 전환 버튼 숨김, 툴바 "새 창으로 열기" 는 유지). 설정 화면: Settings → 화면 UI 설정 → 실행 로그 표시(`components/settings/LogDisplaySetting.tsx`).
 - **새 실행 버튼 체크리스트**: ① `useRunLog` + `useLogPref('<화면키>')` + `RunLogPanel` ② 동기=`runLogged`·SSE=`streamLogged`·큐잉=
   `pollIntoRunLog` ③ 대상(호스트·클러스터·항목)별 한 줄 + 합계 줄 ④ 실패 사유가 error 줄로 남는가(훅에 `onError` 가 없어도)
   ⑤ 자격증명·비밀값을 로그에 싣지 않는가 ⑥ 기존 결과 뷰(표·출력·타임라인)는 그대로인가.
@@ -989,6 +990,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 - **8 아이브로우**: `uppercase tracking-wide*` 는 쓰지 않는다(MacCard·Card 헤더 내장도 Phase 3 에서 제거 — 제목 슬롯에 데이터가 들어온다). 표 헤더(`th`)는 `text-xs font-medium text-muted-foreground`(대소문자 그대로).
 - **9 이모지 예외**: 사용자가 고르고 DB 에 저장하는 값은 데이터다 — `lib/clusterIcons.ts` 피커, `hooks/useOperationLevels.ts` 운영레벨 아이콘, 문서 템플릿·사용자 콘텐츠.
   UI 크롬·상태·카테고리 표시에 쓰인 이모지와 ⚠/✓/✗ 문자 접두는 lucide 아이콘 + 상태 토큰.
+- **동적 폭 막대**: 값에 따라 폭이 바뀌는 막대는 인라인 `style` 대신 SVG `<rect width>`(viewBox 고정 + `preserveAspectRatio="none"`, `fill-*` 토큰)로 그린다 — 레퍼런스 `components/service-config/NumericBars.tsx`.
 - **10 설명 문장은 툴팁**: "이 항목은 무엇이다·이렇게 동작한다" 같은 상시 설명 문장은 본문에 깔지 않고 `common/InfoHint`(ⓘ 아이콘 — 마우스오버·키보드 포커스 툴팁, `aria-label` 에 문장)로 둔다.
   본문에는 데이터(값·건수·상태·시각)와 결과·오류 문구만. 탭 설명은 `SegTabs` 옵션 3번째 요소(툴팁). 확인 대화상자 설명은 결정에 필요한 문장이라 본문 유지.
   레퍼런스: 서비스 구성(`pages/ServiceConfigPage.tsx`).

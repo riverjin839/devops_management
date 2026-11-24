@@ -231,6 +231,7 @@ All routers are imported from `app/routers/__init__.py` and mounted under `/api/
 | `daily-report-rollup` | 00:20 | 일일 리포트 NS 롤업 — 어제·그제 `k8s_ns_samples` 를 NS 일 단위(`k8s_ns_daily_reports`)로 재계산 + 보관 일수(AppSetting `daily_report.settings`) 밖 롤업 삭제 |
 | `node-param-agent-watchdog` | 5분 | 노드 OS 파라미터 에이전트 무응답 감시 — 마지막 보고가 AppSetting `node_param_watch.settings.offline_minutes`(기본 10분)를 넘긴 노드에 `NodeParamAgentOffline` 알람(열려 있으면 그대로, 다음 보고 때 닫힘) |
 | `service-config-watch-dispatcher` | 매분 | 서비스 구성 변경 감지 — AppSetting `service_config.watch`(기본 5분, 켜기/끄기) 주기가 지난 opt-in(설정 버전이 있는) 클러스터를 `collect_service_config_watch_one` 으로 팬아웃 → 정적 파드·cilium-config K8S API 수집 → `service_config_changes` 변경 이력 + `ServiceConfigChanged`/`ServiceConfigDrift` 알람(containerd·kubelet 파일은 노드 파라미터 에이전트가 보고) |
+| `common-services-watch-dispatcher` | 매분 | 공통 서비스(LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS) 변경 감지 — AppSetting `common_services.watch`(기본 30분, 켜기/끄기) 주기가 지난 `watch_enabled` 인스턴스를 `collect_common_service_one` 으로 팬아웃 → 저장된(암호화) 접속 정보로 배포·앱 설정 수집 → 스냅샷·`common_service_changes` 변경 이력·`CommonServiceConfigChanged`/`CommonServiceUnreachable` 알람 |
 | `external-services-dispatcher` | 매분 | 외부 서비스(도메인·IP:Port) 정기 수집 — AppSetting `external_services.settings.schedule_cron`(기본 매시) 평가 → `collect_external_services_one`(Service/Ingress 추출 + backend PTR 역조회, 노드 nslookup 결과 캐시는 유지) |
 
 태스크 성격별로 디스패처류(`run_check_matrix_dispatch`, `run_batch_job_dispatcher`,
@@ -375,7 +376,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `servicenow`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
-| 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `dc_inventory`(DC 인벤토리 — 랙·장비·케이블·IPAM, 일괄 등록), `service_categories`, `lake_services`, `lake_service_types`, `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks`, `scripts` |
+| 인프라/서비스 | `infra_nodes`, `management_servers`, `isilon_nfs`, `node_server_specs`, `dc_inventory`(DC 인벤토리 — 랙·장비·케이블·IPAM, 일괄 등록), `service_categories`, `lake_services`, `lake_service_types`, `common_services`(공통 서비스 — 여러 클러스터가 함께 쓰는 LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS 등록·설정 수집·변경 감지), `versions`, `cluster_custom_fields`, `batch_jobs`, `ansible_assets`, `playbooks`, `scripts` |
 
 ---
 
@@ -401,7 +402,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **DC 인벤토리**: `dc_inventory`(`DcSite`→`DcHall`→`DcRackRow`→`DcRack`, `DcDeviceType`/`DcDevice`, `DcInterface`, `DcCable`, `DcVrf`/`DcPrefix`/`DcIpAddress`/`DcAsn`, 토폴로지용 `DcZoneCluster`(구간 ↔ K8s 클러스터)·`DcLink`(패브릭 계층 논리 연결)·`DcCanvasPosition`(캔버스 좌표), `DcChangeLog` — 변경 1건=1행 append-only(`LOG_TABLES`, 무기한 보존)). **`dc_devices` 가 서버·스위치 신원·물리 위치의 단일 원본**이고 `node_server_specs.device_id`·`infra_nodes.device_id` 가 가리킨다. 쓰기는 반드시 `services/dc_inventory/crud.py` 경유(제약 검증 + 변경 이력이 같은 트랜잭션), 기존 화면과의 값 일치는 `services/dc_inventory/device_registry.py`. 설계·결정은 `docs/dc-inventory/DESIGN.md`
-- **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`
+- **인프라/서비스**: `infra_node`, `node_server_spec`, `management_server`, `isilon_server`, `service_entry`, `service_category`, `service_topology`, `topology_audit_log`, `lake_service`, `lake_service_type`, `cluster_item`, `cluster_custom_field`, `common_service`(`CommonServiceInstance` 호스팅 k8s|podman|external + 서비스별 `params` · `CommonServiceCredential` 접속 정보 — `secret` EncryptedText, 백업 기본 마스킹 · `CommonServiceLink` 사용 클러스터 · `CommonServiceSnapshot`/`CommonServiceChange`/`CommonServiceRun` — 로그성 400/400/365일)
 - **자원 효율화**: `k8s_efficiency`(`K8sNamespaceSample`/`K8sWorkloadSample` — Celery 수집 시계열(로그성, `LOG_TABLES`+`log_retention_service` 보존 400일/8일), `K8sRightsizeRecommendation`(컨테이너 request 축소 추천, 재생성 시 open→superseded), `K8sNamespacePolicy`(NS opt-in: auto_rightsize/quota_elastic/`custom_targets` CR 어댑터), `K8sEfficiencyRun`(수집·적용·롤백·쿼터 실행 로그 — steps/log_lines 단계별 커밋, 365일), `K8sNsDailyReport`(일일 리포트 NS 일 롤업 — 보관 일수는 AppSetting `daily_report.settings`)). 전역 기본값·수집 스케줄은 `AppSetting` `k8s_efficiency.policy_defaults` / `k8s_efficiency.schedule`
 - **NS 마이그레이션**: `ns_migration`(`NsMigrationProfile` — 소스/타깃·종류·치환 규칙 프리셋, `NsMigrationRun` — 계획/적용 실행 로그(steps·log_lines·리소스별 diff, 로그성 365일))
 - **외부 노출**: `external_service`(`ExternalServiceSnapshot` — 클러스터당 1행, 외부 엔드포인트 목록 + IP→도메인 `ptr_cache`. 공개 화면은 이 행만 읽는다 · `ExternalServiceChange` — 수집마다 직전 대비 새로 열림/사라짐 1건=1행, 로그성), `public_share`(`PublicShareLink` — 공개 화면 공유 링크, 토큰은 SHA-256 해시만)
@@ -531,7 +532,7 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
 3. **자격증명은 params 에 저장하지 않는다.** params 는 JSONB 이고 런북·실행 로그에 노출된다.
    SSH 등 인증이 필요한 수집은 기존 UI 흐름(요청 시에만 자격증명 사용, 미저장)으로
    스냅샷을 남기고, 체커는 그 스냅샷을 읽는다 (예: `etcd_defrag` 의 snapshot 경로가
-   `/versions` 화면이 수집한 `etcdctl_config:{host}` 를 읽는 구조).
+   점검 런북 패널·서비스 구성의 SSH 수집 모달이 남긴 `etcdctl_config:{host}` 를 읽는 구조).
 4. **가시화가 편집보다 먼저다.** 무슨 명령이 나가는지 화면에서 볼 수 없으면 편집은 무의미하다
    — 새 체커/실행 경로를 추가하면 `services/check_matrix_runbook.py` 의 명령 목록도 같은
    커밋에서 갱신한다(테스트가 전 타입 커버리지를 검사한다).

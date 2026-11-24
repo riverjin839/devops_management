@@ -13,7 +13,6 @@ import { SprintsPage } from '@/pages/SprintsPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ClusterLinksPage } from '@/pages/ClusterLinksPage';
-import { NodeLabelsPage } from '@/pages/NodeLabelsPage';
 import { NsMigrationPage } from '@/pages/NsMigrationPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
@@ -43,11 +42,10 @@ import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { AlertInboxPage } from '@/pages/AlertInboxPage';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { CheckItemDetailPage } from '@/pages/CheckItemDetailPage';
-import { K9sPage } from '@/pages/K9sPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
-import { NodeSshPage } from '@/pages/NodeSshPage';
 import { NodeSshPopupPage } from '@/pages/NodeSshPopupPage';
 import { LakeServicesPage } from '@/pages/LakeServicesPage';
+import { CommonServicesPage } from '@/pages/CommonServicesPage';
 import { LakeServiceDetailPage } from '@/pages/LakeServiceDetailPage';
 import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
@@ -176,8 +174,8 @@ function AppShell() {
                   아래 옛 경로들(/clusters·/k8s-manage·/k8s-allocation·/cluster-trends·/observability·/k8s-events·
                   /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/etcdctl·/kernel-params)은
                   해당 뷰로 redirect(클러스터·쿼리 보존). 3단계: /pod-bottleneck·/cilium-trace·/packet-flow·/ops-checks.
-                  /versions·/versions/:id/graph 는 화면을 지우고 서비스 구성 뷰로 redirect(서비스 구성이 대체).
-                  /node-labels(전체 클러스터 모드)·/k9s·/node-ssh(전체 높이 터미널)·/pod-bottleneck/:id(실행 상세)는 단독 유지. */}
+                  D-243: /node-labels·/k9s·/node-ssh 도 허브 뷰로. /pod-bottleneck/:id(실행 상세)·터미널 새 창(/k9s/popup·/node-ssh/popup)만 단독.
+                  /versions·/versions/:id/graph 는 화면을 지우고 서비스 구성 뷰로 redirect(서비스 구성이 대체). */}
               <Route path="/k8s" element={<K8sHubPage />} />
               <Route path="/k8s/:clusterId/:view?" element={<K8sHubPage />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
@@ -185,6 +183,8 @@ function AppShell() {
               {/* LAKE service monitoring (lake-service-monitoring PDCA) */}
               <Route path="/lake-services" element={<LakeServicesPage />} />
               <Route path="/lake-services/:id" element={<LakeServiceDetailPage />} />
+              {/* 공통 서비스 — 여러 클러스터가 함께 쓰는 LDAP AD·KEYCLOAK·JENKINS·ARGOCD·NEXUS 설정·변경 감지 */}
+              <Route path="/common-services" element={<CommonServicesPage />} />
 
               {/* Pod-to-pod bottleneck analyzer (pod-bottleneck-analyzer PDCA) */}
               <Route path="/pod-bottleneck" element={<RedirectToHub view="bottleneck" />} />
@@ -208,7 +208,7 @@ function AppShell() {
               <Route path="/jira-import" element={<JiraExcelImportPage />} />
               <Route path="/weekly-report" element={<WeeklyReportPage />} />
               <Route path="/links" element={<ClusterLinksPage />} />
-              <Route path="/node-labels" element={<NodeLabelsPage />} />
+              <Route path="/node-labels" element={<RedirectToHub view="node-labels" />} />
               <Route path="/k8s-rbac" element={<RedirectToHub view="rbac" />} />
               <Route path="/ns-migration" element={<NsMigrationPage />} />
               <Route path="/node-images" element={<RedirectToHub view="node-images" />} />
@@ -292,11 +292,11 @@ function AppShell() {
               <Route path="/k8s-allocation/:clusterId" element={<RedirectToHub view="allocation" />} />
               <Route path="/k8s-allocation" element={<RedirectToHub view="allocation" />} />
               {/* k9s 콘솔 — control-plane 서버 내장 k9s 를 SSH 로 웹 터미널 스트리밍 */}
-              <Route path="/k9s/:clusterId" element={<K9sPage />} />
-              <Route path="/k9s" element={<K9sPage />} />
+              <Route path="/k9s/:clusterId" element={<RedirectToHub view="k9s" />} />
+              <Route path="/k9s" element={<RedirectToHub view="k9s" />} />
               {/* 노드 SSH 터미널 — 개별 노드에 로그인 셸을 열어 웹 터미널로 스트리밍 */}
-              <Route path="/node-ssh/:clusterId" element={<NodeSshPage />} />
-              <Route path="/node-ssh" element={<NodeSshPage />} />
+              <Route path="/node-ssh/:clusterId" element={<RedirectToHub view="node-ssh" />} />
+              <Route path="/node-ssh" element={<RedirectToHub view="node-ssh" />} />
               <Route path="/cluster-trends/:clusterId" element={<RedirectToHub view="trends" />} />
               <Route path="/cluster-trends" element={<RedirectToHub view="trends" />} />
               <Route path="/docs" element={<KnowledgeHubPage />} />

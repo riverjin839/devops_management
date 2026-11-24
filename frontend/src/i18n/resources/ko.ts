@@ -26,6 +26,7 @@ export const ko = {
       dailyCheckReview: '점검 결과 리뷰',
       dailyCheckSettings: '점검 항목 관리',
       lakeServices: 'LAKE 서비스',
+      commonServices: '공통 서비스',
       podBottleneck: '파드 병목 진단',
       docs: '지식 허브 홈',
       playbooks: '플레이북',
@@ -206,6 +207,9 @@ export const ko = {
       readOnly: '읽기',
       openHub: '전체 클러스터 보기',
       register: '클러스터 등록',
+      abnormalOnly: '비정상 {{count}}개만 보기',
+      showAll: '전체 {{count}}개 보기',
+      switch: '클러스터 전환',
     },
   },
   home: {

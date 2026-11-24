@@ -44,10 +44,29 @@ def DEFAULT_CONFIG_DIRS_ORDER(d: str) -> tuple[int, str]:  # noqa: N802 — 정�
     return (DEFAULT_CONFIG_DIRS.index(d) if d in DEFAULT_CONFIG_DIRS else len(DEFAULT_CONFIG_DIRS), d)
 
 
+def is_python_agent_image(image: str) -> bool:
+    """이미지가 PEP backend 이미지(Python 에이전트, ``python -m app.node_param_agent``)인가.
+
+    전용 Rust 에이전트 이미지(``…/node-agent``)는 ENTRYPOINT 가 바이너리라 ``command`` 가 없다. 예전 설치가
+    ``agent_image`` 를 backend 이미지로 두고 있으면 그대로 Python 실행 방식으로 렌더해, 설정을 안 바꾼 곳이
+    backend 이미지를 command 없이(= uvicorn 으로) 띄우는 사고를 막는다. 이미지 이름에 ``backend`` 가 있으면 Python 이다.
+    """
+    name = image.split("@", 1)[0].rsplit("/", 1)[-1].split(":", 1)[0].lower()
+    return "backend" in name
+
+
 def render_manifest(*, cluster_id: str, cluster_name: str, api_base_url: str, image: str,
                     namespace: str, tls_verify: bool, config_dirs: list[str] | None = None) -> str:
     ns = _q(namespace)
     cfg_mounts, cfg_vols = _config_dir_volumes(DEFAULT_CONFIG_DIRS if config_dirs is None else config_dirs)
+    if is_python_agent_image(image):
+        command = '\n          command: ["python", "-m", "app.node_param_agent"]'
+        env_extra = '\n            - name: PYTHONDONTWRITEBYTECODE\n              value: "1"'
+        resources = "cpu: 10m\n              memory: 48Mi", "cpu: 100m\n              memory: 128Mi"
+    else:  # Rust 정적 바이너리 — ENTRYPOINT 가 에이전트라 command 없음, 상주 메모리가 한 자릿수 MiB
+        command, env_extra = "", ""
+        resources = "cpu: 5m\n              memory: 8Mi", "cpu: 100m\n              memory: 64Mi"
+    req, lim = resources
     return f"""# PEP 노드 OS 파라미터 에이전트 — 클러스터: {cluster_name}
 # 1) 아래 Secret 의 NODE_PARAM_INGEST_TOKEN 을 PEP backend 의 NODE_PARAM_INGEST_TOKEN 값으로 바꾼다.
 # 2) kubectl apply -f <이 파일>
@@ -103,8 +122,7 @@ spec:
       containers:
         - name: agent
           image: {_q(image)}
-          imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "app.node_param_agent"]
+          imagePullPolicy: IfNotPresent{command}
           env:
             - name: NODE_NAME
               valueFrom:
@@ -115,9 +133,7 @@ spec:
                 fieldRef:
                   fieldPath: status.hostIP
             - name: HOST_ROOT
-              value: /host
-            - name: PYTHONDONTWRITEBYTECODE
-              value: "1"
+              value: /host{env_extra}
           envFrom:
             - secretRef:
                 name: {SECRET_NAME}
@@ -128,11 +144,9 @@ spec:
               drop: ["ALL"]
           resources:
             requests:
-              cpu: 10m
-              memory: 48Mi
+              {req}
             limits:
-              cpu: 100m
-              memory: 128Mi
+              {lim}
           volumeMounts:
             - name: etc-sysctl-conf
               mountPath: /host/etc/sysctl.conf

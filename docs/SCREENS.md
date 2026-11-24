@@ -308,24 +308,26 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 > **레일 클러스터 목록(2026-11-23)**: 사이드바 레일의 K8s 클러스터 아이콘에 마우스를 올리거나 클릭하면 바로 이동하지 않고 오른쪽 flyout 에 **접근 권한이 있는 클러스터 목록**이 뜬다(`components/layout/K8sClusterFlyoutBody.tsx`, `Sidebar.tsx` 의 `k8sFlyoutAnchor`). 목록은 `useClusters()`(서버 `ClusterScope` 로 이미 거른 `GET /clusters`) — 운영 수준(`operationLevel`)으로 묶고, 상태 점은 정상이면 중립색·경고/위험만 상태색+글자, 사용자 지정 읽기 권한(`useMyClusterAccess` = `read`)은 "읽기" 배지, 7개 이상이면 검색창. 항목은 `/k8s/{id}/{현재 뷰}` 로 이동(허브 밖이면 기본 뷰), 하단에 "전체 클러스터 보기"(`/k8s`)·"클러스터 등록"(`/cluster-manage`, viewer 는 비활성+사유).
 
+> **클러스터 레일 제거 · 터미널·노드 라벨 흡수(2026-11-23, D-243)**: 사이드바 레일 "K8s 클러스터" flyout 에 클러스터 목록이 생기면서 허브 안 클러스터 레일(`ClusterSidebar`)과 목록이 두 군데 보이던 것을 정리했다 — 허브 레일을 없애고 h1 옆 **「클러스터 전환」**(`HubClusterSwitcher`, 같은 `K8sClusterFlyoutBody` 를 버튼 아래로 연다)을 두었다. 레일에만 있던 "비정상 N개만 보기"는 목록 상단 토글(`menuitemcheckbox`)로 옮겼고 ↑/↓ 이동은 flyout 메뉴 키보드가 대신한다. 콘솔 ▸ "터미널" 실행 카드(`HubTerminalsView`, 삭제)는 **k9s**·**노드 SSH** 두 뷰가 됐다(터미널은 화면 위에 뜨는 창이라 탭 안에서 동작, 옛 `terminals` 뷰 URL 은 `k9s` 로). 노드 라벨의 "전체 클러스터" 모드는 허브 뷰의 범위 토글(`?scope=all`)로 옮겼다. 그래서 `/node-labels`·`/k9s(/:id)`·`/node-ssh(/:id)` 도 허브 뷰로 redirect 되고 메뉴·팔레트·즐겨찾기에서 빠진다(`HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES`). 새 창(`/k9s/popup`·`/node-ssh/popup`)만 단독. 허브 안에서 클러스터를 바꾸면 뷰가 다시 마운트돼 열린 터미널 세션은 닫힌다.
+
 > **단축키(2026-11-04)**: `[` 이전 / `]` 다음 화면 — `useHubTabShortcuts`. 입력 요소 포커스·모달 열림·수정키 조합에서는 무시, 양 끝에서 순환하지 않는다.
 
-- **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx,HubTerminalsView.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
+- **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx,HubClusterSwitcher.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
 - **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·서비스 구성)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을, 3단계로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더하고 메뉴에 남아 있던 옛 화면을 정리했다 — 사이드바·커맨드 팔레트·즐겨찾기에는 이제 허브 하나만 보인다.
 - **UI 구성**:
-  - `ClusterSidebar iconOnly`(허브가 하나만 그린다 — 자체 스크롤, 운영등급별 묶음, 상단 "비정상 N개만 보기", 방향키 이동) + `PageHeader`(h1 = 클러스터명 + `StatusBadge`, 설명 = "K8s 클러스터 · 뷰 이름").
+  - `PageHeader`(h1 = 클러스터명 + `StatusBadge` + 「클러스터 전환」, 설명 = "K8s 클러스터 · 뷰 이름"). 클러스터 레일은 없다(D-243) — 클러스터는 사이드바 "K8s 클러스터" flyout 또는 「클러스터 전환」으로 고른다. 클러스터 목록 조회 실패는 본문 `ErrorState`(다시 시도).
   - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 점검: 점검 항목·결과 리뷰·OS 파라미터 감시, 진단: 파드 병목·Cilium·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·서비스 구성, 콘솔: etcdctl·커널 파라미터·터미널). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
   - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). 옛 `LogViewTabs`(파드 로그 ↔ AI 분석 전환)는 2행 탭이 대체해 3단계에서 지웠다.
-  - 뷰 id: `overview`(클러스터 상세) · `checks`(점검 항목 — 2026-11-23 개요에서 이동, D-242) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `etcdctl` · `kernel-params` · `terminals` · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
-  - **콘솔 ▸ 터미널**(`HubTerminalsView`) — k9s 콘솔·노드 SSH 터미널은 전체 높이 웹 터미널(xterm + WebSocket, 새 창 handoff)이라 임베드하지 않고, 카드의 "열기"가 단독 화면(`/k9s/:clusterId`·`/node-ssh/:clusterId`)을 허브가 고른 클러스터로 연다. 접근 제어로 꺼진 쪽은 카드가 빠지고(둘 다 꺼지면 탭도 빠짐 — `HubView.extraNavKeys`), viewer 는 숨기지 않고 비활성 + 사유.
-  - **노드 라벨 이중 진입** — 허브 뷰는 고른 클러스터 하나만 보고, 여러 클러스터를 한 표로 보는 "전체 클러스터" 모드는 단독 화면 `/node-labels`(구성·자산 그룹)에 그대로 남는다.
+  - 뷰 id: `overview`(클러스터 상세) · `checks`(점검 항목 — 2026-11-23 개요에서 이동, D-242) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `etcdctl` · `kernel-params` · `k9s` · `node-ssh`(D-243, 옛 `terminals` → `k9s`) · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
+  - **콘솔 ▸ k9s · 노드 SSH**(D-243) — 단독 화면이던 `K9sPage`·`NodeSshPage` 를 그대로 마운트한다(클러스터는 `useClusterRouteParam` 으로 허브 값). 터미널은 화면 위 창(`SshTerminalWindow`)·새 창 handoff 그대로. 접근 제어는 뷰별 navKey(`/k9s`·`/node-ssh`).
+  - **노드 라벨 범위 토글**(D-243) — 허브 노드 라벨 뷰 툴바의 「이 클러스터 / 전체 클러스터 N」(`SegTabs`, `?scope=all`). 옛 단독 화면 `/node-labels` 는 이 뷰로 redirect.
   - **접근 제어**: 허브 URL 은 `RouteAccessGate` 의 longest-prefix 가 `/k8s` 만 보므로, 뷰마다 흡수한 옛 경로(`HubView.navKey`, 예 `/k8s-manage`)로 `featureAllowed` 를 직접 판정한다 — 꺼진 뷰는 탭에서 빠지고 직접 URL 은 Lock `EmptyState`(아일랜드 패널 호스트와 같은 안내).
 - **Frontend**: `useClusters`, `useNavCatalog`(`featureAllowed`·`getLabel`), `useParams`/`useNavigate`/`useLocation`. 서브뷰의 훅·API 는 각 화면 섹션 참고(허브 전용 API 없음).
 - **Backend**: 없음(프론트 전용 통합).
 - **핵심 기능**:
-  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, 경로에 클러스터가 없고 쿼리에 `cluster=` 가 있으면 그 클러스터로 보내고 그 키는 뺀다, 그 외 bare URL 은 첫 클러스터). 예외는 `/node-labels`·`/k9s`·`/node-ssh`(단독 유지)·`/pod-bottleneck/:id`(실행 상세 — 목록 링크는 그 실행 클러스터의 허브 병목 뷰로). 앱 안의 링크(클러스터 상세의 "결과 리뷰", 파드 → 로그, 패킷 흐름 → 병목 진단 prefill)는 허브 경로로 직행한다. 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
-  - **버전 / 설정 화면 삭제(2026-11-23)**: 옛 `/versions` 뷰와 3D 관계 그래프(`/versions/:clusterId/graph`)는 지웠다 — 수집·현재 값은 **서비스 구성**이 대체한다. 옛 URL·`/k8s/:id/versions` 는 서비스 구성 뷰(`services`)로 간다(앞의 둘은 `RedirectToHub`, 허브 경로는 `hubViews.ts` `RETIRED_HUB_VIEWS`). 수집 API(`routers/versions.py` `collect-*`)와 수집 모달(`components/versions/`)은 서비스 구성·점검 런북·클러스터 관리가 계속 쓴다.
-  - **사이드바·팔레트·즐겨찾기(3단계 잔존 정리)**: 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`)에는 `/k8s` 하나만 있다. 흡수된 옛 화면 18개(`HUB_ABSORBED_PATHS` — 1·2·3단계 17개 + 레거시 `/ops-checks`)는 앱 카탈로그·커맨드 팔레트·즐겨찾기·최근 방문에서 숨긴다. 이미 레일에 설치했거나 즐겨찾기에 고정한 옛 경로는 서버가 읽을 때 `/k8s` 로 접는다(`services/home_prefs.py` `RETIRED_PATH_ALIASES`). NAV_MAP 항목은 남는다 — Settings ▸ 접근 제어에서 허브 탭을 하나씩 켜고 끄는 키이고(목록에선 "K8s 클러스터" 그룹 아래), 아일랜드 패널에 화면 하나를 담는 용도로도 쓴다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
+  - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, 경로에 클러스터가 없고 쿼리에 `cluster=` 가 있으면 그 클러스터로 보내고 그 키는 뺀다, 그 외 bare URL 은 첫 클러스터). 예외는 터미널 새 창(`/k9s/popup`·`/node-ssh/popup`)·`/versions/:clusterId/graph`(전체 높이 캔버스 — 뒤로가기 링크는 허브 버전 뷰로)·`/pod-bottleneck/:id`(실행 상세 — 목록 링크는 그 실행 클러스터의 허브 병목 뷰로). 앱 안의 링크(클러스터 상세의 "결과 리뷰", 파드 → 로그, 패킷 흐름 → 병목 진단 prefill)는 허브 경로로 직행한다. 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
+  - **버전 / 설정 화면 삭제(2026-11-23)**: 옛 `/versions` 뷰와 3D 관계 그래프(`/versions/:clusterId/graph`)는 지웠다 — 수집·현재 값은 **서비스 구성**이 대체한다. 옛 URL·`/k8s/:id/versions` 는 서비스 구성 뷰(`services`)로 간다(앞의 둘은 `RedirectToHub`, 허브 경로는 `hubViews.ts` `RETIRED_HUB_VIEWS` — 옛 `terminals` → `k9s` 도 같은 표). 수집 API(`routers/versions.py` `collect-*`)와 수집 모달(`components/versions/`)은 서비스 구성·점검 런북·클러스터 관리가 계속 쓴다.
+  - **사이드바·팔레트·즐겨찾기(3단계 잔존 정리)**: 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`)에는 `/k8s` 하나만 있다. 흡수된 옛 화면 23개(`HUB_ABSORBED_PATHS` — 1·2·3단계 + 레거시 `/ops-checks` + `/os-param-watch`·`/k8s-services` + D-243 `/node-labels`·`/k9s`·`/node-ssh`)는 앱 카탈로그·커맨드 팔레트·즐겨찾기·최근 방문에서 숨긴다. 이미 레일에 설치했거나 즐겨찾기에 고정한 옛 경로는 서버가 읽을 때 `/k8s` 로 접는다(`services/home_prefs.py` `RETIRED_PATH_ALIASES`). NAV_MAP 항목은 남는다 — Settings ▸ 접근 제어에서 허브 탭을 하나씩 켜고 끄는 키이고(목록에선 "K8s 클러스터" 그룹 아래), 아일랜드 패널에 화면 하나를 담는 용도로도 쓴다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
   - 새 뷰 추가: `HUB_VIEWS` 에 항목을 더하고, 옛 라우트를 `RedirectToHub` 로, 옛 경로를 `HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES` 두 목록에 같이 더한다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -441,7 +443,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### k9s 콘솔 (`/k9s`, `/k9s/:clusterId`)
 
-> **허브로 통합(2026-10-23, D-240 2단계)**: 단독 화면 유지 — 전체 높이 웹 터미널이라 허브에 임베드하지 않는다. K8s 클러스터 허브 ▸ 콘솔 ▸ 터미널 카드의 "열기"가 `/k9s/:clusterId` 로 이 화면을 연다.
+> **허브 뷰로(2026-11-23, D-243)**: K8s 클러스터 허브 ▸ 콘솔 ▸ **k9s**(`/k8s/:clusterId/k9s`)로 마운트된다. `/k9s(/:clusterId)` 는 그 뷰로 redirect, 클러스터는 `useClusterRouteParam('/k9s')`(허브 값). 새 창(`/k9s/popup`)은 단독. 아래 `ClusterSidebar` 설명은 허브 밖(아일랜드) 렌더 기준 — 허브 안에서는 그리지 않는다.
 
 - **파일**: `frontend/src/pages/K9sPage.tsx` + `frontend/src/components/k8s/K9sTerminal.tsx`(xterm.js 터미널) + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
 - **목적 / UX**: 각 클러스터의 control-plane(master) 서버에 **SSH 로 접속해 서버에 내장된 `k9s` TUI 를 그대로 웹 터미널로 스트리밍**한다. 별도 재구현이 아니라 실제 k9s 를 브라우저에서 조작(파드/노드/디플로이 탐색, 로그, describe 등)한다.
@@ -463,7 +465,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 노드 SSH 터미널 (`/node-ssh`, `/node-ssh/:clusterId`)
 
-> **허브로 통합(2026-10-23, D-240 2단계)**: 단독 화면 유지 — 전체 높이 웹 터미널이라 허브에 임베드하지 않는다. K8s 클러스터 허브 ▸ 콘솔 ▸ 터미널 카드의 "열기"가 `/node-ssh/:clusterId` 로 이 화면을 연다.
+> **허브 뷰로(2026-11-23, D-243)**: K8s 클러스터 허브 ▸ 콘솔 ▸ **노드 SSH**(`/k8s/:clusterId/node-ssh`)로 마운트된다. `/node-ssh(/:clusterId)` 는 그 뷰로 redirect, 클러스터는 `useClusterRouteParam('/node-ssh')`(허브 값). 새 창(`/node-ssh/popup`)은 단독.
 
 - **파일**: `frontend/src/pages/NodeSshPage.tsx` + `frontend/src/pages/NodeSshPopupPage.tsx`(별도 창) + `frontend/src/components/k8s/{NodeSshTerminal,SshTerminalWindow}.tsx` + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
 - **목적 / UX**: 클러스터의 **개별 노드 하나에 SSH 로 붙어 로그인 셸을 그대로** 웹 터미널로 쓴다. k9s 콘솔이 control-plane 의 k9s TUI 만 띄우는 것과 달리 범용 셸이라 `journalctl`·`top`·`vi` 같은 인터랙티브 명령까지 동작한다(tty + resize). 여러 노드에 같은 명령을 돌리는 용도는 `/bulk-exec`, 리소스 TUI 탐색은 `/k9s` 로 안내한다.
@@ -836,6 +838,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8S 노드 라벨 (`/node-labels`)
 
+> **허브 뷰로(2026-11-23, D-243)**: `/node-labels` 는 허브 구성 ▸ 노드 라벨 뷰로 redirect 된다. "전체 클러스터" 모드는 그 뷰 툴바의 범위 토글(「이 클러스터 / 전체 클러스터 N」, `?scope=all`)로 옮겼다. 아래 단독 화면 설명(`ClusterSidebar allowAll`)은 아일랜드 패널 렌더에만 해당한다.
+
 > **허브로 통합(2026-10-23, D-240 2단계)**: K8s 클러스터 허브 `/k8s/:clusterId/node-labels`(구성 카테고리)에도 같은 화면이 뷰로 들어 있다 — 허브에서는 고른 클러스터 하나만 보인다. 이 단독 화면은 redirect 하지 않고 "전체 클러스터" 모드(여러 클러스터의 노드를 한 표로)를 위해 그대로 둔다.
 
 - **파일**: `frontend/src/pages/NodeLabelsPage.tsx` (+ `components/node-labels/NodeLabelEditorModal.tsx`, `NodeLabelsTable.tsx`, `nodeLabelsShared.ts`, `components/common/ExportMenu`)
@@ -1035,6 +1039,29 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 공통 서비스 (`/common-services`)
+
+- **파일**: `frontend/src/pages/CommonServicesPage.tsx` (+ `components/common-services/{InstanceDialog,WatchSettingsDialog,InstanceViews,labels}`, 레일은 `components/service-config/ServiceConfigRail` 재사용)
+- **목적 / UX**: 여러 K8S 클러스터가 함께 쓰는 서비스(LDAP AD · KEYCLOAK · JENKINS · ARGOCD · NEXUS)를 인스턴스로 등록하고, **설정값을 가져와 보고(배포 수준 + 앱 설정), 바뀌면 감지(변경 이력·알람)하고, 수집 실행 로그를 남긴다.** 1단계는 읽기 전용 — 버전 관리·편집·적용은 없다. 서비스는 등록 클러스터 안 워크로드(**K8S 에서 가져오기**), 일반 노드의 Podman 컨테이너(SSH), 클러스터 밖 외부 시스템(AD 등)일 수 있다.
+- **UI 구성**: `PageShell density="hub"` + `PageHeader`(우측 **감시 설정**). 테두리 컨테이너 안 좌측 서비스 레일(상태 점 — 수집 실패 critical·일부 실패 warning) + 우측:
+  - 서비스 이름(ⓘ 설명) · 인스턴스 `SegTabs` · **+ 등록**(operator). 인스턴스가 없으면 `EmptyState`.
+  - 인스턴스 헤더: 상태 배지(정상은 중립색) · 호스팅 위치(K8S 클러스터·NS/워크로드 / Podman 호스트·컨테이너 / 외부) · 엔드포인트 · 사용 클러스터 배지 · 마지막 수집 · 마지막 오류. 버튼 **접속 테스트**(저장 없이 같은 단계 실행) · **지금 수집** · 편집 · 삭제(danger 확인) — 모두 `useCanOperate`(K8S 호스팅이면 그 클러스터 operate) 비활성 + 사유.
+  - 실행하면 그 자리에 `RunLogPanel`(SSE 실시간 log·step, **로그 보기 토글 `useLogPref('common-services-collect')`**), 끝나면 토스트 1회(변경 N건) + 화면 무효화.
+  - `SegTabs mode="tabs"` **설정**(검색 · 컴포넌트별 `MacCard` 표 키·값, 24시간 안 바뀐 키는 "N분 전 변경 · 전 → 후") / **변경 이력**(감지 시각·컴포넌트·키·전 → 후·경로(주기/수동)) / **수집 로그**(실행 목록 → 단계 배지 + 저장된 실행 로그 `LogViewer`).
+  - `InstanceDialog`: 이름·설명 → 호스팅 위치 `SegTabs`(서비스가 지원하는 것만) → K8S: 클러스터·NS·워크로드 종류·이름 + **K8S 에서 가져오기**(카탈로그 이미지·이름 패턴으로 후보 워크로드 + 같은 셀렉터 Service 주소) / Podman: SSH 호스트·포트·컨테이너 → 엔드포인트·TLS 검증 → 서비스별 설정(카탈로그 `param_fields`, label·ⓘ help) → 접속 정보(목적별 fieldset, 쓰기 전용 — "저장됨, 비우면 유지", 삭제 토글) → 사용 클러스터 칩 → 주기 수집 토글.
+  - `WatchSettingsDialog`(admin 편집, 그 외 읽기): 주기 수집 켜기·주기(분)·설정 변경 알람·수집 실패 알람(연속 N회, 복구 시 닫힘)·심각도.
+  - URL `?service=&instance=&tab=config|changes|runs`.
+- **Frontend**: `hooks/useCommonServices.ts`(`useCommonServiceCatalog`·`useCommonServiceStatus`·`useCommonServiceInstances`·`useCommonServiceConfig`·`useCommonServiceChanges`·`useCommonServiceRuns`·`useCommonServiceRun`·`useSaveCommonService`·`useDeleteCommonService`·`useDiscoverCommonServices`·watch-settings 훅 — 60초 다시 읽기), api.ts `commonServicesApi`, SSE 는 `streamLogged` + `commonServicesApi.runStreamUrl`. `params` 는 `[{key, value}]` 목록으로 주고받는다(응답 camelCase 변환이 `auth_realm` 같은 키를 바꾸지 않게).
+- **Backend**: 라우터 `backend/app/routers/common_services.py`(`/api/v1/common-services`, `_auth`, feature `/common-services`):
+  - `GET /catalog` · `GET /status` · `GET|POST /instances` · `GET|PUT|DELETE /instances/{id}`(쓰기 operator + 호스팅 클러스터 operate, 감사 `common_service.create|update|delete` — 자격증명은 변경 여부만) · `POST /discover`(operator + 클러스터 read).
+  - `POST /instances/{id}/run/stream?kind=collect|test`(operator, SSE — 첫 이벤트 `{type:"run", run_id}`, 같은 인스턴스 실행 중이면 409, 감사 `common_service.collect|test`) · `GET /instances/{id}/config|changes|runs|runs/{run_id}` · `GET|PUT /watch-settings`(PUT admin, AppSetting `common_services.watch`).
+  - 숨김 클러스터(`hidden_cluster_ids`)에 호스팅된 인스턴스는 목록·조회에서 빠진다.
+  - 서비스 `services/common_services/`: `catalog`(서비스·호스팅·param/자격증명 필드 — UI-First) · `flatten`(평탄화 — 이름 있는 객체 목록은 이름 경로, 비밀처럼 보이는 키는 `(숨김 · 해시)`로 값 대신 저장해 변경만 감지, 해시·diff, 순수 함수) · `collectors`(배포: K8S 워크로드 spec·env(Secret 참조는 이름만)·마운트 ConfigMap / Podman `podman inspect`. 앱: Keycloak Admin API realm·클라이언트·IdP / Jenkins `/api/json`·플러그인·JCasC ConfigMap / ArgoCD `argocd-cm`류 ConfigMap + 토큰 있으면 클러스터·저장소 / Nexus 저장소·blob store·보안 realm·익명 + Podman 이면 `nexus.properties` / LDAP AD rootDSE·도메인 정책 속성(`ldap3` 읽기 전용 바인드) — 단계 실패는 다음 단계로(fail-safe)) · `service`(CRUD·실행 로그 `RunLog`(단계마다 커밋 + SSE)·스냅샷(해시가 바뀔 때만)·변경 이력·알람(`CommonServiceConfigChanged`, `CommonServiceUnreachable` — 세이브포인트로 격리)·주기 판정·후보 찾기).
+  - 모델 `models/common_service.py`: `CommonServiceInstance` · `CommonServiceCredential`(`secret` EncryptedText, 백업 기본 마스킹) · `CommonServiceLink` · `CommonServiceSnapshot`(로그성 400일) · `CommonServiceChange`(400일) · `CommonServiceRun`(365일).
+  - Celery Beat `common-services-watch-dispatcher`(매분) → `collect_common_service_one`(주기가 지난 `watch_enabled` 인스턴스).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### LAKE 서비스 (`/lake-services`)
 
 > **2026-10-14 (D-128)**: 목록 카드·상세의 "지금 점검" 이 실행 로그(상태·응답 ms·메시지·details 키·점검 시각, 비활성 409 는 경고)를 띄운다 — 공용 `components/lake-services/runLakeCheckLogged.ts`.
@@ -1167,7 +1194,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
     섹션별 `MacCard`(접기) 표 — 열 **키 · VALUE · 반영 방식 · 상태**:
     - 키: 키 이름 + 짧은 이름(label). 항목 도움말은 키 옆 ⓘ(`InfoHint`). 아래에 **의존 규칙 결과**(권장(제안값 + "제안 적용")·필수(저장 막힘 / 기존 위반 경고)·영향).
     - VALUE: 편집 입력(형식별 — bool/enum 선택, 숫자, 텍스트. 그룹 화면은 **재정의 값**, 비우면 "상속: 기본값") + ⓘ(노드 현재 값 요약·기본 그룹 값·커널·제품 기본값) + 바뀌면 강조·"이전 → 새"·행 되돌리기.
-      아래 줄은 노드 현재 값이 **입력 값과 다를 때만**: 모두 같은 다른 값이면 "노드 0 · 3개"(경고색), 노드마다 다르면 "노드 N가지 값" 펼침(값별 노드), 수집 값이 없으면 "노드 값 없음". 편집 중엔 초안 값과 비교한다.
+      **수치형(int·size)** 이고 설정 값이나 노드 값이 숫자면 아래에 `NumericBars` — 설정(편집, 끌기·←/→·PgUp/PgDn·Home/End, `role="slider"`)·노드(값별 줄, 다르면 경고색)·기본 막대를 위아래로, 수치는 오른쪽 가로, 눈금 0~값의 약 2배(끝까지 끌면 늘어남, 항목 `min_value`/`max_value` 가 있으면 그 범위). size 는 GiB/MiB 표시·MiB 단위. 막대 폭은 SVG.
+      그 밖의 형식은 아래 줄에 노드 현재 값이 **입력 값과 다를 때만**: 모두 같은 다른 값이면 "노드 0 · 3개"(경고색), 노드마다 다르면 "노드 N가지 값" 펼침(값별 노드), 수집 값이 없으면 "노드 값 없음". 편집 중엔 초안 값과 비교한다.
   - 상시 설명 문장은 전부 ⓘ 툴팁(서비스 이름 옆 서비스 설명 · 노드 그룹 규칙 · V1 없음 카드 · 미적용/드리프트 배너 설명 · 하단 '저장' 안내 · 요약 탭 카드 설명). 본문은 값·건수·상태·결과만(DESIGN_SYSTEM §12.12-10).
   - 하단 고정 바: 변경 N건 · 의존 제안/필수 위반 수 · 변경 취소 · **저장…**(operator). 초안은 300ms 디바운스로 `POST /service-config/evaluate` 를 불러 행에 결과를 붙인다. 서비스·그룹·버전·클러스터를 바꿀 때 편집 중이면 "저장하지 않은 변경을 버릴까요?" 확인.
   - **저장 전 확인** `SaveVersionDialog`: 직접 바꾼 값 · 같이 바꾸기를 권하는 값(이 화면에서 고칠 수 있는 권장·필수, 체크해서 포함) · 지켜야 저장되는 조건(남은 위반이 있으면 저장 잠금, 다른 서비스에서 고칠 위반은 경고) · 적용할 때 일어나는 일(영향) · 변경 메모 → "V{n} 로 저장 (적용은 따로)". 409(그사이 다른 저장)면 안내 후 새로 읽기.
@@ -1191,9 +1219,9 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
     **인터페이스** 표(검색·종류·경고만 필터 — 노드 · 인터페이스(종류·상위 본딩·드라이버) · 상태 · 속도 · MTU · 본딩/LACP(모드·해시·rate·Aggregator, 하위는 Aggregator·상대 MAC) · Ring(현재/최대) · 드롭/분 · CRC·끊김 · 주요 offload · 판정).
     행을 펼치면 그 행의 경고 + 드라이버·펌웨어·autoneg·본딩 하위 상태 표 + 전체 offload(ethtool -k 이름, fixed 표시) + 전체 카운터(`drv:` = ethtool -S). 판정 수준이 있으면 레일 NIC 아이콘에 상태 점.
     판정: 본딩(모드·해시 정책·LACP rate 기대 값, 링크 감시 꺼짐, 하위 다운·속도·MTU 차이, LACP 집계 실패(활성 Aggregator 밖 하위 — 하위 행에도 표시)·상대 MAC 0(협상 안 됨)·하위마다 상대 다름(MLAG 안내)) · 링크(다운, half duplex, 최소 속도, 플래핑) · VLAN MTU > 부모 · 창(기본 15분) 동안 증가한 NIC 드롭(큐별·합계 카운터 중 최대 증가분, xdp 제외 — ring 여유가 있으면 `ethtool -G` 제안)·CRC · offload 기대 값(기본 LRO off) · 노드 간 같은 이름 인터페이스의 MTU·속도·본딩 설정·offload·펌웨어 차이(다수 값 기준) · 보고 끊김.
-    `NicSettingsDialog`(admin): 수집 켜기·인터페이스 종류·포함/제외 이름(glob — 에이전트 다음 보고부터) · 본딩/LACP 기대 값(비우면 검사 안 함) · 최소 속도·증가율 창·드롭/CRC/끊김 임계치·보고 끊김 · 노드 간 비교 · offload 기대 값 목록.
+    `NicSettingsDialog`(admin) — **「이 클러스터」/「공통 기준」 두 탭**. 공통 기준은 모든 클러스터의 기본값, 이 클러스터 탭은 항목마다 "공통 값 · 재정의/공통 따름 · 공통으로 되돌리기"를 보이고 바꾼 항목만 재정의로 저장한다(나머지는 공통을 따라 공통 기준을 바꾸면 따라간다). "관측 값으로 채우기" = 보고된 구성(본딩 모드·해시·LACP 최빈값, 최소 속도, 본딩 없으면 본딩 기준 비움)을 제안(저장 전 확인). 인터페이스 이름은 입력 불필요 — 종류로 자동 수집. 공통 탭 하단에 재정의한 클러스터 목록. 항목: 수집 켜기·인터페이스 종류·포함/제외 이름(glob — 에이전트 다음 보고부터) · 본딩/LACP 기대 값(비우면 검사 안 함) · 최소 속도·증가율 창·드롭/CRC/끊김 임계치·보고 끊김 · 노드 간 비교 · offload 기대 값 목록.
     Frontend `useNicWatch`(60초 다시 읽기)·`useNicWatchSettings`·`useUpdateNicWatchSettings`(`hooks/useNicWatch.ts`), api.ts `nicWatchApi`. 이름이 키인 값(카운터·offload·본딩 하위)은 응답 camelCase 변환에 깨지지 않게 목록으로 받는다.
-    Backend `GET /nic-watch/clusters/{id}`(`_cluster_scoped`) · `GET|PUT /nic-watch/settings`(PUT admin, AppSetting `nic_watch.settings`, 감사 `nic_watch.settings.update`) — `routers/nic_watch.py`, 수신은 `POST /node-params/agent/report` 의 `nic`(실패해도 파라미터 보고는 성공, 응답 `nic` 에 수집 대상), 저장 `services/nic_watch/service.py`(`NodeNicState`, 5분 간격 카운터 표본), 판정 `analyze.py`(조회 때마다 현재 설정으로 다시 계산), 에이전트 `node_param_agent/nic.py`.
+    Backend `GET /nic-watch/clusters/{id}`(`_cluster_scoped`) · `GET|PUT /nic-watch/settings`(PUT admin, AppSetting `nic_watch.settings`, 감사 `nic_watch.settings.update`) · 클러스터별 재정의 `GET|PUT|DELETE /nic-watch/clusters/{id}/settings`(PUT·DELETE admin, AppSetting `nic_watch.cluster_overrides`, 감사 `nic_watch.cluster_settings.update|clear`, 에이전트 보고 응답의 수집 대상과 판정이 모두 실효 기준=공통+재정의) · `GET /nic-watch/clusters/{id}/observed`(기준 제안) · `GET /nic-watch/overrides` — `routers/nic_watch.py`, 수신은 `POST /node-params/agent/report` 의 `nic`(실패해도 파라미터 보고는 성공, 응답 `nic` 에 수집 대상), 저장 `services/nic_watch/service.py`(`NodeNicState`, 5분 간격 카운터 표본), 판정 `analyze.py`(조회 때마다 현재 설정으로 다시 계산), 제안 `learn.py`, 에이전트 `agent-rs/src/nic.rs`(Python `node_param_agent/nic.py` 와 같은 보고 계약).
   - 모달을 닫으며 URL 쿼리를 바꾸는 동작(그룹 만들기·삭제, 버리고 이동)은 `afterModalClose` 로 모달 history 기록이 회수된 뒤에 한다(`common/modalHistory.ts` 의 `history.back()` 이 바꾼 쿼리를 되돌리던 문제).
 - **Frontend**: `useServiceConfigServices`, `useServiceConfigView(clusterId, service, version, groupId)`, `useServiceConfigEvaluate`(디바운스 초안), `useSaveServiceConfigVersion`, `useServiceConfigCompare`, `useRevertServiceConfig`, `useSaveServiceConfigGroup`·`useDeleteServiceConfigGroup`, `useImportServiceConfig`, `useInvalidateServiceConfig`(`hooks/useServiceConfig.ts`), `useUrlParams({service, version, group})`, `useDebouncedValue`. api.ts `serviceConfigApi.*` — 설정 값은 `[{key, value}]` 목록으로 보낸다(요청 인터셉터가 객체 키를 snake_case 로 바꿔 `SystemdCgroup` 같은 키가 망가지므로).
 - **Backend**: 라우터 `backend/app/routers/service_config.py`(`_cluster_scoped`):
@@ -1225,7 +1253,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - JWT(`_cluster_scoped`): `GET /node-params/clusters/{id}/nodes` · `/changes` · `/manifest`, `DELETE /node-params/clusters/{id}/agents/{agent_id}`(operator), `GET/POST /node-params/rules` · `PUT/DELETE /node-params/rules/{id}`(operator, 공통 규칙은 admin, 클러스터 규칙은 그 클러스터 operate), `GET/PUT /node-params/settings`(PUT admin). 감사 `node_params.rule.*`·`node_params.agent.delete`·`node_params.settings.update`.
   - 서비스 `services/node_param_watch/`(`rules` 순수 판정 · `service` 보고 처리·상태·워치독·기본 규칙 시드 · `settings` AppSetting `node_param_watch.settings` · `manifest`). 모델 `models/node_param_watch.py`(`NodeParamWatchRule`·`NodeParamAgent`), 값 이력은 `cluster_config_snapshots`(component `node_params:{node}`, 값이 바뀔 때만 새 행) + `os_param_changes`(`extra.source="agent"`).
   - 알람(`alert_router.route_and_notify` 재사용): `NodeParamChanged`(변경 1회=1건) · `NodeParamBaselineViolation` · `NodeParamNotPersisted`(상태 전이 때만 열고 해소되면 resolved) · `NodeParamAgentOffline`(Celery Beat `node-param-agent-watchdog` 5분).
-  - 에이전트: `python -m app.node_param_agent`(backend 이미지 재사용, 표준 라이브러리만), 배포 번들 `deploy/k8s/node-param-agent/`.
+  - 에이전트: 전용 Rust 이미지 `…/node-agent`(`agent-rs/`, 정적 바이너리 — 노드 500대 기준 상주 메모리·이미지 크기 최소화). `agent_image` 가 backend 이미지면 Python 에이전트(`python -m app.node_param_agent`)로 렌더(하위 호환). 배포 번들 `deploy/k8s/node-param-agent/`.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

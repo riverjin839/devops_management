@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import {
   LayoutGrid, Boxes, Gauge, TrendingUp, Activity, Bell, ScrollText, Zap, ClipboardCheck,
-  KeyRound, Tags, Package, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks,
+  KeyRound, Tags, Dog, Package, Database, Cpu, TerminalSquare, Waves, Route, ShieldCheck, Layers, ListChecks,
 } from 'lucide-react';
 import { ClusterDetailPage } from '@/pages/ClusterDetailPage';
 import { K8sManagePage } from '@/pages/K8sManagePage';
@@ -23,7 +23,8 @@ import { ServiceConfigPage } from '@/pages/ServiceConfigPage';
 import { PodBottleneckPage } from '@/pages/PodBottleneckPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
-import { HubTerminalsView } from './HubTerminalsView';
+import { K9sPage } from '@/pages/K9sPage';
+import { NodeSshPage } from '@/pages/NodeSshPage';
 
 /** 허브 카테고리 탭(1행). 순서가 곧 탭 순서다. */
 export type HubCategory = 'overview' | 'resources' | 'allocation' | 'observe' | 'logs' | 'checks' | 'diagnose' | 'config' | 'console';
@@ -63,8 +64,9 @@ export interface HubView {
  * `useClusterRouteParam` 분기로 허브 값을 받는다.
  *
  * 2단계(2026-10-23)로 구성(RBAC·노드 라벨·노드 이미지·버전)·콘솔(etcdctl·커널 파라미터·터미널 실행 카드)을 더했다.
- * 노드 라벨은 단독 화면(`/node-labels`, 전체 클러스터 모드)도 유지한다 — 허브 뷰는 선택 클러스터만.
- * k9s·노드 SSH 는 전체 높이 웹 터미널이라 임베드하지 않고 `HubTerminalsView` 가 단독 화면으로 연다.
+ * 노드 라벨의 단독 화면(`/node-labels`)은 D-243 에서 허브 뷰로 redirect 됐다(전체 클러스터 모드는 뷰 안 토글).
+ * (D-243, 2026-11-23) k9s·노드 SSH 도 허브 뷰로 넣었다 — 터미널은 화면 위에 뜨는 창(`SshTerminalWindow`)이라 탭 안에서도 동작한다.
+ * 예전 "터미널" 실행 카드 뷰(`terminals`)는 `k9s` 로 대체됐다. 노드 라벨의 전체 클러스터 모드도 허브 뷰의 `?scope=all` 로 옮겼다.
  * 3단계(2026-10-23)로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더했다. 2026-11-23 개요에 있던 점검 카탈로그를
  * 점검 ▸ 점검 항목(`checks`, 옛 `/ops-checks`)으로 옮겼다 — 개요는 상태 + 「전체 점검」만 남는다(D-242). 새 뷰를 넣을 땐 이 목록에 항목을 더하고
  * App.tsx 의 옛 라우트를 `RedirectToHub` 로, `navConfig.ts` `HUB_ABSORBED_PATHS` 에 옛 경로를 더한다(메뉴에서 숨김).
@@ -90,7 +92,8 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'node-images', category: 'config', label: '노드 이미지', icon: Package, navKey: '/node-images', component: NodeImagesPage },
   { id: 'etcdctl', category: 'console', label: 'etcdctl', icon: Database, navKey: '/etcdctl', component: EtcdCtlPage },
   { id: 'kernel-params', category: 'console', label: '커널 파라미터', icon: Cpu, navKey: '/kernel-params', component: KernelParamsPage },
-  { id: 'terminals', category: 'console', label: '터미널', icon: TerminalSquare, navKey: '/k9s', extraNavKeys: ['/node-ssh'], component: HubTerminalsView },
+  { id: 'k9s', category: 'console', label: 'k9s', icon: Dog, navKey: '/k9s', component: K9sPage },
+  { id: 'node-ssh', category: 'console', label: '노드 SSH', icon: TerminalSquare, navKey: '/node-ssh', component: NodeSshPage },
 ];
 
 export const DEFAULT_HUB_VIEW = 'overview';
@@ -102,6 +105,7 @@ export function hubViewAllowed(v: HubView, featureAllowed: (path: string) => boo
 
 /** 지운 뷰 id → 대체 뷰 id. 옛 링크(`/k8s/:id/versions` 등)가 개요가 아니라 대체 화면으로 가게 한다. */
 export const RETIRED_HUB_VIEWS: Readonly<Record<string, string>> = {
+  terminals: 'k9s', // 옛 터미널 실행 카드 → k9s(D-243)
   versions: 'services', // 버전 / 설정 → 서비스 구성(2026-11-23)
 };
 
