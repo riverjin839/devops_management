@@ -16,13 +16,11 @@ import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { SprintsPage } from '@/pages/SprintsPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
-import { VersionsPage } from '@/pages/VersionsPage';
 import { BulkExecPage } from '@/pages/BulkExecPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
 import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
-import { KernelParamsPage } from '@/pages/KernelParamsPage';
 import { NodeParamWatchPage } from '@/pages/NodeParamWatchPage';
 import { ServiceConfigPage } from '@/pages/ServiceConfigPage';
 import { InfraTopologyPage } from '@/pages/InfraTopologyPage';
@@ -78,13 +76,11 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/sprints': SprintsPage,
   '/members': MemberBoardPage,
   '/cluster-manage': ClusterManagePage,
-  '/versions': VersionsPage,
   '/bulk-exec': BulkExecPage,
   '/etcdctl': EtcdCtlPage,
   '/batch-jobs': BatchJobsPage,
   '/mc': McClientPage,
   '/isilon-nfs': IsilonNfsPage,
-  '/kernel-params': KernelParamsPage,
   '/os-param-watch': NodeParamWatchPage,
   '/k8s-services': ServiceConfigPage,
   '/infra-topology': InfraTopologyPage,

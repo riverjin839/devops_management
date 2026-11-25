@@ -1,11 +1,11 @@
 import type { ComponentType } from 'react';
 import {
   Activity, Archive, ArrowRightLeft, BarChart3, Binary, BellRing, Blocks, BookMarked, BookOpen, Boxes, Calculator,
-  CalendarCheck2, ClipboardCheck, ClipboardList, Cog, Command, Container, Cpu, Database, Dog, Droplets,
+  CalendarCheck2, ClipboardCheck, ClipboardList, Cog, Command, Container, Database, Dog, Droplets,
   Eye, FileCode2, FileSpreadsheet, FileText, Files, Gauge, GitBranch, GitFork, HardDrive, Home, Hourglass,
   KeyRound, Layers, LayoutGrid, Library, Link2, ListChecks, ListTodo, ListTree, Map, Network,
   NotebookText, Palmtree, Radar, Rocket, Route, Rss, ScrollText, Server, Settings, Share2, ShieldCheck,
-  ShipWheel, Siren, Tag, Tags, Terminal, TerminalSquare, TrendingUp, Users, UsersRound, Warehouse, Waves, Waypoints,
+  ShipWheel, Siren, Tags, Terminal, TerminalSquare, TrendingUp, Users, UsersRound, Warehouse, Waves, Waypoints,
   Workflow,
 } from 'lucide-react';
 import type { NavGroupDescKey, NavGroupKey, NavPageKey } from '@/i18n/resources/ko';
@@ -44,6 +44,7 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/daily-check/review': { labelKey: 'dailyCheckReview', defaultLabel: '점검 결과 리뷰',  icon: ClipboardCheck },
   '/daily-check/settings':{ labelKey: 'dailyCheckSettings', defaultLabel: '점검 항목 관리',  icon: ListChecks },
   '/lake-services':      { labelKey: 'lakeServices', defaultLabel: 'LAKE 서비스',     icon: Droplets },
+  '/common-services':    { labelKey: 'commonServices', defaultLabel: '공통 서비스',     icon: Network },
   '/pod-bottleneck':     { labelKey: 'podBottleneck', defaultLabel: '파드 병목 진단',   icon: Hourglass },
   '/docs':               { labelKey: 'docs', defaultLabel: '지식 허브 홈',    icon: Library },
   '/playbooks':          { labelKey: 'playbooks', defaultLabel: '플레이북',        icon: BookOpen },
@@ -52,14 +53,12 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/sprints':            { labelKey: 'sprints', defaultLabel: '스프린트',        icon: Rocket },
   '/members':            { labelKey: 'members', defaultLabel: '멤버별 업무',    icon: UsersRound },
   '/cluster-manage':     { labelKey: 'clusterManage', defaultLabel: '클러스터 관리',  icon: Server },
-  '/versions':           { labelKey: 'versions', defaultLabel: '버전 / 설정',     icon: Tag },
   '/bulk-exec':          { labelKey: 'bulkExec', defaultLabel: '노드 일괄 실행', icon: Terminal },
   '/node-ssh':           { labelKey: 'nodeSsh', defaultLabel: '노드 SSH 터미널', icon: TerminalSquare },
   '/etcdctl':            { labelKey: 'etcdctl', defaultLabel: 'etcdctl 콘솔',   icon: Database },
   '/batch-jobs':         { labelKey: 'batchJobs', defaultLabel: '배치잡',          icon: ListTree },
   '/mc':                 { labelKey: 'mc', defaultLabel: 'mc 클라이언트',  icon: Archive },
   '/isilon-nfs':         { labelKey: 'isilonNfs', defaultLabel: 'NFS 모니터링',   icon: HardDrive },
-  '/kernel-params':      { labelKey: 'kernelParams', defaultLabel: '커널 파라미터',  icon: Cpu },
   // OS 파라미터 감시 — 노드 에이전트가 보고한 sysctl 값의 변경·기준값 위반·영구 설정 불일치(K8s 허브 점검 탭).
   '/os-param-watch':     { labelKey: 'osParamWatch', defaultLabel: 'OS 파라미터 감시', icon: ShieldCheck },
   // 서비스 구성 — etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전(K8S 허브 구성 탭).
@@ -172,7 +171,7 @@ export const GROUPS: NavGroup[] = [
   { id: 'operate',   label: '운영 조작', labelKey: 'operate', descriptionKey: 'operate', icon: Terminal,    description: '클러스터·노드·스토리지에 명령을 보낸다 — 실행 전 대상을 확인할 것', domain: 'platform', tone: 'danger',
     paths: ['/ns-migration', '/bulk-exec', '/mc'] },
   { id: 'configure', label: '구성·자산', labelKey: 'configure', descriptionKey: 'configure', icon: Layers,      description: '클러스터 등록·자원·권한·노드 자산을 관리한다', domain: 'platform',
-    paths: ['/cluster-manage', '/node-specs', '/dc-inventory', '/links'] },
+    paths: ['/cluster-manage', '/common-services', '/node-specs', '/dc-inventory', '/links'] },
   { id: 'topology',  label: '토폴로지', labelKey: 'topology', descriptionKey: 'topology', icon: Map,     description: '인프라·서비스 구조를 지도로 본다', domain: 'platform',
     paths: ['/infra-topology', '/service-topology', '/service-architecture', '/architecture'] },
   // '/batch-jobs' 는 사이드바 진입점에서 뺐다 — 홈 화면 "플랫폼 현황" 탭의 서브탭으로

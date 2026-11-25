@@ -25,7 +25,8 @@ export function useHubTabShortcuts(ids: readonly string[], activeId: string, go:
       if (e.key !== '[' && e.key !== ']') return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing || e.repeat) return;
       if (isTyping(e.target)) return;
-      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      // 닫힌 사이드 패널(`SidePane`)은 aria-hidden 으로 DOM 에 남아 있다 — 그것까지 세면 단축키가 늘 꺼진다(D-246 에서 수정).
+      if (document.querySelector('[role="dialog"]:not([aria-hidden="true"]), [role="alertdialog"]:not([aria-hidden="true"])')) return;
       const { ids: list, activeId: cur, go: navigate } = ref.current;
       const i = list.indexOf(cur);
       if (i < 0) return;

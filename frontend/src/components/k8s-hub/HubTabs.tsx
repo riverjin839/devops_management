@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { SegTabs } from '@/components/common/SegTabs';
 import { useHubTabShortcuts } from './useHubTabShortcuts';
+import { useClusterSwitchGuardStore } from '@/stores/clusterSwitchGuardStore';
 import { HUB_CATEGORIES, type HubCategory, type HubView } from './hubViews';
 
 interface HubTabsProps {
@@ -19,7 +20,14 @@ interface HubTabsProps {
  */
 export function HubTabs({ clusterId, views, active }: HubTabsProps) {
   const navigate = useNavigate();
-  const go = (id: string) => navigate(`/k8s/${clusterId}/${id}`);
+  // 열린 터미널 세션이 있는 뷰(k9s·노드 SSH)는 탭을 떠나기 전에 확인한다(D-246) — 클릭·단축키 모두 여기를 지난다.
+  const switchGuard = useClusterSwitchGuardStore((s) => s.guard);
+  const go = (id: string) => {
+    if (id === active.id) return;
+    const path = `/k8s/${clusterId}/${id}`;
+    if (switchGuard?.({ clusterId, path })) return;
+    navigate(path);
+  };
   // [ ] 로 이전/다음 화면 — 카테고리 순서대로 이어 붙인 순서
   const order = HUB_CATEGORIES.flatMap((c) => views.filter((v) => v.category === c.id).map((v) => v.id));
   useHubTabShortcuts(order, active.id, go);

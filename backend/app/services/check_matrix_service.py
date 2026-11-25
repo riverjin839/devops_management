@@ -16,6 +16,7 @@ addon.type / BatchJob.name / Playbook.name 문자열)이며, 클러스터별 실
 """
 from __future__ import annotations
 
+import contextvars
 import logging
 import random
 import uuid
@@ -28,6 +29,7 @@ from sqlalchemy import event as _sa_event
 from sqlalchemy.orm import Session, defer
 
 from app.config import settings
+from app.services import command_trace
 from app.models import (
     Addon,
     BatchJob,
@@ -1513,6 +1515,20 @@ def _log_line(text: str) -> str:
     return f"[{datetime.now(_resolve_tz()).strftime('%H:%M:%S')}] {text}"
 
 
+# 실행 중 대상에 나간 명령(command_trace) — 다음 진행 줄·마감 줄 앞에 ``CMD $ […]`` 줄로 붙인다.
+# sink 는 체커 안(다른 스레드일 수 있음)에서 불리므로 DB 를 만지지 않고 리스트에만 쌓는다.
+_CMD_PENDING: contextvars.ContextVar[Optional[list[str]]] = contextvars.ContextVar("check_matrix_cmd_pending", default=None)
+
+
+def _drain_cmd_lines() -> list[str]:
+    pending = _CMD_PENDING.get()
+    if not pending:
+        return []
+    taken = pending[:]
+    del pending[: len(taken)]
+    return [_log_line(f"CMD {c}") for c in taken]
+
+
 def _progress(db: Session, run: CheckMatrixRun, text: str) -> None:
     """실행 중인 수행에 진행 로그 한 줄을 붙이고 즉시 커밋한다 — 화면이 2초 폴링으로 실시간 표시.
 
@@ -1525,6 +1541,7 @@ def _progress(db: Session, run: CheckMatrixRun, text: str) -> None:
     try:
         details = dict(run.details or {})
         lines = list(details.get("_log") or [])
+        lines.extend(_drain_cmd_lines())
         lines.append(_log_line(text))
         details["_log"] = lines[-_LOG_MAX_LINES:]
         run.details = details
@@ -1579,7 +1596,7 @@ def _finish_run(
     if error or message:
         tail += f" — {error or message}"
     merged = dict(details or {})
-    merged["_log"] = (prev_log + [_log_line(tail)])[-_LOG_MAX_LINES:]
+    merged["_log"] = (prev_log + _drain_cmd_lines() + [_log_line(tail)])[-_LOG_MAX_LINES:]
     run.run_state = state
     run.status = status
     run.value = value
@@ -1621,8 +1638,11 @@ def execute_run(db: Session, run_id) -> dict[str, Any]:
         db.commit()
         return _run_to_dict(run)
 
+    cmd_pending: list[str] = []
+    cmd_token = _CMD_PENDING.set(cmd_pending)
     try:
-        _execute_into_run(db, run, item, cluster)
+        with command_trace.bind(cmd_pending.append):
+            _execute_into_run(db, run, item, cluster)
     except RunCancelled:
         db.rollback()
         logger.info("check-matrix run cancelled run_id=%s", run_id)
@@ -1638,6 +1658,8 @@ def execute_run(db: Session, run_id) -> dict[str, Any]:
             )
             db.commit()
         logger.exception("check-matrix run failed run_id=%s", run_id)
+    finally:
+        _CMD_PENDING.reset(cmd_token)
     return _run_to_dict(run) if run is not None else {"error": "run lost", "run_id": str(run_id)}
 
 
@@ -2465,7 +2487,7 @@ def _run_to_dict(run: CheckMatrixRun, *, include_details: bool = False) -> dict[
         out["step_plan"] = details.pop("_step_plan", []) or []
         out["commands"] = details.pop("_commands", []) or []
         out["runbook"] = details.pop("_runbook", None)
-        out["log_lines"] = details.pop("_log", []) or []
+        out["log_lines"] = command_trace.visible_lines(details.pop("_log", []) or [])
         details.pop("_definition_id", None)
         out["details"] = details
     return out

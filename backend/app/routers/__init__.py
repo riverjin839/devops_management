@@ -80,6 +80,7 @@ from app.routers.daily_report import public_router as daily_report_public_router
 from app.routers.external_services import router as external_services_router
 from app.routers.external_services import public_router as external_services_public_router
 from app.routers.public_share import router as public_share_router
+from app.routers.common_services import router as common_services_router
 from app.routers.k8s_helm import router as k8s_helm_router
 from app.routers.k8s_exec import router as k8s_exec_router
 from app.routers.k9s_ssh import router as k9s_ssh_router
@@ -124,6 +125,7 @@ __all__ = [
     "external_services_router",
     "external_services_public_router",
     "public_share_router",
+    "common_services_router",
     "service_topology_router",
     "architecture_docs_router",
     "projects_router",

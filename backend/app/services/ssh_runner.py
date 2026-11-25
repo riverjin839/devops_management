@@ -12,12 +12,13 @@ import io
 import os
 import socket
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict, field
 from typing import Any, Literal, Optional
 
 import paramiko
 
+from app.services import command_trace
+from app.services.command_trace import ContextThreadPoolExecutor
 from app.services.ssh_host_keys import TofuHostKeyPolicy, apply_known_key
 
 
@@ -221,6 +222,7 @@ def _exec_ssh(
     """
     start = time.monotonic()
     client: Optional[paramiko.SSHClient] = None
+    command_trace.record("ssh", f"{tgt.username}@{tgt.host}:{tgt.port}", command)
     try:
         client = _build_client(tgt, connect_timeout)
         if cancel_token is not None:
@@ -274,6 +276,8 @@ def _exec_scp_push(tgt: SSHTarget, local_content: bytes, remote_path: str,
                    connect_timeout: int) -> SSHResult:
     """in-memory content → remote_path 로 업로드 (SCP/SFTP)."""
     start = time.monotonic()
+    command_trace.record("scp", f"{tgt.username}@{tgt.host}:{tgt.port}",
+                         f"sftp put → {remote_path} ({len(local_content)} bytes, 상위 디렉터리 없으면 mkdir -p)")
     client: Optional[paramiko.SSHClient] = None
     try:
         client = _build_client(tgt, connect_timeout)
@@ -416,6 +420,7 @@ def fetch_remote_file(tgt: SSHTarget, remote_path: str, connect_timeout: int,
 
     # ── 2) 원격 파일 확인 ────────────────────────────────────────────────
     stat_cmd = f"sftp stat {remote_path}"
+    command_trace.record("sftp", conn_label, stat_cmd)
     t0 = time.time()
     try:
         sftp = client.open_sftp()
@@ -444,6 +449,7 @@ def fetch_remote_file(tgt: SSHTarget, remote_path: str, connect_timeout: int,
 
     # ── 3) 읽기 ─────────────────────────────────────────────────────────
     read_cmd = f"sftp get {remote_path}"
+    command_trace.record("sftp", conn_label, read_cmd)
     t0 = time.time()
     if size > max_bytes:
         detail = f"파일이 너무 큽니다 ({size:,} bytes, 최대 {max_bytes:,} bytes)."
@@ -550,7 +556,7 @@ async def run_bulk(
 
     results: list[SSHResult] = []
     # ThreadPoolExecutor 는 전체 배치 동안 1개만 사용 — chunk 별로 재생성하지 않음
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    with ContextThreadPoolExecutor(max_workers=workers) as pool:
         sem = asyncio.Semaphore(workers)
 
         async def bounded(t: SSHTarget) -> SSHResult:

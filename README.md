@@ -25,8 +25,8 @@
 | **리소스 탐색(읽기전용)** | K8s 리소스 40여 종 조회 + YAML 보기(Secret 마스킹), 파드 로그 스트리밍, 실시간 이벤트 |
 | **NS 마이그레이션** | 개발 → 운영 클러스터로 네임스페이스 리소스 이전(기본: SA·RBAC·ConfigMap·쿼터, 선택: 워크로드·Secret) — 치환 규칙(레지스트리·문자열·replicas·라벨), diff·서버 dry-run 미리보기, server-side apply(실시간 로그) 또는 YAML 번들 다운로드 |
 | **자동화** | Ansible 플레이북(실시간 실행 로그·실행 취소)·배치(SSH), Batch Jobs(cron), etcdctl/mc 콘솔, 노드 일괄 실행 |
-| **설정 변경 이력** | 스냅샷(해시 dedup) + diff + 감사 로그, OS/커널 파라미터 드리프트, **OS 파라미터 감시**(노드 에이전트 DaemonSet — 변경·기준값 위반·영구 설정 불일치·무응답을 알람 인박스로), **서비스 구성**(etcd·containerd·cilium·OS·kube-apiserver·controller-manager·scheduler·kubelet 설정 목록·노드별 현재 값·설정 버전), **NIC 상태**(본딩/LACP·링크·MTU·ring buffer·드롭·offload 경고, 노드 에이전트 보고) |
-| **인프라/스토리지** | 인프라 물리 토폴로지, 노드 서버스펙 자산 대장, DC 인벤토리(랙·장비·케이블·IPAM, Excel 일괄 등록), Isilon NFS 모니터링, 서비스 토폴로지, LAKE 서비스 카탈로그 |
+| **설정 변경 이력** | 스냅샷(해시 dedup) + diff + 감사 로그, OS/커널 파라미터 드리프트, **OS 파라미터 감시**(노드 에이전트 DaemonSet — 변경·기준값 위반·영구 설정 불일치·무응답을 알람 인박스로), **서비스 구성**(etcd·containerd·cilium·OS·kube-apiserver·controller-manager·scheduler·kubelet 설정 목록·노드별 현재 값·설정 버전), **NIC**(본딩/LACP·링크·MTU·ring buffer·드롭·offload 경고 + ring·채널·offload·본딩 설정 버전·드리프트·적용(하위 하나씩·원복 타이머·NM 기록), SSH 수집 또는 노드 에이전트) |
+| **인프라/스토리지** | 인프라 물리 토폴로지, 노드 서버스펙 자산 대장, DC 인벤토리(랙·장비·케이블·IPAM, Excel 일괄 등록), Isilon NFS 모니터링, 서비스 토폴로지, LAKE 서비스 카탈로그, 공통 서비스(LDAP AD·Keycloak·Jenkins·ArgoCD·Nexus 설정 수집·변경 감지) |
 | **협업/지식** | 업무 보드(칸반/표/캘린더), 스프린트, Jira 양방향 연동(Excel 가져오기·상태/내용 반영), 문서 관리 대시보드(Confluence 문서 가져오기/게시 + 동기화 상태 + AI 시맨틱 검색), 주간 타임라인, WBS, 워크플로우, 마인드맵, 온톨로지 그래프, 지식 허브(문서 에디터·도구 탭 통합), 기술 트렌드 다이제스트 |
 | **개인화** | Your Island — 자주 쓰는 화면을 개인 화면 하나에 모아 탭/좌측 레일로 전환(기존 페이지를 그대로 임베드), 아일랜드 여러 개 + 팀 공유·복제, 화면 언어 선택(한국어/English) |
 | **소통/알림** | 사용자 VOC 게시판, 인앱 알림, 릴리즈 노트 패널(CHANGELOG 자동 파싱), 👍 공감 |

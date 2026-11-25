@@ -608,9 +608,9 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 - `MacCard` 등 본문 wrapper 와 같은 row 에 둔다.
 
 **URL 동기화 — `hooks/useClusterRouteParam.ts`:** 선택을 `/<base>/:clusterId` 에 담는다(파라미터가 없으면 첫 클러스터로 replace).
-`useClusterRouteParam(base, clusters, { pathFor?, local? })` — `pathFor` 는 id 가 경로 가운데 오는 라우트(`/versions/:id/graph`)용,
+`useClusterRouteParam(base, clusters, { pathFor?, local? })` — `pathFor` 는 id 가 경로 가운데 오는 라우트(`/<base>/:id/<sub>`)용,
 `local` 은 허브 탭 안에 다시 마운트된 화면(지식 허브의 온톨로지)처럼 이동하면 안 되는 곳용이다. `pathFor` 는 모듈 스코프 함수로 넘긴다.
-예: `K8sLogsPage`·`IncidentAnalysisPage`(쿼리 `?namespace=&pod=` 병행)·`VersionGraphPage`·`OntologyPage`.
+예: `K8sLogsPage`·`IncidentAnalysisPage`(쿼리 `?namespace=&pod=` 병행)·`OntologyPage`.
 
 **K8s 클러스터 허브 임베드 — `lib/k8sHub.ts` (D-240):** per-cluster K8s 화면은 `/k8s/:clusterId/:view` 허브의 서브뷰로도 마운트된다.
 허브가 `K8sHubContext` 를 제공하면 ① `useClusterRouteParam()` 은 URL 을 건드리지 않고 허브의 `clusterId`/`selectCluster` 를 돌려주고
@@ -623,7 +623,7 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 
 **전체 높이 캔버스 페이지(PageShell 예외)**: 루트를 `app-h-screen flex overflow-hidden` 가로 행으로 두고
 `<div className="py-3 flex-shrink-0"><ClusterSidebar iconOnly … /></div>` + `<div className="flex-1 min-w-0 flex flex-col">`(툴바·캔버스)로 나눈다.
-캔버스는 ResizeObserver 로 줄어든 폭을 따라간다. 예: `VersionGraphPage`·`OntologyPage`.
+캔버스는 ResizeObserver 로 줄어든 폭을 따라간다. 예: `OntologyPage`.
 
 **금지:**
 - ❌ 와이드 폼 (`iconOnly` 없이 사용) — 신규 페이지에서 절대 사용 금지. 기존 페이지도 모두 iconOnly 로 마이그레이션됨.
@@ -640,7 +640,7 @@ MacCard `title` 아래 또 그린 툴바 행(이중 헤더), 같은 모양의 �
 **예외 — SSH 웹 터미널 창(`SshTerminalWindow`, `/k9s`·`/node-ssh`)**: 터미널 크롬은 테마와 무관한 고정 다크(`bg-zinc-*`·`text-zinc-*`, `rounded-2xl`)다. 터미널 화면은 테마가 바뀌어도 같은 대비여야 하고 xterm 팔레트가 별도(Settings ▸ 터미널 Appearance)이기 때문이다. 드래그 창 좌표(`left`/`top`)만 인라인 `style` 을 쓴다. 이 창 안에서 상태·경고 색(`status-*`)은 토큰을 그대로 쓴다.
 
 **적용 화면**: 노드 일괄 실행 `/bulk-exec` · mc 클라이언트 `/mc` · etcdctl `/etcdctl` ·
-Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 모니터링(Isilon) `/isilon-nfs`
+Cilium BPF Trace `/cilium-trace` · NFS 모니터링(Isilon) `/isilon-nfs`
 (+ 신규 SSH/exec 콘솔은 전부 이 패턴으로 시작)
 
 > `/isilon-nfs` 는 명령 1건이 stdout/stderr 두 스트림이 아니라 단일 출력(+선택적 error)만 갖는
@@ -714,9 +714,9 @@ Cilium BPF Trace `/cilium-trace` · 커널 파라미터 `/kernel-params` · NFS 
 - [ ] 결과가 모드별로 보존되는가, 스크롤이 카드 내부 한 겹뿐인가
 - [ ] 오류가 로그 + alert 한 곳인가
 
-적용 현황: §12.6 적용 화면 6개(`/etcdctl` `/bulk-exec` `/mc` `/cilium-trace` `/kernel-params` `/isilon-nfs`) 전부 적용 완료.
+적용 현황: §12.6 적용 화면 5개(`/etcdctl` `/bulk-exec` `/mc` `/cilium-trace` `/isilon-nfs`) 전부 적용 완료.
 화면 특성에 따른 차이 — `/isilon-nfs` 는 등록된 읽기 전용 명령만 실행하므로 위험 배지·확인 모달이 없고 좌측에 서버 레일이 따로 있다,
-`/kernel-params` 는 프리셋이 모두 조회 명령, `/mc`·`/kernel-params`·`/isilon-nfs` 는 모드 탭이 없어 결과 보관 단위가 프리셋·화면 하나다.
+`/mc`·`/isilon-nfs` 는 모드 탭이 없어 결과 보관 단위가 프리셋·화면 하나다.
 신규 실행형 화면은 위 체크리스트로 시작한다.
 
 ### 12.7 전역 상단바 (`components/layout/AppTopBar.tsx`) — 높이 규약
@@ -841,11 +841,22 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   `warnings[]`·`missing[]`·`steps[]`·`entries[]`·`fieldErrors[]`)은 절삭하지 않고 한 건당 한 줄(수백 건이면 앞 200건 + "외 N건").
   성공 시 자동으로 닫히는 대화상자는 부분 실패(warn/error)면 닫지 않고 로그를 보여준다. 자격증명·쿠키·토큰은 로그 금지(계정 이름까지만).
 - **표시 위치(2026-11-23)** — 전역 설정 `useLogWindowStore().mode`(localStorage `pep.runlog.displayMode`, 기본 `window`). `window` 면
-  `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 이 로그 본문을 우측 상단 새 창(`common/PopoutWindow` — 같은 React 트리 portal,
+  `RunLogPanel`·`EfficiencyRunLog`·`CheckMatrixRunLogPanel` 이 로그 본문을 새 창(`common/PopoutWindow` — 기본 크기·위치는 앱 화면을 4등분한 1사분면(우측 상단 1/4, 최소 480×320), 작업 화면을 가리지 않게 크기를 넘기지 않는다(D-245) — 같은 React 트리 portal,
   `<head>` 스타일·`<html>` 테마 속성 복사·동기화)에 띄우고 화면 안에는 상태 줄과 "새 창" 버튼만 남긴다. 팝업 차단 시 화면 안으로 폴백(경고 줄),
   사용자가 창을 닫으면 다음 실행 시작 때 다시 연다. `LogViewer` 는 툴바 "새 창으로 열기"(`allowPopout`, 기본 true). 새 로그 패널도
   표시 위치를 직접 정하지 말고 이 설정을 따른다. **예외: 로그 중심 화면(`RunLogPanel fill`, §12.6.1)은 설정과 무관하게 항상 화면 안**
   (창 전환 버튼 숨김, 툴바 "새 창으로 열기" 는 유지). 설정 화면: Settings → 화면 UI 설정 → 실행 로그 표시(`components/settings/LogDisplaySetting.tsx`).
+- **실행 명령 줄(관리자, 2026-11-24)** — 관리자에게는 서버가 노드·클러스터에 실제로 날린 명령이 `cmd` 레벨 줄
+  (`CMD   $ [ssh root@host:22] …`, `LogViewer` 보라색)로 실행 로그에 함께 쌓인다. 화면이 따로 할 일은 없다: 단건 요청은 axios
+  인터셉터가 응답 헤더 `X-PEP-Commands` 를 진행 중인 `useRunLog` 에 붙이고(`lib/commandTrace.ts`), SSE 는 서버가 `log{level:"cmd"}`
+  를 직접 보낸다(`applyRunEvent`). 표준 이벤트를 쓰지 않는 스트림 소비자(예: `verifyLogged`)는 `log` 이벤트를 `run.log` 로 넘겨야 한다.
+  명령은 **그 요청을 보낸 실행에만** 붙는다 — `begin` 이 실행 owner 를 등록하고 직후(같은 매크로태스크) 나가는 요청에 owner 를 찍는다.
+  타이머·폴링 뒤에 요청을 보내는 실행은 보내기 직전에 핸들의 `run.claim()` 을 부른다(`pollIntoRunLog` 는 자동). owner 없는 요청의
+  명령은 진행 중 실행이 하나일 때만 붙는다. 관리자 판정은 토큰 role + DB 현재 역할·활성(`command_trace.resolve_admin`).
+  `RunLogPanel` 헤더의 「명령」 토글(`useLogWindowStore().showCommands`, localStorage `pep.runlog.showCommands`, 기본 켬)은 관리자에게만
+  보이고, 비관리자 화면은 `cmd` 줄을 거른다. 백엔드에서 새로 노드에 명령을 보내는 길목을 만들면 `command_trace.record(kind, target, cmd)`
+  를 부른다(`ssh_runner`·`subprocess`(감사 훅)·`kubectl_exec.safe_pod_exec` 는 이미 기록한다). DB 에 남는 실행 로그는
+  `command_trace.bind_log(log.log)` 로 `cmd` 줄을 저장하고, 조회 직렬화에서 `command_trace.visible_lines(lines)` 로 거른다.
 - **새 실행 버튼 체크리스트**: ① `useRunLog` + `useLogPref('<화면키>')` + `RunLogPanel` ② 동기=`runLogged`·SSE=`streamLogged`·큐잉=
   `pollIntoRunLog` ③ 대상(호스트·클러스터·항목)별 한 줄 + 합계 줄 ④ 실패 사유가 error 줄로 남는가(훅에 `onError` 가 없어도)
   ⑤ 자격증명·비밀값을 로그에 싣지 않는가 ⑥ 기존 결과 뷰(표·출력·타임라인)는 그대로인가.
@@ -990,6 +1001,7 @@ D-117~D-134)에서 원자는 지켜지는데 화면이 "AI 가 만든 템플릿"
 - **8 아이브로우**: `uppercase tracking-wide*` 는 쓰지 않는다(MacCard·Card 헤더 내장도 Phase 3 에서 제거 — 제목 슬롯에 데이터가 들어온다). 표 헤더(`th`)는 `text-xs font-medium text-muted-foreground`(대소문자 그대로).
 - **9 이모지 예외**: 사용자가 고르고 DB 에 저장하는 값은 데이터다 — `lib/clusterIcons.ts` 피커, `hooks/useOperationLevels.ts` 운영레벨 아이콘, 문서 템플릿·사용자 콘텐츠.
   UI 크롬·상태·카테고리 표시에 쓰인 이모지와 ⚠/✓/✗ 문자 접두는 lucide 아이콘 + 상태 토큰.
+- **동적 폭 막대**: 값에 따라 폭이 바뀌는 막대는 인라인 `style` 대신 SVG `<rect width>`(viewBox 고정 + `preserveAspectRatio="none"`, `fill-*` 토큰)로 그린다 — 레퍼런스 `components/service-config/NumericBars.tsx`.
 - **10 설명 문장은 툴팁**: "이 항목은 무엇이다·이렇게 동작한다" 같은 상시 설명 문장은 본문에 깔지 않고 `common/InfoHint`(ⓘ 아이콘 — 마우스오버·키보드 포커스 툴팁, `aria-label` 에 문장)로 둔다.
   본문에는 데이터(값·건수·상태·시각)와 결과·오류 문구만. 탭 설명은 `SegTabs` 옵션 3번째 요소(툴팁). 확인 대화상자 설명은 결정에 필요한 문장이라 본문 유지.
   레퍼런스: 서비스 구성(`pages/ServiceConfigPage.tsx`).

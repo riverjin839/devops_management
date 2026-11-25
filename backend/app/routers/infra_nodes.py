@@ -1,5 +1,6 @@
 import json
 import logging
+import contextvars
 import queue
 import subprocess
 import threading
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.services import command_trace
 from app.services.sse import SSE_HEADERS as _SHARED_SSE_HEADERS
 from app.auth.deps import require_operator
 from app.database import SessionLocal, get_db
@@ -342,7 +344,9 @@ def _stream_job(job: Callable[[Session, Emit], BaseModel]) -> StreamingResponse:
     def worker() -> None:
         sdb = SessionLocal()
         try:
-            result = job(sdb, q.put)
+            # 노드에 나간 명령을 관리자 실행 로그에 cmd 줄로(services/command_trace.py).
+            with command_trace.bind_stream(q.put):
+                result = job(sdb, q.put)
             q.put({"type": "result", "result": result.model_dump(mode="json")})
         except _RunFailure as e:
             sdb.rollback()
@@ -355,7 +359,9 @@ def _stream_job(job: Callable[[Session, Emit], BaseModel]) -> StreamingResponse:
             sdb.close()
             q.put(done)
 
-    threading.Thread(target=worker, name="infra-nodes-stream", daemon=True).start()
+    # 요청 컨텍스트(관리자 여부·명령 sink)를 작업 스레드로 넘긴다 — threading.Thread 는 contextvars 를 복사하지 않는다.
+    ctx = contextvars.copy_context()
+    threading.Thread(target=ctx.run, args=(worker,), name="infra-nodes-stream", daemon=True).start()
 
     def gen() -> Iterator[str]:
         while True:

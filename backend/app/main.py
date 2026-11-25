@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -19,6 +20,8 @@ from app.services.request_context import (
     HEADER as REQUEST_ID_HEADER, get_request_id, install_logging, new_request_id,
 )
 from app.services.request_id_middleware import RequestIdMiddleware
+from app.services import command_trace
+from app.services.command_trace import CommandTraceMiddleware
 from app.services.memory_watch import MemoryWatchMiddleware
 from app.services.dc_inventory.errors import DcError
 from app.services.dc_inventory.importer import FileError as DcFileError
@@ -103,6 +106,7 @@ from app.routers import (
     external_services_router,
     external_services_public_router,
     public_share_router,
+    common_services_router,
     k8s_helm_router,
     k8s_exec_router,
     k9s_ssh_router,
@@ -1495,6 +1499,9 @@ def _run_migrations():
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
         _safe_create_index("ix_os_param_changes_cluster_detected", "os_param_changes", "(cluster_id, detected_at DESC)")
+    # node_nic_states: NIC 상태 — 수집 출처(agent|ssh). 테이블은 create_all, 1.103 이전 DB 는 컬럼 보강.
+    if "node_nic_states" in inspector.get_table_names():
+        _safe_add_column("node_nic_states", "source", "VARCHAR(16)")
     # node_param_agents: 노드 파라미터 에이전트 상태 — 테이블은 create_all, 워치독 조회 인덱스 보강.
     if "node_param_agents" in inspector.get_table_names():
         _safe_create_index("ix_node_param_agents_last_seen", "node_param_agents", "(last_seen_at)")
@@ -1508,11 +1515,25 @@ def _run_migrations():
     if "service_config_apply_runs" in inspector.get_table_names():
         _safe_create_index("ix_service_config_apply_runs_lookup", "service_config_apply_runs",
                            "(cluster_id, service, started_at DESC)")
+    if "service_config_items" in inspector.get_table_names():
+        _safe_add_column("service_config_items", "min_value", "VARCHAR(64)")
+        _safe_add_column("service_config_items", "max_value", "VARCHAR(64)")
     if "service_config_changes" in inspector.get_table_names():
         _safe_create_index("ix_service_config_changes_lookup", "service_config_changes",
                            "(cluster_id, service, detected_at DESC)")
     if "service_config_groups" in inspector.get_table_names():
         _safe_create_index("ix_service_config_groups_lookup", "service_config_groups", "(cluster_id, service, sort_order)")
+    # common_service_*: 공통 서비스 — 테이블은 create_all, 스냅샷·변경·실행 조회 인덱스 보강.
+    if "common_service_instances" in inspector.get_table_names():
+        _safe_add_column("common_service_instances", "fail_count", "INTEGER NOT NULL DEFAULT 0")
+        _safe_add_column("common_service_instances", "tenant_id", "UUID")
+    if "common_service_snapshots" in inspector.get_table_names():
+        _safe_create_index("ix_common_service_snapshots_lookup", "common_service_snapshots",
+                           "(instance_id, component, collected_at DESC)")
+    if "common_service_changes" in inspector.get_table_names():
+        _safe_create_index("ix_common_service_changes_lookup", "common_service_changes", "(instance_id, detected_at DESC)")
+    if "common_service_runs" in inspector.get_table_names():
+        _safe_create_index("ix_common_service_runs_lookup", "common_service_runs", "(instance_id, started_at DESC)")
 
     # cluster_items: 현황 아이템 — 문자형/도메인상태 컬럼은 구버전 DB 호환을 위해 보강.
     if "cluster_items" in inspector.get_table_names():
@@ -2565,6 +2586,15 @@ async def lifespan(app: FastAPI):
     # §config.py sync_threadpool_size 주석 참고.
     current_default_thread_limiter().total_tokens = settings.sync_threadpool_size
 
+    # 실행 명령 추적(관리자 "로그 보기") — subprocess 감사 훅 + run_in_executor(None) 가 contextvars 를 넘기게.
+    command_trace.install()
+    try:
+        asyncio.get_running_loop().set_default_executor(
+            command_trace.ContextThreadPoolExecutor(thread_name_prefix="pep-exec"),
+        )
+    except Exception:  # noqa: BLE001
+        _startup_log.warning("command_trace: default executor 교체 실패 — 스레드 안 명령은 실행 로그에 안 남을 수 있음")
+
     boot_state.begin()
     boot_state.pending_ddl_provider = lambda: list(_pending_ddl)
     _t = _time_mod.monotonic()
@@ -2686,7 +2716,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.104.0",
+    version="1.107.2",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2708,6 +2738,8 @@ if extra_origins:
 
 # 요청 ID — 가장 안쪽(gzip·CORS 보다 먼저 add)이라 5xx 응답 본문을 압축 전에 읽어 사유로 남긴다.
 app.add_middleware(RequestIdMiddleware)
+# 실행 명령 추적 — 관리자 요청에서 노드·클러스터에 나간 명령을 X-PEP-Commands 헤더로 돌려준다(services/command_trace.py).
+app.add_middleware(CommandTraceMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2715,7 +2747,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=[REQUEST_ID_HEADER],
+    expose_headers=[REQUEST_ID_HEADER, command_trace.HEADER],
 )
 
 
@@ -2873,6 +2905,7 @@ app.include_router(daily_report_router, prefix="/api/v1", dependencies=_auth)
 # 외부 서비스(도메인·IP:Port) — 공개 조회(`/public/external-services/*`)는 비인증(저장 스냅샷만), 수집·설정은 JWT.
 app.include_router(external_services_public_router, prefix="/api/v1")
 app.include_router(external_services_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(common_services_router, prefix="/api/v1", dependencies=_auth)
 # 공개 화면 공유 링크(만료 기한이 있는 접근 토큰) 관리 — require_admin.
 app.include_router(public_share_router, prefix="/api/v1", dependencies=_auth)
 # cluster-trends — per-node 메트릭 추이(Prometheus range query, 노드 명시선택+상한).
@@ -2916,7 +2949,7 @@ app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.104.0",
+        "version": "1.107.2",
         "status": "running"
     }
 

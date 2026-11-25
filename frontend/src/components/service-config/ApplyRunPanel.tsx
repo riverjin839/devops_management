@@ -24,7 +24,7 @@ export function NodeResultsTable({ run }: { run: ServiceConfigApplyRun }) {
     <div className="overflow-x-auto">
       <table className="w-full min-w-[640px]">
         <thead>
-          <tr><th className={TH}>노드</th><th className={TH}>결과</th><th className={TH}>적용 전 → 후{keys[0] ? ` (${keys[0]})` : ''}</th><th className={TH}>소요</th><th className={TH}>오류</th></tr>
+          <tr><th className={TH}>노드</th><th className={TH}>결과</th><th className={TH}>적용 전 → 후{keys[0] ? ` (${keys[0]})` : ''}</th><th className={TH}>소요</th><th className={TH}>오류·메모</th></tr>
         </thead>
         <tbody>
           {run.targets.map((t) => {
@@ -36,7 +36,10 @@ export function NodeResultsTable({ run }: { run: ServiceConfigApplyRun }) {
                 <td className={`${TD} whitespace-nowrap`}>{st ? <StatusBadge variant={st.variant} label={st.label} /> : <StatusBadge variant={run.status === 'running' ? 'loading' : 'neutral'} label={run.status === 'running' ? '대기·진행' : '—'} />}</td>
                 <td className={`${TD} font-mono text-xs`}>{r && keys[0] ? `${r.before?.[keys[0]] ?? '—'} → ${r.after?.[keys[0]] ?? '—'}` : '—'}</td>
                 <td className={`${TD} text-xs text-muted-foreground`}>{r?.durationMs ? `${(r.durationMs / 1000).toFixed(1)}초` : '—'}</td>
-                <td className={`${TD} text-xs text-status-critical break-all`}>{r?.error ?? ''}</td>
+                <td className={`${TD} text-xs break-all`}>
+                  {r?.error && <span className="block text-status-critical">{r.error}</span>}
+                  {(r?.notes ?? []).map((n) => <span key={n} className="block text-status-warning">{n}</span>)}
+                </td>
               </tr>
             );
           })}

@@ -109,7 +109,7 @@ def test_summarize_and_status():
 
 
 def test_catalog_shape():
-    assert list(SERVICE_KEYS) == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"]
+    assert list(SERVICE_KEYS) == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet", "nic"]
     keys = [(i["service"], i["key"]) for i in ITEMS]
     assert len(keys) == len(set(keys))
     for i in ITEMS:
@@ -213,7 +213,7 @@ def test_api_requires_operator_for_import(db, cluster):
     try:
         client = TestClient(app)
         r = client.get("/api/v1/service-config/services")
-        assert r.status_code == 200 and [s["key"] for s in r.json()["items"]] == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"]
+        assert r.status_code == 200 and [s["key"] for s in r.json()["items"]] == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet", "nic"]
         r = client.get(f"/api/v1/service-config/clusters/{cluster.id}/cilium")
         assert r.status_code == 200, r.text
         assert r.json()["counts"]["same"] >= 1
@@ -1116,7 +1116,7 @@ def test_service_status_drift_alerts_changes_and_api(db, linux_v1):
         app.dependency_overrides[get_current_user] = lambda: viewer
         client = TestClient(app)
         r = client.get(f"/api/v1/service-config/clusters/{c.id}/status")
-        assert r.status_code == 200 and set(r.json()["services"]) == set(["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"])
+        assert r.status_code == 200 and set(r.json()["services"]) == set(["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet", "nic"])
         r = client.get(f"/api/v1/service-config/clusters/{c.id}/linux/status")
         assert r.status_code == 200 and r.json()["drift"]["rows"][0]["key"] == "net.ipv4.ip_forward"
         assert client.get(f"/api/v1/service-config/clusters/{c.id}/nope/status").status_code == 404
@@ -1573,3 +1573,22 @@ def test_agent_read_files(tmp_path):
     assert "error" in out["kubelet"]
     again = AG.read_files(targets, tmp_path, {"containerd": out["containerd"]["sha256"]})
     assert "content" not in again["containerd"]  # 해시가 같으면 내용 생략
+
+
+def test_numeric_ranges_seeded_and_in_view(db, linux_v1):
+    from app.models.service_config import ServiceConfigItem
+    from app.services.service_config import view as V
+    from app.services.service_config.catalog_seed import seed_catalog
+
+    rows = {r["key"]: r for s in V.build_view(db, linux_v1, "linux")["sections"] for r in s["items"]}
+    assert (rows["vm.swappiness"]["min_value"], rows["vm.swappiness"]["max_value"]) == ("0", "100")
+    assert rows["net.core.somaxconn"]["max_value"] is None
+    # 운영자가 고친 범위는 다시 시드해도 덮지 않는다
+    it = db.query(ServiceConfigItem).filter(ServiceConfigItem.service == "linux", ServiceConfigItem.key == "vm.swappiness").one()
+    it.max_value = "50"
+    db.commit()
+    seed_catalog(db)
+    db.refresh(it)
+    assert it.max_value == "50"
+    it.max_value = "100"
+    db.commit()

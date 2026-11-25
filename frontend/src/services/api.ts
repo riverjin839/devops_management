@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmProfile, LlmProfileModels, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
+import { currentRequestOwner, OWNER_FIELD, publishFromResponse } from '@/lib/commandTrace';
 import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
@@ -81,6 +82,12 @@ api.interceptors.request.use(
     }
     // 요청 추적 ID — 재시도는 같은 ID 를 유지한다(lib/requestId.ts).
     if (!config.headers.has(REQUEST_ID_HEADER)) config.headers.set(REQUEST_ID_HEADER, newRequestId());
+    // 이 요청을 보낸 실행 로그(lib/commandTrace) — 응답의 실행 명령을 그 실행에만 붙인다. 재시도는 같은 config 라 유지된다.
+    const cfgExt = config as unknown as Record<string, unknown>;
+    if (cfgExt[OWNER_FIELD] === undefined) {
+      const owner = currentRequestOwner();
+      if (owner) cfgExt[OWNER_FIELD] = owner;
+    }
     // FormData/Blob/File 은 own-enumerable 프로퍼티가 없어 convertKeysToSnake 가
     // 빈 객체({})로 뭉개버린다 — multipart 업로드(backup import 등)가 깨지므로 건너뛴다.
     if (config.data && typeof config.data === 'object'
@@ -125,6 +132,8 @@ function retryDelay(error: unknown): number | null {
 // Response interceptor - snake_case → camelCase 자동 변환 + debug 로깅
 api.interceptors.response.use(
   (response) => {
+    // 관리자 요청이면 서버가 실제로 날린 명령을 헤더로 돌려준다 — 그 요청을 보낸 실행 로그에 CMD 줄로(lib/commandTrace).
+    publishFromResponse(response);
     if (response.data && typeof response.data === 'object' && !(response.data instanceof Blob)) {
       response.data = convertKeys(response.data);
     }
@@ -141,6 +150,7 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    publishFromResponse(error?.response);
     const delay = retryDelay(error);
     if (delay != null) {
       await new Promise((r) => setTimeout(r, delay));
@@ -441,34 +451,8 @@ export const workItemCustomFieldsApi = {
     api.get<{ data: import('@/types').WorkItemCustomField[] }>('/work-item-custom-fields'),
 };
 
-// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집 & 히스토리
-export interface ComponentSnapshot {
-  id: string;
-  component: string;
-  category: string | null;
-  version: string | null;
-  data: Record<string, unknown>;
-  contentHash?: string;
-  collectedAt: string;
-}
-
-export interface VersionGraphNode {
-  id: string;
-  label: string;
-  type: 'cluster' | 'category' | 'component' | 'flag';
-  category?: string;
-  version?: string | null;
-  value?: string;
-  collectedAt?: string;
-  /** component 노드만 — 수집된 플래그 전체 개수(그래프는 앞 6개만 leaf 로 그린다). */
-  flagTotal?: number;
-}
-
-export interface VersionGraphEdge {
-  source: string;
-  target: string;
-  type: 'contains' | 'param' | 'configures' | 'replaces';
-}
+// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집(서비스 구성 "현재 값 수집" 이 쓴다).
+// SSH 수집(etcd systemd·kubelet·커널 파라미터·containerd·kubeadm 인증서·노드 NIC)은 components/versions 모달이 스트림으로 부른다.
 
 /** `POST /collect-versions` 응답의 컴포넌트별 결과 — 실행 로그가 대상마다 한 줄씩 남긴다. */
 export interface VersionCollectComponent {
@@ -486,51 +470,6 @@ export const versionsApi = {
     }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal, timeout: SYNC_RUN_TIMEOUT },
     ),
-  collectMinio: (clusterId: string, signal?: AbortSignal) =>
-    api.post<import('@/types').MinioCollectResponse>(
-      `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
-    ),
-  /** 현재 스냅샷 CSV 내보내기. detail 로 컬럼 풍부도 조절. */
-  exportCsv: (
-    clusterId: string,
-    opts: { detail?: 'summary' | 'full' | 'none'; categories?: string[]; components?: string[] } = {},
-    signal?: AbortSignal,
-  ) => {
-    const q = new URLSearchParams();
-    if (opts.detail) q.set('detail', opts.detail);
-    if (opts.categories?.length) q.set('categories', opts.categories.join(','));
-    if (opts.components?.length) q.set('components', opts.components.join(','));
-    return api.get<Blob>(
-      `/clusters/${clusterId}/versions/export.csv?${q.toString()}`,
-      { signal, responseType: 'blob' },
-    );
-  },
-  current: (clusterId: string) =>
-    api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
-      `/clusters/${clusterId}/versions/current`,
-    ),
-  history: (clusterId: string, component?: string, limit = 200) => {
-    const q = new URLSearchParams();
-    if (component) q.set('component', component);
-    q.set('limit', String(limit));
-    return api.get<{ clusterId: string; component: string | null; snapshots: ComponentSnapshot[] }>(
-      `/clusters/${clusterId}/versions/history?${q.toString()}`,
-    );
-  },
-  diff: (clusterId: string, fromId: string, toId: string) =>
-    api.get<{
-      from: { id: string; component: string; version: string | null; collectedAt: string };
-      to: { id: string; component: string; version: string | null; collectedAt: string };
-      versionChanged: boolean;
-      changes: { key: string; from: unknown; to: unknown }[];
-    }>(`/clusters/${clusterId}/versions/diff?from=${fromId}&to=${toId}`),
-  graph: (clusterId: string) =>
-    api.get<{
-      clusterId: string;
-      clusterName: string;
-      nodes: VersionGraphNode[];
-      edges: VersionGraphEdge[];
-    }>(`/clusters/${clusterId}/versions/graph`),
 };
 
 // Bulk SSH/SCP API
@@ -2004,7 +1943,7 @@ import type {
 /** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
 export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
 /** versions SSH 수집의 SSE 버전(D-135) — 호스트가 끝날 때마다 log·step, 마지막에 동기 응답과 같은 result. */
-export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config';
+export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config' | 'nic';
 export const versionsCollectStreamUrl = (clusterId: string, kind: VersionsCollectKind) =>
   `/api/v1/clusters/${clusterId}/collect-${kind}/stream`;
 
@@ -2722,10 +2661,49 @@ const toEntries = (values: Record<string, string | null>) =>
   Object.entries(values).map(([key, value]) => ({ key, value }));
 /** NIC 상태(서비스 구성 ▸ NIC) — 노드 파라미터 에이전트 보고의 읽기 전용 판정. 설정 저장은 admin. */
 export const nicWatchApi = {
-  cluster: (clusterId: string) => api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`),
+  // GET 쿼리는 요청 인터셉터가 snake_case 로 바꾸지 않으므로 직접 쓴다.
+  cluster: (clusterId: string, p: import('@/types').NicViewQuery = {}) =>
+    api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`, {
+      params: { q: p.q || undefined, kind: p.kind || undefined, only_flagged: p.onlyFlagged || undefined, offset: p.offset ?? 0, limit: p.limit ?? 100 },
+    }),
+  interfaceDetail: (clusterId: string, node: string, iface: string) =>
+    api.get<import('@/types').NicInterfaceDetail>(
+      `/nic-watch/clusters/${clusterId}/nodes/${encodeURIComponent(node)}/interfaces/${encodeURIComponent(iface)}`),
   settings: () => api.get<import('@/types').NicWatchSettingsOut>('/nic-watch/settings'),
   updateSettings: (body: Partial<import('@/types').NicWatchSettings>) =>
     api.put<import('@/types').NicWatchSettingsOut>('/nic-watch/settings', body),
+  /** 클러스터별 판정 기준(공통 기준 위의 재정의). 저장·초기화는 admin. resetFields 는 서버 필드명(snake_case). */
+  clusterSettings: (clusterId: string) => api.get<import('@/types').NicClusterSettingsOut>(`/nic-watch/clusters/${clusterId}/settings`),
+  updateClusterSettings: (clusterId: string, body: Partial<import('@/types').NicWatchSettings> & { resetFields?: string[] }) =>
+    api.put<import('@/types').NicClusterSettingsOut>(`/nic-watch/clusters/${clusterId}/settings`, body),
+  clearClusterSettings: (clusterId: string) => api.delete<import('@/types').NicClusterSettingsOut>(`/nic-watch/clusters/${clusterId}/settings`),
+  observed: (clusterId: string) => api.get<import('@/types').NicObserved>(`/nic-watch/clusters/${clusterId}/observed`),
+  overrides: () => api.get<import('@/types').NicOverrideSummary[]>('/nic-watch/overrides'),
+};
+
+/** 공통 서비스(/common-services) — 인스턴스 등록·K8S 에서 가져오기·수집(SSE)·설정·변경·실행 이력·감시 설정. */
+export const commonServicesApi = {
+  catalog: () => api.get<{ services: import('@/types').CommonServiceDef[]; hostKinds: string[] }>('/common-services/catalog'),
+  status: () => api.get<import('@/types').CommonServiceStatusMap>('/common-services/status'),
+  instances: (serviceType?: string) =>
+    api.get<{ items: import('@/types').CommonServiceInstance[] }>('/common-services/instances',
+      { params: serviceType ? { service_type: serviceType } : {} }),
+  create: (body: import('@/types').CommonServiceInstanceInput) =>
+    api.post<import('@/types').CommonServiceInstance>('/common-services/instances', body),
+  update: (id: string, body: import('@/types').CommonServiceInstanceInput) =>
+    api.put<import('@/types').CommonServiceInstance>(`/common-services/instances/${id}`, body),
+  remove: (id: string) => api.delete<{ deleted: boolean }>(`/common-services/instances/${id}`),
+  discover: (body: { clusterId: string; namespace?: string | null; serviceType?: string | null }) =>
+    api.post<{ items: import('@/types').CommonServiceCandidate[] }>('/common-services/discover', body),
+  config: (id: string) => api.get<import('@/types').CommonServiceConfig>(`/common-services/instances/${id}/config`),
+  changes: (id: string) => api.get<{ items: import('@/types').CommonServiceChange[] }>(`/common-services/instances/${id}/changes`),
+  runs: (id: string) => api.get<{ items: import('@/types').CommonServiceRun[] }>(`/common-services/instances/${id}/runs`),
+  run: (id: string, runId: string) => api.get<import('@/types').CommonServiceRun>(`/common-services/instances/${id}/runs/${runId}`),
+  /** 지금 수집(collect) / 접속 테스트(test, 저장 없음) — SSE 실시간 로그. */
+  runStreamUrl: (id: string, kind: 'collect' | 'test') => `/api/v1/common-services/instances/${id}/run/stream?kind=${kind}`,
+  watchSettings: () => api.get<import('@/types').CommonServiceWatchSettings>('/common-services/watch-settings'),
+  updateWatchSettings: (body: Partial<import('@/types').CommonServiceWatchSettings>) =>
+    api.put<import('@/types').CommonServiceWatchSettings>('/common-services/watch-settings', body),
 };
 
 export const serviceConfigApi = {

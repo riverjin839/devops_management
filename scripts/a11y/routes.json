@@ -10,7 +10,6 @@
     { "id": "docs", "path": "/docs", "auth": true, "page": "frontend/src/pages/KnowledgeHubPage.tsx", "label": "지식 허브" },
     { "id": "settings", "path": "/settings", "auth": true, "page": "frontend/src/pages/SettingsPage.tsx", "label": "설정" },
     { "id": "cluster-manage", "path": "/cluster-manage", "auth": true, "page": "frontend/src/pages/ClusterManagePage.tsx", "label": "클러스터 관리" },
-    { "id": "versions", "path": "/versions", "auth": true, "page": "frontend/src/pages/VersionsPage.tsx", "label": "버전" },
     { "id": "ops-notes", "path": "/ops-notes", "auth": true, "page": "frontend/src/pages/OpsNotesPage.tsx", "label": "운영 노트" },
     { "id": "documents", "path": "/documents", "auth": true, "page": "frontend/src/pages/DocumentsPage.tsx", "label": "문서" },
     { "id": "playbooks", "path": "/playbooks", "auth": true, "page": "frontend/src/pages/PlaybooksPage.tsx", "label": "플레이북" },

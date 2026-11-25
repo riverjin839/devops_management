@@ -206,6 +206,7 @@ def build_view(db: Session, cluster: Cluster, service: str, version_no: Optional
         sections.setdefault(it.section, []).append({
             "id": str(it.id), "key": it.key, "label": it.label, "help": it.help, "value_type": it.value_type,
             "unit": it.unit, "options": it.options, "default_value": it.default_value,
+            "min_value": getattr(it, "min_value", None), "max_value": getattr(it, "max_value", None),
             "restart_scope": it.restart_scope, "version_value": vval,
             "base_value": C.norm(default_vals.get(it.key)) if it.key in default_vals else None,
             "override_value": C.norm(overrides.get(it.key)) if group and it.key in overrides else None,
@@ -248,7 +249,7 @@ def import_v1(db: Session, cluster: Cluster, service: str, username: Optional[st
     for it in items:
         summary = C.summarize(cur["values"].get(it.key) or {})
         if summary["value"] is not None:
-            values[it.key] = summary["value"]
+            values[it.key] = C.to_version_value(summary["value"]) or summary["value"]
             if not summary["uniform"]:
                 mixed.append(it.key)
     if not values:

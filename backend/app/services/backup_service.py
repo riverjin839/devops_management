@@ -93,6 +93,10 @@ LOG_TABLES: frozenset[str] = frozenset({
     "service_config_apply_runs",
     # 서비스 구성 노드 설정 값 변경 이력(로그성, 400일).
     "service_config_changes",
+    # 공통 서비스 수집 스냅샷(재수집 가능)·변경 이력(400일)·실행 로그(365일) — 로그성.
+    "common_service_snapshots",
+    "common_service_changes",
+    "common_service_runs",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와
@@ -113,6 +117,8 @@ SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "isilon_servers": ["encrypted_password", "encrypted_private_key"],
     # 사내 LLM 서비스 API 키 — 암호문이지만 export 기본 마스킹 (SECRET_KEY 유출 대비).
     "llm_credentials": ["api_key"],
+    # 공통 서비스 접속 정보(앱 API 토큰·SSH·LDAP 바인드) — EncryptedText 라 export 시 평문이 되므로 기본 마스킹.
+    "common_service_credentials": ["secret"],
 }
 
 # JSON 컬럼 안의 민감 키 — 컬럼 전체가 아니라 그 키만 마스킹한다(설정 나머지는 백업돼야 한다).

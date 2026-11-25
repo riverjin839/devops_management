@@ -1,20 +1,23 @@
 // 서비스 구성 ▸ NIC — 노드 파라미터 에이전트(1.2.0+)가 보고한 인터페이스 상태(읽기 전용).
 // 경고(본딩/LACP·링크·MTU·ring buffer·드롭·CRC·offload, 노드 간 값 차이) + 노드 × 인터페이스 표. 행을 펼치면 전체 offload·카운터·본딩 하위 상태.
+// 노드 수백 대 클러스터를 위해 검색·종류·경고만 필터와 페이지는 서버가 하고(한 페이지 100행), 행 상세는 펼칠 때만 읽는다.
 // 정상은 중립색, 상태색은 비정상에만(DESIGN_SYSTEM §12.12). 판정 기준은 설정 대화상자(admin)에서 고친다(UI-First).
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Network, Settings2 } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorState, InfoHint, LoadingState, StatusBadge } from '@/components/common';
-import { useNicWatch } from '@/hooks/useNicWatch';
+import { useNicInterfaceDetail, useNicWatch } from '@/hooks/useNicWatch';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { formatRelativeTime } from '@/lib/utils';
-import type { NicFinding, NicInterfaceRow, NicLevel } from '@/types';
+import type { NicFinding, NicInterfaceDetail, NicInterfaceRow, NicLevel } from '@/types';
 import { NicSettingsDialog } from './NicSettingsDialog';
 
 const TH = 'text-left px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border whitespace-nowrap';
 const TD = 'px-3 py-2 border-b border-border align-top text-sm';
 const INPUT = 'px-2 py-1 text-sm rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-1 focus:ring-primary';
+const PAGE = 100;
 
 const KIND_LABEL: Record<string, string> = { physical: '물리', bond: '본딩', vlan: 'VLAN', tunnel: '터널', bridge: '브리지', virtual: '가상' };
 const LEVEL_LABEL: Record<Exclude<NicLevel, 'ok'>, string> = { critical: '위험', warning: '확인 필요', info: '참고' };
@@ -82,7 +85,22 @@ function RingCell({ r }: { r: NicInterfaceRow }) {
   );
 }
 
-function RowDetail({ r }: { r: NicInterfaceRow }) {
+function RowDetailLoader({ clusterId, row }: { clusterId: string; row: NicInterfaceRow }) {
+  const q = useNicInterfaceDetail(clusterId, row.node, row.name, true);
+  if (q.isLoading) return <LoadingState />;
+  if (q.isError || !q.data) return <ErrorState error={q.error} title="상세를 불러오지 못했습니다" onRetry={() => { void q.refetch(); }} />;
+  const d = q.data;
+  return (
+    <>
+      {d.findings.length > 0 && (
+        <ul className="mb-3 rounded-md border border-border bg-card">{d.findings.map((f, i) => <FindingItem key={`${f.code}|${i}`} f={f} />)}</ul>
+      )}
+      <RowDetail r={d} />
+    </>
+  );
+}
+
+function RowDetail({ r }: { r: NicInterfaceDetail }) {
   return (
     <div className="grid gap-3 md:grid-cols-3 text-xs">
       <div className="space-y-1">
@@ -144,39 +162,41 @@ function RowDetail({ r }: { r: NicInterfaceRow }) {
   );
 }
 
-export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdmin: boolean }) {
+/** ``embedded`` = 서비스 구성 NIC 의 상태 탭 안(서비스 이름 제목은 페이지가 그린다). */
+export function NicStatusView({ clusterId, isAdmin, embedded = false }: { clusterId: string; isAdmin: boolean; embedded?: boolean }) {
   const navigate = useNavigate();
-  const q = useNicWatch(clusterId);
-  const data = q.data;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('');
   const [onlyFlagged, setOnlyFlagged] = useState(false);
+  const [page, setPage] = useState(0);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const q2 = useDebouncedValue(query.trim(), 300);
+  useEffect(() => { setPage(0); }, [q2, kind, onlyFlagged, clusterId]);
+  const q = useNicWatch(clusterId, { q: q2, kind, onlyFlagged, offset: page * PAGE, limit: PAGE });
+  const data = q.data;
 
   const findings = useMemo(() => (data?.findings ?? []).filter((f) => showInfo || f.level !== 'info'), [data, showInfo]);
-  const rows = useMemo(() => {
-    const s = query.trim().toLowerCase();
-    return (data?.interfaces ?? []).filter((r) => (!kind || r.kind === kind)
-      && (!onlyFlagged || r.level === 'critical' || r.level === 'warning')
-      && (!s || r.node.toLowerCase().includes(s) || r.name.toLowerCase().includes(s)));
-  }, [data, query, kind, onlyFlagged]);
-  const latest = useMemo(() => (data?.nodes ?? []).reduce<string | null>((m, n) => (n.receivedAt && (!m || n.receivedAt > m) ? n.receivedAt : m), null), [data]);
+  const rows = data?.interfaces ?? [];
+  const total = data?.interfacesTotal ?? 0;
+  const pages = Math.max(1, Math.ceil(total / PAGE));
+  const latest = data?.summary.latestReceivedAt ?? null;
   const toggle = (k: string) => setOpen((prev) => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
 
   return (
     <div className="space-y-3 pb-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="inline-flex items-center gap-1 text-lg font-semibold text-foreground">
+        {!embedded && <h2 className="inline-flex items-center gap-1 text-lg font-semibold text-foreground">
           NIC
           <InfoHint label="NIC 설명" side="bottom"
             text="노드 파라미터 에이전트(1.2.0 이상)가 보고 주기마다 읽는 인터페이스 상태 — 본딩/LACP, 링크 속도·MTU·끊김, ring buffer 와 드롭 카운터, offload. 읽기 전용이며 노드 설정은 바꾸지 않는다." />
-        </h2>
+        </h2>}
         {data && (
           <span className="text-xs text-muted-foreground">
             노드 {data.summary.nodes}개{latest ? ` · 마지막 보고 ${formatRelativeTime(latest)}` : ''}
             {data.settings.enabled ? '' : ' · 수집 꺼짐'}
+            {data.overridden.length > 0 ? ` · 이 클러스터 기준 ${data.overridden.length}개 재정의` : ''}
           </span>
         )}
         <div className="ml-auto">
@@ -188,12 +208,12 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
 
       {q.isLoading && !data ? <LoadingState /> : q.isError ? (
         <ErrorState error={q.error} title="NIC 상태를 불러오지 못했습니다" onRetry={() => { void q.refetch(); }} />
-      ) : !data ? null : data.nodes.length === 0 ? (
+      ) : !data ? null : data.summary.nodes === 0 ? (
         <MacCard>
-          <EmptyState icon={Network} title="NIC 상태를 보고한 노드가 없음"
-            description={data.agentCount === 0
-              ? '노드 파라미터 에이전트(1.2.0 이상)를 설치하면 보고 주기마다 인터페이스 상태가 들어온다.'
-              : (data.pendingAgents[0]?.reason ?? '다음 보고를 기다리는 중')}
+          <EmptyState icon={Network} title="NIC 상태가 아직 없음"
+            description={(data.agentCount === 0
+              ? '「SSH 로 수집」으로 지금 읽어 오거나, 노드 파라미터 에이전트(1.2.0 이상)를 설치하면 1분마다 들어온다(드롭·플래핑 감시는 에이전트가 있을 때만).'
+              : `${data.pendingAgents[0]?.reason ?? '다음 보고를 기다리는 중'} — 「SSH 로 수집」으로 지금 읽어 올 수도 있다.`)}
             action={{ label: '에이전트 설치 화면으로', onClick: () => navigate(`/k8s/${clusterId}/os-param-watch`) }} />
         </MacCard>
       ) : (
@@ -209,7 +229,11 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
           )}
 
           <MacCard title="경고" bodyPadding="p-0"
-            titleExtra={<span className="text-xs text-muted-foreground">위험 {data.summary.critical} · 확인 필요 {data.summary.warning} · 참고 {data.summary.info}</span>}
+            titleExtra={(
+              <span className="text-xs text-muted-foreground">위험 {data.summary.critical} · 확인 필요 {data.summary.warning} · 참고 {data.summary.info}
+                {showInfo && data.findingsTotal > data.findings.length ? ` · 앞 ${data.findings.length}건 표시` : ''}
+              </span>
+            )}
             actions={(
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <input type="checkbox" checked={showInfo} onChange={(e) => setShowInfo(e.target.checked)} /> 참고 포함
@@ -221,10 +245,11 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
           </MacCard>
 
           <MacCard title="인터페이스" bodyPadding="p-0"
-            titleExtra={<span className="text-xs text-muted-foreground">{rows.length}개</span>}
+            titleExtra={<span className="text-xs text-muted-foreground">{total.toLocaleString()}개{q.isFetching ? ' · 갱신 중' : ''}</span>}
             actions={(
               <div className="flex flex-wrap items-center gap-2">
-                <input className={`${INPUT} w-40`} placeholder="노드·인터페이스" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="노드·인터페이스 검색" />
+                <input className={`${INPUT} w-44`} placeholder="노드·인터페이스(glob 가능)" value={query} onChange={(e) => setQuery(e.target.value)}
+                  title="이름 일부 또는 glob(예: gpu-*, ens1f?)" aria-label="노드·인터페이스 검색" />
                 <select className={INPUT} value={kind} onChange={(e) => setKind(e.target.value)} aria-label="인터페이스 종류">
                   <option value="">전체 종류</option>
                   {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -288,17 +313,14 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
                             </td>
                             <td className={TD}>
                               {r.level === 'ok' || r.level === 'info' ? <span className="text-xs text-muted-foreground">{r.level === 'info' ? '참고' : '정상'}</span> : (
-                                <span className="inline-flex items-center gap-1 whitespace-nowrap">{levelBadge(r.level)}<span className="text-xs text-muted-foreground">{r.findings.filter((f) => f.level !== 'info').length}</span></span>
+                                <span className="inline-flex items-center gap-1 whitespace-nowrap">{levelBadge(r.level)}<span className="text-xs text-muted-foreground">{r.findingCount}</span></span>
                               )}
                             </td>
                           </tr>
                           {expanded && (
                             <tr>
                               <td colSpan={11} className="px-4 py-3 border-b border-border bg-secondary/30">
-                                {r.findings.length > 0 && (
-                                  <ul className="mb-3 rounded-md border border-border bg-card">{r.findings.map((f, i) => <FindingItem key={`${f.code}|${i}`} f={f} />)}</ul>
-                                )}
-                                <RowDetail r={r} />
+                                <RowDetailLoader clusterId={clusterId} row={r} />
                               </td>
                             </tr>
                           )}
@@ -307,12 +329,20 @@ export function NicStatusView({ clusterId, isAdmin }: { clusterId: string; isAdm
                     })}
                   </tbody>
                 </table>
+                {pages > 1 && (
+                  <div className="flex items-center justify-end gap-2 px-3 py-2 text-xs text-muted-foreground">
+                    <span>{(page * PAGE + 1).toLocaleString()}–{Math.min(total, (page + 1) * PAGE).toLocaleString()} / {total.toLocaleString()}</span>
+                    <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)} aria-label="이전 페이지">이전</Button>
+                    <span className="tabular-nums">{page + 1} / {pages}</span>
+                    <Button size="sm" variant="outline" disabled={page + 1 >= pages} onClick={() => setPage((p) => p + 1)} aria-label="다음 페이지">다음</Button>
+                  </div>
+                )}
               </div>
             )}
           </MacCard>
         </>
       )}
-      <NicSettingsDialog open={settingsOpen} isAdmin={isAdmin} onClose={() => setSettingsOpen(false)} />
+      <NicSettingsDialog open={settingsOpen} isAdmin={isAdmin} clusterId={clusterId} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
