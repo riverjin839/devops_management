@@ -60,7 +60,7 @@ import { DailyReportPage } from '@/pages/DailyReportPage';
 import { ExternalServicesPage } from '@/pages/ExternalServicesPage';
 import { AgentChat } from '@/components/agent';
 import { Sidebar, PageStyleProvider } from '@/components/layout';
-import { ToastProvider, LoadingState } from '@/components/common';
+import { ToastProvider, LoadingState, TabGlowLayer } from '@/components/common';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuthStore } from '@/stores/authStore';
 import { useFeatureAccess, canAccessFeature } from '@/hooks/useFeatureAccess';
@@ -162,6 +162,8 @@ function AppShell() {
         본문으로 건너뛰기
       </a>
       <Sidebar />
+      {/* 모든 가로 탭 목록에서 마우스를 따라가는 글로우 노치(DESIGN_SYSTEM.md §12.16) — 셸에 한 번만. */}
+      <TabGlowLayer />
       {/* PageStyleProvider — 전역 상단바(AppTopBar, 업무 알람 종 포함) + 라우트별
           "화면 UI 설정"(폰트/크기/색/배경)이 적용된 본문 래퍼. */}
       <PageStyleProvider>

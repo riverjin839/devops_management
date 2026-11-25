@@ -28,6 +28,7 @@ export { PageShell } from './PageShell';
 export type { PageDensity } from './PageShell';
 export { StatTile, StatTileRow } from './StatTile';
 export { SegTabs } from './SegTabs';
+export { TabGlowLayer } from './TabGlowLayer';
 export { InfoHint } from './InfoHint';
 export { SwitchToggle } from './SwitchToggle';
 export { StatusBadge, StatusDot, statusToVariant } from './StatusBadge';

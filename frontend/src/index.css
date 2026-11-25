@@ -1701,6 +1701,19 @@ html.high-contrast .nav-notch-fill { fill: none; }
 html.high-contrast .nav-active-spotlight { filter: none; background: hsl(var(--sidebar-accent)); }
 html.high-contrast .nav-active-notch::after { box-shadow: none; }
 
+/* ── 탭 글로우 노치 (components/common/TabGlowLayer) ──
+   모든 가로 탭 목록([role="tablist"]) 위에서 마우스를 따라가는 빛나는 아치. 위치·모양은 rAF 가 DOM 에 직접 쓴다.
+   색은 --primary 토큰만(테마·강조색을 따른다). 규격은 DESIGN_SYSTEM.md §12.16. */
+.tab-glow { position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none; overflow: visible; opacity: 0; transition: opacity 180ms ease; }
+.tab-glow[data-on] { opacity: 1; }
+.tab-glow-line {
+  fill: none; stroke: hsl(var(--primary)); stroke-width: 1.5; stroke-linecap: round;
+  filter: drop-shadow(0 0 2px hsl(var(--primary) / .9)) drop-shadow(0 0 6px hsl(var(--primary) / .5));
+}
+.tab-glow-fill { fill: hsl(var(--primary) / .08); }
+html.high-contrast .tab-glow-line { stroke-width: 2.5; filter: none; }
+html.high-contrast .tab-glow-fill { fill: none; }
+
 /* ── Prefers-reduced-motion — 모든 애니메이션/트랜지션 최소화 ────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
