@@ -6,6 +6,7 @@ import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
 import { WorkItemFormPage } from '@/pages/WorkItemFormPage';
 import { WorkItemDetailPage } from '@/pages/WorkItemDetailPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
 import { JiraExcelImportPage } from '@/pages/JiraExcelImportPage';
 import { WeeklyReportPage } from '@/pages/WeeklyReportPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
@@ -193,6 +194,8 @@ function AppShell() {
               <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
               <Route path="/tasks-mgmt/new" element={<WorkItemFormPage />} />
               <Route path="/tasks-mgmt/:id" element={<WorkItemDetailPage />} />
+              {/* 받은 알림 전체 이력 + 내 알림 설정 — 개인 화면이라 feature 가드 없음 */}
+              <Route path="/notifications" element={<NotificationsPage />} />
               {/* 별도 수정 페이지 폐지 — 옛 /edit 딥링크/북마크는 상세 페이지의 편집 모드(?edit=1)로 리다이렉트 */}
               <Route path="/tasks-mgmt/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="?edit=1" />} />
               {/* 레거시 경로 — /tasks-mgmt 로 리다이렉트 (북마크/외부 링크 호환) */}

@@ -177,6 +177,7 @@ class WorkItemResponse(WorkItemBase):
     id: UUID
     cluster_names: Optional[list[str]] = None   # cluster_ids 와 1:1 표시용 이름
     created_by: Optional[str] = None   # 등록자 username (구버전 데이터는 null)
+    watchers: Optional[list[str]] = None   # 구독자 username — 댓글·상태 변경 알림 대상(POST/DELETE /{id}/watch)
     # Jira 연동 — jira_url 은 WorkItemBase 에 있어 수동 입력/가져오기 모두 가능.
     # 나머지(issue_key/status/synced_at/watchers)는 가져오기로만 세팅되는 읽기 전용.
     jira_issue_key: Optional[str] = None

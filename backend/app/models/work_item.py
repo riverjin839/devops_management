@@ -82,6 +82,8 @@ class WorkItem(Base):
     # 등록자(생성자) username — 생성 시 actor 로 기록. 담당자가 아니어도 본인이 만든
     # work item 은 수정/삭제할 수 있도록 ownership 판정에 사용 (nullable: 구버전 호환).
     created_by = Column(String(100), nullable=True, index=True)
+    # 구독자(watcher) username 목록 — 담당자가 아니어도 댓글·상태 변경 알림을 받는다.
+    watchers = Column(JSONB, nullable=True)
 
     # ── Jira 연동 (가져온 이슈) ──────────────────────────────────────────────
     # jira_issue_id = Jira 내부 불변 ID (정규 dedup 키, 부분 UNIQUE). jira_issue_key 는

@@ -357,14 +357,20 @@ def apply_notification(db: Session, event: AlertEvent, policy: dict[str, Any]) -
         return "summarized" if updated else "suppressed"
 
     repeat = event.occurrences or 1
+    # 받는 사람을 사용자 ID 로 풀어 저장한다(동명이인 오배달 방지) — 못 찾은 이름은 문자열로만 남고
+    # 조회에서 username·사번·유일한 이름일 때만 매칭된다. 사용자별 알림 설정(앱/메일/메신저)도 여기서 적용.
+    from app.services.user_notify import PrefCache, UserIndex, create_notification
+
+    index = UserIndex.load(db)
+    prefs = PrefCache(db)
     for recipient in recipients:
-        db.add(UserNotification(
-            recipient=recipient,
+        create_notification(
+            db, user=index.resolve(recipient), recipient=recipient, prefs=prefs,
             type="alert",
             title=_notification_title(event, repeat),
             body=_notification_body(event, repeat, window),
             link=f"/alerts?id={event.id}",
-        ))
+        )
     event.notify_count = (event.notify_count or 0) + 1
     event.last_notified_at = now
     return "created"

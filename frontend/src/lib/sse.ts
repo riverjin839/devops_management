@@ -44,6 +44,29 @@ export async function postSse(
     }
     throw new Error(detail);
   }
+  await readSseBody(resp, onEvent);
+}
+
+/** GET 으로 여는 장기 구독 스트림(알림 종 실시간 갱신 등). 거절·본문 없음은 Error. */
+export async function getSse(
+  url: string,
+  onEvent: (evt: SseEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = getAuthToken();
+  const resp = await fetch(url, {
+    method: 'GET',
+    signal,
+    headers: {
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!resp.ok) throw new Error(`서버 오류 ${resp.status}`);
+  await readSseBody(resp, onEvent);
+}
+
+async function readSseBody(resp: Response, onEvent: (evt: SseEvent) => void): Promise<void> {
   if (!resp.body) throw new Error('스트림 본문이 비어 있습니다.');
   const reader = resp.body.getReader();
   const decoder = new TextDecoder('utf-8');

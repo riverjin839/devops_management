@@ -93,6 +93,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     "common_service_snapshots",
     "common_service_changes",
     "common_service_runs",
+    # 일정 알람 '오늘 그만 보기' 기록 — 그날만 의미 있는 로그성 행.
+    "work_alarm_dismissals",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와

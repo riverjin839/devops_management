@@ -25,7 +25,7 @@ from app.models.alert_event import AlertEvent
 from app.models.incident_analysis import IncidentAnalysis
 from app.models.agent_conversation import AgentConversation, AgentMessage
 from app.models.k8s_event import K8sEvent
-from app.models.user_notification import UserNotification
+from app.models.user_notification import UserNotification, WorkAlarmDismissal
 from app.models.k8s_efficiency import K8sEfficiencyRun, K8sNamespaceSample, K8sWorkloadSample
 from app.models.ns_migration import NsMigrationRun
 from app.models.service_config import ServiceConfigApplyRun, ServiceConfigChange
@@ -42,7 +42,11 @@ RETENTION_DAYS: dict[str, int] = {
     "check_logs": 90,
     "k8s_events": 21,
     "audit_logs": 365,
+    # 읽은 알림 90일. 안 읽은 알림은 놓친 일일 수 있어 1년까지 남긴다(_purge_user_notifications).
     "user_notifications": 90,
+    "user_notifications_unread": 365,
+    # 일정 알람 '오늘 그만 보기' 기록 — 그날만 의미가 있다.
+    "work_alarm_dismissals": 30,
     "alert_events": 90,
     # AI 자동 분석 이력 — 알람과 같은 회고 목적이라 동일 90일.
     "incident_analyses": 90,
@@ -159,7 +163,6 @@ def purge_all(db: Session) -> dict[str, Any]:
         ("check_logs", CheckLog, CheckLog.checked_at),
         ("k8s_events", K8sEvent, K8sEvent.received_at),
         ("audit_logs", AuditLog, AuditLog.created_at),
-        ("user_notifications", UserNotification, UserNotification.created_at),
         ("alert_events", AlertEvent, AlertEvent.received_at),
         ("incident_analyses", IncidentAnalysis, IncidentAnalysis.created_at),
         ("agent_messages", AgentMessage, AgentMessage.created_at),
@@ -175,6 +178,19 @@ def purge_all(db: Session) -> dict[str, Any]:
         ("common_service_snapshots", CommonServiceSnapshot, CommonServiceSnapshot.collected_at),
         ("system_error_logs", SystemErrorLog, SystemErrorLog.created_at),
     ]
+    try:
+        results["user_notifications"] = _purge_user_notifications(db)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        results["user_notifications"] = {"error": str(e)[:200]}
+    try:
+        days = RETENTION_DAYS["work_alarm_dismissals"]
+        deleted = _purge_simple(db, WorkAlarmDismissal, WorkAlarmDismissal.created_at, days)
+        results["work_alarm_dismissals"] = {"deleted": deleted, "retention_days": days}
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        results["work_alarm_dismissals"] = {"error": str(e)[:200]}
+
     for name, model, ts_column in simple_targets:
         try:
             days = _alert_retention_days(db) if name == "alert_events" else RETENTION_DAYS[name]
@@ -185,3 +201,25 @@ def purge_all(db: Session) -> dict[str, Any]:
             results[name] = {"error": str(e)[:200]}
 
     return results
+
+
+def _purge_user_notifications(db: Session) -> dict:
+    """읽은 알림은 90일, 안 읽은 알림은 1년이 지나면 지운다."""
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import or_
+
+    now = datetime.utcnow()
+    read_cut = now - timedelta(days=RETENTION_DAYS["user_notifications"])
+    unread_cut = now - timedelta(days=RETENTION_DAYS["user_notifications_unread"])
+    deleted = (
+        db.query(UserNotification)
+        .filter(or_(
+            (UserNotification.is_read.is_(True)) & (UserNotification.created_at < read_cut),
+            UserNotification.created_at < unread_cut,
+        ))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"deleted": deleted, "retention_days": RETENTION_DAYS["user_notifications"],
+            "unread_retention_days": RETENTION_DAYS["user_notifications_unread"]}

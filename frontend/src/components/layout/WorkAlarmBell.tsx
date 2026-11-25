@@ -1,290 +1,289 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, AlertTriangle, CalendarClock, MessageSquare, X } from 'lucide-react';
-import { useHomeWorkItems } from '@/hooks/useWorkItems';
+import { Bell, AlertTriangle, CalendarClock, CalendarPlus, MessageSquare, Check, EyeOff } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
+import { SegTabs } from '@/components/common/SegTabs';
+import { EmptyState } from '@/components/common/EmptyState';
+import { useToastSafe } from '@/components/common/Toast';
 import { useAuthStore } from '@/stores/authStore';
 import { notificationsApi } from '@/services/api';
-import { EmptyState } from '@/components/common/EmptyState';
-import { stripHtml, assigneeNames, toLocalDateKey } from '@/lib/utils';
-import type { WorkItem } from '@/types';
+import {
+  useDismissWorkAlarm,
+  useInvalidateMyNotifications,
+  useMyNotifications,
+  useMyWorkAlarms,
+  useNotificationStream,
+  useRestoreWorkAlarms,
+} from '@/hooks/useNotifications';
+import { cn, stripHtml } from '@/lib/utils';
+import type { NotificationCategory, UserNotification, WorkAlarm } from '@/types';
 
 /**
- * 업무 일정 알람 (UI 채널).
+ * 알림 종 (전역 상단 바).
  *
- * 현재 로그인한 담당자에게 배정된 **미완료**(kanbanStatus !== 'done') 업무 중
- * **지연**(시작일 < 오늘) 또는 **오늘 마감**(시작일 == 오늘) 건을 사이드바 벨로 알린다.
- * 실시간 집계 — 업무를 완료하면 알람이 자동으로 사라진다.
- *
- * 확장(나중에): CUBE / E-Mail 등 다른 채널은 백엔드에서 동일한 "담당자별 미완료 업무"
- * 집계를 재사용해 `services/notifier.py` 채널 패턴 + Celery 스케줄로 추가하면 된다.
- * 이 컴포넌트는 그 중 UI(인앱) 채널에 해당한다.
+ * - **업무** 탭: 일정 알람(지연 · 오늘 마감 · 내일 마감 — 서버 판정 `GET /work-items/my-alarms`, 마감일 우선)
+ *   + 업무 알림(배정·멘션·댓글·상태 변경·마감 알림·VOC 답변).
+ * - **운영** 탭: 알람 인박스 알림 규칙·K8S 이벤트 알림.
+ * - 라인마다 지우기: 일정 알람은 '오늘 그만 보기'(내일도 미완료면 다시 보임), 알림은 읽음 처리.
+ * - 실시간: `GET /notifications/my/stream`(SSE) 으로 새 알림이 오면 토스트 + 배지 갱신.
+ * 전체 이력·알림 설정은 `/notifications` 화면.
  */
 
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/** fromKey~toKey 사이 일수 (YYYY-MM-DD, 양수 = toKey 가 나중). */
-function daysBetween(fromKey: string, toKey: string): number {
-  const a = new Date(fromKey + 'T00:00:00');
-  const b = new Date(toKey + 'T00:00:00');
-  return Math.round((b.getTime() - a.getTime()) / 86_400_000);
-}
-
-function itemLabel(item: WorkItem): string {
-  const t = item.title?.trim();
+function alarmLabel(a: WorkAlarm): string {
+  const t = a.title?.trim();
   if (t) return t;
-  const c = stripHtml(item.content).trim();
+  const c = stripHtml(a.content ?? '').trim();
   return c || '(제목 없음)';
 }
 
-function AlarmRow({ item, today, onOpen }: { item: WorkItem; today: string; onOpen: (i: WorkItem) => void }) {
-  const due = toLocalDateKey(item.startedAt);
-  const overdueDays = due ? daysBetween(due, today) : 0;
+const KIND_META = {
+  overdue: { icon: AlertTriangle, label: '지연', tone: 'text-status-critical bg-status-critical/10' },
+  due_today: { icon: CalendarClock, label: '오늘 마감', tone: 'text-status-warning bg-status-warning/10' },
+  due_tomorrow: { icon: CalendarPlus, label: '내일 마감', tone: 'text-muted-foreground bg-secondary/60' },
+} as const;
+
+function AlarmRow({ a, onOpen, onDismiss }: { a: WorkAlarm; onOpen: () => void; onDismiss: () => void }) {
+  const label = alarmLabel(a);
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(item)}
-      className="w-full text-left px-3 py-2 hover:bg-muted/40 transition-colors flex flex-col gap-0.5 border-b border-border/60 last:border-b-0"
-    >
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className="text-sm text-foreground/90 line-clamp-1 flex-1 min-w-0">{itemLabel(item)}</span>
-        {overdueDays > 0 ? (
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-status-critical/15 text-status-critical whitespace-nowrap flex-shrink-0">
-            {overdueDays}일 지연
-          </span>
-        ) : (
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-status-warning/15 text-status-warning whitespace-nowrap flex-shrink-0">
-            오늘
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary truncate max-w-[120px]">{item.category}</span>
-        {due && <span className="tabular-nums">{due}</span>}
-      </div>
-    </button>
+    <li className="flex items-stretch border-b border-border/60 last:border-b-0">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex-1 min-w-0 text-left px-3 py-2 hover:bg-muted/40 focus-visible:bg-muted/40 outline-none transition-colors flex flex-col gap-0.5"
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm text-foreground line-clamp-1 flex-1 min-w-0">{label}</span>
+          {a.kind === 'overdue' && (
+            <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-status-critical/15 text-status-critical whitespace-nowrap flex-shrink-0">
+              {a.overdueDays}일 지연
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="px-1.5 py-0.5 rounded-full bg-secondary truncate max-w-[120px]">{a.category}</span>
+          {a.dueDate && (
+            <span className="tabular-nums">
+              {a.basis === 'due_date' ? '마감' : '시작'} {a.dueDate}
+            </span>
+          )}
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={onDismiss}
+        title="오늘 그만 보기 — 내일도 미완료면 다시 보입니다"
+        aria-label={`${label} 알람 오늘 그만 보기`}
+        className="px-2.5 text-muted-foreground hover:text-foreground hover:bg-secondary focus-visible:bg-secondary outline-none transition-colors"
+      >
+        <EyeOff className="w-3.5 h-3.5" />
+      </button>
+    </li>
+  );
+}
+
+function NotifRow({ n, onOpen, onRead }: { n: UserNotification; onOpen: () => void; onRead: () => void }) {
+  return (
+    <li className="flex items-stretch border-b border-border/60 last:border-b-0">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex-1 min-w-0 text-left px-3 py-2 hover:bg-muted/40 focus-visible:bg-muted/40 outline-none transition-colors"
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" aria-hidden />
+          <span className="text-sm font-medium truncate flex-1 min-w-0">{n.title}</span>
+          {n.typeLabel && <span className="text-xs text-muted-foreground flex-shrink-0">{n.typeLabel}</span>}
+        </div>
+        {n.body && <p className="text-xs text-muted-foreground truncate mt-0.5 pl-3">{n.body}</p>}
+      </button>
+      <button
+        type="button"
+        onClick={onRead}
+        title="읽음 처리"
+        aria-label={`${n.title} 읽음 처리`}
+        className="px-2.5 text-muted-foreground hover:text-foreground hover:bg-secondary focus-visible:bg-secondary outline-none transition-colors"
+      >
+        <Check className="w-3.5 h-3.5" />
+      </button>
+    </li>
+  );
+}
+
+function SectionHead({ icon: Icon, label, count, tone }: { icon: typeof Bell; label: string; count: number; tone: string }) {
+  return (
+    <div className={cn('flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold sticky top-0 bg-popover', tone)}>
+      <Icon className="w-3.5 h-3.5" aria-hidden /> {label} {count}
+    </div>
   );
 }
 
 export function WorkAlarmBell() {
   const navigate = useNavigate();
+  const toast = useToastSafe();
   const user = useAuthStore((s) => s.user);
-  const myName = user?.displayName?.trim() || user?.username || null;
+  const enabled = !!user;
 
-  const { data } = useHomeWorkItems();
-  const items = useMemo(() => data?.data ?? [], [data]);
-  const today = dateKey(new Date());
+  const { data: alarms } = useMyWorkAlarms(enabled);
+  const { data: notifResp } = useMyNotifications(enabled);
+  const invalidate = useInvalidateMyNotifications();
+  const dismiss = useDismissWorkAlarm();
+  const restore = useRestoreWorkAlarms();
 
-  const { overdue, dueToday } = useMemo(() => {
-    const overdueList: WorkItem[] = [];
-    const todayList: WorkItem[] = [];
-    if (myName) {
-      for (const t of items) {
-        if (t.kanbanStatus === 'done') continue;
-        // 담당자 필드에 쉼표로 여러 명("A,B")이 들어올 수 있어 정확 일치가 아닌 분리 매칭.
-        const mine = assigneeNames(t).includes(myName);
-        if (!mine) continue;
-        const due = toLocalDateKey(t.startedAt);
-        if (!due) continue;
-        if (due < today) overdueList.push(t);
-        else if (due === today) todayList.push(t);
-      }
-    }
-    const byDate = (a: WorkItem, b: WorkItem) => (a.startedAt ?? '').localeCompare(b.startedAt ?? '');
-    overdueList.sort(byDate);
-    todayList.sort(byDate);
-    return { overdue: overdueList, dueToday: todayList };
-  }, [items, myName, today]);
-
-  const total = overdue.length + dueToday.length;
-
-  // 개인 인앱 알림(댓글 등)
-  const qc = useQueryClient();
-  const { data: notifResp } = useQuery({
-    queryKey: ['myNotifications'],
-    queryFn: () => notificationsApi.listMy().then((r) => r.data),
-    refetchInterval: 60000,
-    enabled: !!user,
+  useNotificationStream(enabled, (n) => {
+    toast.show({
+      variant: n.category === 'ops' ? 'warning' : 'info',
+      title: n.title,
+      description: n.body ?? undefined,
+      durationMs: 6000,
+      ...(n.link ? { action: { label: '열기', onClick: () => navigate(n.link as string) } } : {}),
+    });
   });
-  const notifications = notifResp?.data ?? [];
-  const unreadNotif = notifResp?.unread ?? 0;
-  const grandTotal = total + unreadNotif;
 
-  const openNotif = (n: { id: string; link?: string | null }) => {
-    setOpen(false);
-    if (n.link) navigate(n.link);
-    notificationsApi.markRead(n.id).then(() => qc.invalidateQueries({ queryKey: ['myNotifications'] })).catch(() => {});
-  };
-  const dismissNotif = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    notificationsApi.markRead(id).then(() => qc.invalidateQueries({ queryKey: ['myNotifications'] })).catch(() => {});
-  };
-  const markAllNotif = () => {
-    notificationsApi.markAllRead().then(() => qc.invalidateQueries({ queryKey: ['myNotifications'] })).catch(() => {});
-  };
+  const overdue = alarms?.overdue ?? [];
+  const dueToday = alarms?.dueToday ?? [];
+  const dueTomorrow = alarms?.dueTomorrow ?? [];
+  const scheduleCount = overdue.length + dueToday.length + dueTomorrow.length;
+  const notifications = useMemo(() => notifResp?.data ?? [], [notifResp]);
+  const workNotifs = notifications.filter((n) => n.category === 'work');
+  const opsNotifs = notifications.filter((n) => n.category !== 'work');
+  const unreadWork = notifResp?.unreadWork ?? workNotifs.length;
+  const unreadOps = notifResp?.unreadOps ?? opsNotifs.length;
+  // 배지는 지금 처리할 것(지연·오늘 마감 + 안 읽은 알림) — 내일 마감은 예고라 세지 않는다.
+  const badge = overdue.length + dueToday.length + unreadWork + unreadOps;
 
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState<DOMRect | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (btnRef.current && btnRef.current.contains(e.target as Node)) return;
-      const panel = document.getElementById('work-alarm-panel');
-      if (panel && panel.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    window.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const [tabPick, setTabPick] = useState<NotificationCategory | null>(null);
+  const workTotal = scheduleCount + unreadWork;
+  const tab: NotificationCategory = tabPick ?? (workTotal === 0 && unreadOps > 0 ? 'ops' : 'work');
 
   if (!user) return null;
 
-  const togglePanel = () => {
-    setAnchor(btnRef.current?.getBoundingClientRect() ?? null);
-    setOpen((v) => !v);
+  const close = () => setOpen(false);
+  const openAlarm = (a: WorkAlarm) => { close(); navigate(`/tasks-mgmt/${a.id}`); };
+  const readOne = (id: string) => notificationsApi.markRead(id).then(invalidate).catch(() => {});
+  const openNotif = (n: UserNotification) => {
+    close();
+    if (n.link) navigate(n.link);
+    readOne(n.id);
   };
+  const readAll = () => notificationsApi.markAllRead(tab).then(invalidate).catch(() => {});
 
-  const openItem = (item: WorkItem) => {
-    setOpen(false);
-    navigate(`/tasks-mgmt/${item.id}`);
-  };
-
-  const tooltip = total > 0 ? `업무 알람 — 지연/오늘 ${total}건` : '업무 알람 (처리할 항목 없음)';
+  const tooltip = badge > 0
+    ? `알림 — 처리할 항목 ${badge}건 (지연 ${overdue.length} · 오늘 마감 ${dueToday.length} · 안 읽은 알림 ${unreadWork + unreadOps})`
+    : '알림 (처리할 항목 없음)';
+  const list = tab === 'work' ? workNotifs : opsNotifs;
+  const unreadInTab = tab === 'work' ? unreadWork : unreadOps;
 
   return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={togglePanel}
+    <Popover open={open} onOpenChange={(v) => setOpen(v)}>
+      <PopoverTrigger
         aria-label={tooltip}
         title={tooltip}
-        className={`relative flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-          open ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
-        }`}
+        className={cn(
+          'relative flex items-center justify-center w-7 h-7 rounded-md transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          open ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
+        )}
       >
         <Bell className="w-4 h-4" />
-        {grandTotal > 0 && (
+        {badge > 0 && (
           <span
             aria-hidden
-            className={`absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full text-white text-xs font-bold leading-4 text-center pointer-events-none ${
-              overdue.length > 0 ? 'bg-status-critical' : dueToday.length > 0 ? 'bg-status-warning' : 'bg-status-info'
-            }`}
+            className={cn(
+              'absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full text-xs font-bold leading-[14px] text-center pointer-events-none border',
+              overdue.length > 0
+                ? 'bg-status-critical text-primary-foreground border-status-critical'
+                : 'bg-primary text-primary-foreground border-primary',
+            )}
           >
-            {grandTotal > 99 ? '99+' : grandTotal}
+            {badge > 99 ? '99+' : badge}
           </span>
         )}
-      </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[22rem] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border flex-shrink-0">
+          <PopoverTitle className="text-sm font-semibold">알림</PopoverTitle>
+          <SegTabs
+            mode="tabs"
+            label="알림 종류"
+            value={tab}
+            onChange={setTabPick}
+            options={[
+              ['work', `업무${workTotal ? ` ${workTotal}` : ''}`],
+              ['ops', `운영${unreadOps ? ` ${unreadOps}` : ''}`],
+            ] as const}
+          />
+        </div>
 
-      {open && anchor && createPortal(
-        <div
-          id="work-alarm-panel"
-          role="dialog"
-          aria-label="업무 알람"
-          style={{
-            // 버튼 아래로, 오른쪽 가장자리를 버튼 우측에 맞춰 연다 (우상단 배치에서도 화면 밖으로 안 나가게).
-            top: Math.max(8, Math.min(anchor.bottom + 8, window.innerHeight - 8 - 440)),
-            right: Math.max(8, window.innerWidth - anchor.right),
-          }}
-          className="fixed z-[60] w-80 max-h-[70vh] rounded-md border border-border bg-card shadow-xl flex flex-col overflow-hidden"
-        >
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-border flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <Bell className="w-4 h-4 text-primary" />
-              <span className="text-sm font-semibold">업무 알람</span>
-              {total > 0 && <span className="text-sm text-muted-foreground">{total}건</span>}
-            </div>
+        <div className="overflow-y-auto flex-1">
+          {tab === 'work' && scheduleCount === 0 && workNotifs.length === 0 && (
+            <EmptyState compact icon={Bell} title="처리할 업무 알림이 없습니다."
+              description="지연·마감 임박 업무나 배정·멘션·댓글 알림이 생기면 여기에 표시됩니다." />
+          )}
+          {tab === 'ops' && opsNotifs.length === 0 && (
+            <EmptyState compact icon={Bell} title="안 읽은 운영 알림이 없습니다."
+              description="알람 인박스 알림 규칙이 보낸 알람이 여기에 표시됩니다." />
+          )}
+
+          {tab === 'work' && (
+            <>
+              {(['overdue', 'due_today', 'due_tomorrow'] as const).map((k) => {
+                const rows = k === 'overdue' ? overdue : k === 'due_today' ? dueToday : dueTomorrow;
+                if (rows.length === 0) return null;
+                const meta = KIND_META[k];
+                return (
+                  <section key={k} aria-label={meta.label}>
+                    <SectionHead icon={meta.icon} label={meta.label} count={rows.length} tone={meta.tone} />
+                    <ul>
+                      {rows.map((a) => (
+                        <AlarmRow key={a.id} a={a} onOpen={() => openAlarm(a)} onDismiss={() => dismiss.mutate(a.id)} />
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </>
+          )}
+          {list.length > 0 && (
+            <section aria-label={tab === 'work' ? '업무 알림' : '운영 알림'}>
+              <SectionHead icon={MessageSquare} label={tab === 'work' ? '업무 알림' : '운영 알림'}
+                count={unreadInTab} tone="text-foreground bg-secondary/40" />
+              <ul>
+                {list.map((n) => (
+                  <NotifRow key={n.id} n={n} onOpen={() => openNotif(n)} onRead={() => readOne(n.id)} />
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+
+        <div className="flex-shrink-0 border-t border-border flex items-center gap-1 px-1.5 py-1 text-sm">
+          <button
+            type="button"
+            onClick={() => { close(); navigate('/notifications'); }}
+            className="px-2 py-1 rounded-md text-primary hover:bg-primary/5"
+          >
+            알림 전체 보기
+          </button>
+          {tab === 'work' && (alarms?.dismissed ?? 0) > 0 && (
             <button
               type="button"
-              onClick={() => setOpen(false)}
-              className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-              aria-label="닫기"
+              onClick={() => restore.mutate()}
+              className="px-2 py-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="overflow-y-auto flex-1">
-            {grandTotal === 0 ? (
-              <EmptyState compact icon={Bell} title="처리할 미완료 업무가 없습니다." description="지연되거나 오늘 마감인 업무가 생기면 여기에 표시됩니다." />
-            ) : (
-              <>
-                {notifications.length > 0 && (
-                  <>
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-status-info/10 text-status-info text-xs font-semibold sticky top-0">
-                      <span className="flex items-center gap-1.5"><MessageSquare className="w-3.5 h-3.5" /> 알림 {unreadNotif > 0 ? unreadNotif : ''}</span>
-                      {unreadNotif > 0 && (
-                        <button type="button" onClick={markAllNotif} className="text-xs underline hover:no-underline">모두 읽음</button>
-                      )}
-                    </div>
-                    {notifications.map((n) => (
-                      <div key={n.id} className="relative group border-b border-border/40 bg-status-info/[0.04]">
-                        <button
-                          type="button"
-                          onClick={() => openNotif(n)}
-                          className="w-full text-left px-3 py-2 pr-7 hover:bg-secondary/40 transition-colors"
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-status-info flex-shrink-0" />
-                            <span className="text-sm font-medium truncate">{n.title}</span>
-                          </div>
-                          {n.body && <p className="text-xs text-muted-foreground truncate mt-0.5">{n.body}</p>}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => dismissNotif(e, n.id)}
-                          title="지우기"
-                          aria-label="알림 지우기"
-                          className="absolute top-1.5 right-1.5 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </>
-                )}
-                {overdue.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-status-critical/10 text-status-critical text-xs font-semibold sticky top-0">
-                      <AlertTriangle className="w-3.5 h-3.5" /> 지연 {overdue.length}
-                    </div>
-                    {overdue.map((it) => <AlarmRow key={it.id} item={it} today={today} onOpen={openItem} />)}
-                  </>
-                )}
-                {dueToday.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-status-warning/10 text-status-warning text-xs font-semibold sticky top-0">
-                      <CalendarClock className="w-3.5 h-3.5" /> 오늘 마감 {dueToday.length}
-                    </div>
-                    {dueToday.map((it) => <AlarmRow key={it.id} item={it} today={today} onOpen={openItem} />)}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-
-          {total > 0 && (
-            <button
-              type="button"
-              onClick={() => { setOpen(false); navigate('/tasks-mgmt'); }}
-              className="flex-shrink-0 border-t border-border px-3 py-2 text-sm text-primary hover:bg-primary/5 transition-colors text-left"
-            >
-              전체 업무 보기 →
+              숨긴 {alarms?.dismissed}건 다시 보기
             </button>
           )}
-        </div>,
-        document.body,
-      )}
-    </>
+          {unreadInTab > 0 && (
+            <button
+              type="button"
+              onClick={readAll}
+              className="ml-auto px-2 py-1 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              모두 읽음
+            </button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

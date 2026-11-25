@@ -12,7 +12,11 @@ import {
   useDeleteChannel,
   useTestChannel,
 } from '@/hooks/useNotifications';
+import { hasRole, useAuthStore } from '@/stores/authStore';
 import type { NotificationChannel, NotificationChannelInput, NotificationChannelType } from '@/types';
+
+// 채널 조회는 operator, 생성·수정·삭제·테스트 발송은 admin(서버 `routers/notifications.py`). 비밀 값은 가려서 온다.
+const ADMIN_HINT = 'admin 권한이 필요합니다';
 
 const CHANNEL_TYPES: { value: NotificationChannelType; label: string }[] = [
   { value: 'slack', label: 'Slack' },
@@ -22,7 +26,10 @@ const CHANNEL_TYPES: { value: NotificationChannelType; label: string }[] = [
 ];
 
 export function NotificationSettingsPanel() {
-  const { data: channels = [] } = useNotificationChannels();
+  const user = useAuthStore((s) => s.user);
+  const canView = hasRole(user, 'admin', 'operator');
+  const isAdmin = hasRole(user, 'admin');
+  const { data: channels = [] } = useNotificationChannels(canView);
   const create = useCreateChannel();
   const update = useUpdateChannel();
   const remove = useDeleteChannel();
@@ -52,7 +59,10 @@ export function NotificationSettingsPanel() {
         <button
           type="button"
           onClick={() => setAdding((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted"
+          disabled={!isAdmin}
+          title={isAdmin ? '채널 추가' : ADMIN_HINT}
+          aria-label={isAdmin ? '채널 추가' : `채널 추가 — ${ADMIN_HINT}`}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5" />
           {adding ? '닫기' : '채널 추가'}
@@ -71,7 +81,13 @@ export function NotificationSettingsPanel() {
           />
         )}
 
-        {channels.length === 0 ? (
+        {!canView ? (
+          <EmptyState
+            compact
+            title="알림 채널은 operator 이상만 볼 수 있습니다"
+            description="채널 설정에는 웹훅 주소·메일 서버 정보가 들어 있어 권한이 있는 사용자에게만 보입니다."
+          />
+        ) : channels.length === 0 ? (
           <EmptyState
             compact
             title="알림 채널 없음"
@@ -103,6 +119,7 @@ export function NotificationSettingsPanel() {
                 }}
                 onTest={() => runTest(c)}
                 testing={test.isPending}
+                canEdit={isAdmin}
               />
             ))}
           </ul>
@@ -118,20 +135,24 @@ function ChannelRow({
   onDelete,
   onTest,
   testing,
+  canEdit,
 }: {
   channel: NotificationChannel;
   onToggle: () => void;
   onDelete: () => void;
   onTest: () => void;
   testing: boolean;
+  canEdit: boolean;
 }) {
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
       <button
         type="button"
         onClick={onToggle}
-        title={channel.enabled ? '비활성화' : '활성화'}
-        className={`rounded-lg p-1.5 ${
+        disabled={!canEdit}
+        title={canEdit ? (channel.enabled ? '비활성화' : '활성화') : ADMIN_HINT}
+        aria-label={`${channel.name} ${channel.enabled ? '비활성화' : '활성화'}${canEdit ? '' : ` — ${ADMIN_HINT}`}`}
+        className={`rounded-lg p-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
           channel.enabled
             ? 'text-primary hover:bg-primary/10'
             : 'text-muted-foreground hover:bg-muted'
@@ -154,17 +175,20 @@ function ChannelRow({
       <button
         type="button"
         onClick={onTest}
-        disabled={testing}
+        disabled={testing || !canEdit}
         className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-        title="테스트 발송"
+        title={canEdit ? '테스트 발송' : ADMIN_HINT}
+        aria-label={`${channel.name} 테스트 발송${canEdit ? '' : ` — ${ADMIN_HINT}`}`}
       >
         <Send className="w-4 h-4" />
       </button>
       <button
         type="button"
         onClick={onDelete}
-        className="rounded-lg p-1.5 text-status-critical hover:bg-status-critical/10"
-        title="삭제"
+        disabled={!canEdit}
+        className="rounded-lg p-1.5 text-status-critical hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed"
+        title={canEdit ? '삭제' : ADMIN_HINT}
+        aria-label={`${channel.name} 삭제${canEdit ? '' : ` — ${ADMIN_HINT}`}`}
       >
         <Trash2 className="w-4 h-4" />
       </button>
