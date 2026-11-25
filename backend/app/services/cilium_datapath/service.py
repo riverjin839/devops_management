@@ -187,8 +187,13 @@ def sync_alerts(db: Session, cluster: Cluster, node: str, maps: list[dict[str, A
         _route(db, cluster, fingerprint=fp, node=node, **a)
         if ev is None:
             opened += 1
+    # 닫는 건 회복을 **관측했을 때만** — 그 맵 그룹을 이번 보고에서 끝까지 세었고 임계치 아래일 때.
+    # 고정 경로를 못 읽었거나(그룹 누락) 세지 못했거나(unknown) 시간 예산 초과(partial, 하한)면 열린 알람을 그대로 둔다.
+    # 알람을 끈 경우는 운영자 선택이라 모두 닫는다.
+    recovered = {m["group"] for m in maps if m["level"] == "ok" and not m.get("partial")}
     for fp, ev in open_events.items():
-        if fp not in desired:
+        group = (ev.labels or {}).get("group")
+        if fp not in desired and (not cfg["alerts_enabled"] or group in recovered):
             _route(db, cluster, fingerprint=fp, node=node, severity=ev.severity, summary=ev.summary or ALERT_PRESSURE,
                    description=ev.description or "", labels=dict(ev.labels or {}), status="resolved")
             resolved += 1
@@ -230,6 +235,7 @@ def handle_report(db: Session, cluster: Cluster, report: dict[str, Any]) -> dict
     enriched = [enrich_map(m, cfg) for m in maps]
     try:
         opened, resolved = sync_alerts(db, cluster, node, enriched, cfg)
+        db.commit()  # route_and_notify 는 커밋을 호출자에게 맡긴다 — 주기 보고(run_id 없음)도 여기서 확정한다.
     except Exception as exc:  # noqa: BLE001 — 알람 실패가 보고 저장을 되돌리지 않게
         db.rollback()
         logger.warning("cilium bpf 알람 동기화 실패 (%s/%s): %s", cluster.name, node, exc)

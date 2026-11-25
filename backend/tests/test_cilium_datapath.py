@@ -238,6 +238,43 @@ def test_report_alerts_open_escalate_and_resolve(db, world):
     assert pol["members"] == 3 and pol["label"] == "정책(최대)"
 
 
+def test_periodic_report_alerts_are_committed(db, world):
+    """주기 보고(run_id 없음)의 알람도 커밋돼 다른 세션에서 보인다(route_and_notify 는 커밋하지 않는다)."""
+    from app.database import SessionLocal
+    from app.services.cilium_datapath import service as svc
+
+    svc.handle_report(db, world.cluster, _report("w1", 950))
+    other = SessionLocal()
+    try:
+        assert len(_firing(other, world.cluster.id)) == 1
+    finally:
+        other.close()
+
+
+def test_alert_kept_when_map_not_observed(db, world):
+    """맵을 못 읽거나 끝까지 세지 못한 보고는 회복이 아니다 — 열린 알람을 닫지 않는다."""
+    from app.services.cilium_datapath import service as svc
+
+    c = world.cluster
+    svc.handle_report(db, c, _report("w1", 950))
+    assert len(_firing(db, c.id)) == 1
+    # 1) 고정 경로를 못 읽어 맵이 하나도 없는 보고
+    empty = {**_report("w1", 1), "maps": [], "errors": ["고정 경로를 읽지 못함"]}
+    assert svc.handle_report(db, c, empty)["alerts_resolved"] == 0
+    # 2) 세지 못한 맵(entries 없음)
+    unknown = _report("w1", 1)
+    unknown["maps"][0]["entries"] = None
+    assert svc.handle_report(db, c, unknown)["alerts_resolved"] == 0
+    # 3) 시간 예산 초과로 일부만 센 값(하한)은 임계치 아래여도 회복으로 보지 않는다
+    partial = _report("w1", 100)
+    partial["maps"][0]["partial"] = True
+    assert svc.handle_report(db, c, partial)["alerts_resolved"] == 0
+    assert len(_firing(db, c.id)) == 1
+    # 4) 끝까지 세어 임계치 아래 → 닫힌다
+    assert svc.handle_report(db, c, _report("w1", 100))["alerts_resolved"] == 1
+    assert _firing(db, c.id) == []
+
+
 def test_alerts_can_be_disabled(db, world):
     from app.services.cilium_datapath import service as svc
 

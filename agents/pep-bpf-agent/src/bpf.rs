@@ -222,23 +222,39 @@ pub struct CountResult {
 
 /// 키를 처음부터 끝까지 따라가며 센다(`BPF_MAP_GET_NEXT_KEY`). 값은 읽지 않는다.
 ///
-/// 순회 중 현재 키가 지워지면 커널은 해시 맵의 첫 키부터 다시 준다 — 같은 키를 두 번 셀 수 있으므로
-/// `max_entries` 를 넘으면 멈추고 `partial` 로 표시한다(무한 순회 방지).
+/// 순회 중 현재 키가 지워지면 커널은 맵의 첫 키부터 다시 준다 — 그대로 세면 같은 키를 두 번 센다.
+/// 그래서 키마다 64비트 해시를 모아 끝에서 중복을 지우고(정렬 + dedup, 키당 8바이트), 중복이 있었으면
+/// 맵이 순회 중 바뀐 것이므로 `partial`(하한)로 표시한다. 재시작이 반복돼도 끝나도록 순회 횟수는
+/// `max_entries` 의 2배로 묶는다.
 pub fn count_keys(
     fd: &OwnedFd,
     key_size: u32,
     max_entries: u32,
     budget: Duration,
 ) -> io::Result<CountResult> {
+    walk_keys(fd, key_size, max_entries, budget, &mut |_| {})
+}
+
+/// `count_keys` 본체 — `on_key` 는 새 키를 받을 때마다 불린다(테스트가 순회 중 맵을 바꾸는 데 쓴다).
+fn walk_keys(
+    fd: &OwnedFd,
+    key_size: u32,
+    max_entries: u32,
+    budget: Duration,
+    on_key: &mut dyn FnMut(&[u8]),
+) -> io::Result<CountResult> {
+    use std::hash::{Hash, Hasher};
     let ks = (key_size as usize).max(1);
     let mut cur = vec![0u8; ks];
     let mut next = vec![0u8; ks];
     let start = Instant::now();
-    let mut n: u64 = 0;
+    let limit = (max_entries as u64).saturating_mul(2).max(1);
+    let mut hashes: Vec<u64> = Vec::new();
+    let mut steps: u64 = 0;
     let mut first = true;
     let mut partial = false;
     loop {
-        if n & 0xff == 0 && start.elapsed() > budget {
+        if steps & 0xff == 0 && start.elapsed() > budget {
             partial = true;
             break;
         }
@@ -248,11 +264,14 @@ pub fn count_keys(
         a.put_u64(16, next.as_mut_ptr() as u64);
         match sys_bpf(BPF_MAP_GET_NEXT_KEY, &mut a) {
             Ok(_) => {
-                n += 1;
+                steps += 1;
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                next.hash(&mut h);
+                hashes.push(h.finish());
                 std::mem::swap(&mut cur, &mut next);
                 first = false;
-                if n > max_entries as u64 {
-                    n = max_entries as u64;
+                on_key(&cur);
+                if steps >= limit {
                     partial = true;
                     break;
                 }
@@ -261,8 +280,14 @@ pub fn count_keys(
             Err(e) => return Err(e),
         }
     }
+    let walked = hashes.len();
+    hashes.sort_unstable();
+    hashes.dedup();
+    if hashes.len() != walked {
+        partial = true;
+    }
     Ok(CountResult {
-        entries: n,
+        entries: (hashes.len() as u64).min(max_entries as u64),
         partial,
         elapsed: start.elapsed(),
     })
@@ -370,6 +395,13 @@ pub mod testing {
         sys_bpf(BPF_MAP_UPDATE_ELEM, &mut a).map(|_| ())
     }
 
+    pub fn map_delete(fd: &OwnedFd, key: &[u8]) -> io::Result<()> {
+        let mut a = Attr::new();
+        a.put_u32(0, fd.as_raw_fd() as u32);
+        a.put_u64(8, key.as_ptr() as u64);
+        sys_bpf(3, &mut a).map(|_| ())
+    }
+
     pub fn obj_pin(fd: &OwnedFd, path: &str) -> io::Result<()> {
         let c = CString::new(path).unwrap();
         let mut a = Attr::new();
@@ -425,6 +457,32 @@ mod tests {
         let c = count_keys(&fd, 4, 4096, Duration::ZERO).unwrap();
         assert!(c.partial);
         assert!(c.entries < 2000);
+    }
+
+    /// 순회 중 현재 키를 지우면 커널이 처음부터 다시 준다 — 중복을 세지 않고 partial 로 표시해야 한다.
+    #[test]
+    fn walk_with_deletes_does_not_overcount() {
+        let Some(fd) = try_map(1024, "pep_test_churn") else {
+            return;
+        };
+        for k in 0u32..300 {
+            map_update(&fd, &k.to_ne_bytes(), &[0u8; 8]).unwrap();
+        }
+        let mut seen = 0;
+        let c = walk_keys(&fd, 4, 1024, Duration::from_secs(5), &mut |key| {
+            seen += 1;
+            if seen == 50 || seen == 120 {
+                map_delete(&fd, key).unwrap(); // 현재 키 삭제 → 다음 호출이 첫 키부터 다시
+            }
+        })
+        .unwrap();
+        assert!(
+            seen > 300,
+            "커널이 순회를 다시 시작했어야 한다 (seen={seen})"
+        );
+        assert!(c.entries <= 300, "중복을 세면 안 된다: {}", c.entries);
+        assert!(c.entries >= 298 - 2);
+        assert!(c.partial, "순회 중 바뀐 맵은 하한으로 표시");
     }
 
     #[test]
