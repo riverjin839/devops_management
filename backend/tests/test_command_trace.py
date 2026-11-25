@@ -183,6 +183,50 @@ def test_role_change_takes_effect_immediately():
         ct.forget_user()
 
 
+def _set_role(name: str, role: str) -> None:
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.username == name).update({"role": role})
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_role_change_in_another_worker_invalidates_this_cache():
+    """다른 워커(프로세스)의 forget_user 는 이 프로세스 캐시를 직접 못 지운다 — Redis 세대로 알아채야 한다."""
+    if ct._current_gen("ct-admin") is None:
+        pytest.skip("Redis 없음 — 이 경우 캐시를 쓰지 않으므로 다른 워커 문제가 생기지 않는다(아래 테스트)")
+    client = TestClient(_app())
+    headers = _auth("admin")
+    try:
+        assert ct.HEADER in client.post("/run", headers=headers).headers  # 이 프로세스 캐시에 관리자로
+        _set_role("ct-admin", "operator")
+        assert ct.HEADER in client.post("/run", headers=headers).headers  # 세대 그대로면 캐시(10초) 사용
+        # 다른 워커가 역할을 바꾼 상황: 로컬 캐시는 그대로 두고 Redis 세대만 올린다.
+        ct._redis().incr(ct._gen_key("ct-admin"))
+        r = client.post("/run", headers=headers)
+        assert ct.HEADER not in r.headers and r.json()["admin"] is False
+    finally:
+        _set_role("ct-admin", "admin")
+        ct.forget_user()
+
+
+def test_without_redis_cache_is_not_used(monkeypatch):
+    """Redis 를 못 쓰면 다른 워커의 무효화를 알 수 없으므로 캐시를 쓰지 않는다(매번 DB — fail-closed)."""
+    monkeypatch.setattr(ct, "_redis", lambda: None)
+    ct.forget_user()
+    client = TestClient(_app())
+    headers = _auth("admin")
+    try:
+        assert ct.HEADER in client.post("/run", headers=headers).headers
+        _set_role("ct-admin", "operator")  # forget_user 없이 DB 만 바뀜
+        r = client.post("/run", headers=headers)
+        assert ct.HEADER not in r.headers and r.json()["admin"] is False
+    finally:
+        _set_role("ct-admin", "admin")
+        ct.forget_user()
+
+
 def _events(body: str) -> list[dict]:
     return [json.loads(ln[5:]) for ln in body.splitlines() if ln.startswith("data:")]
 
