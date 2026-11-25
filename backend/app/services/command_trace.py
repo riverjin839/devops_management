@@ -28,9 +28,13 @@ import logging
 import re
 import shlex
 import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any, Callable, Iterable, Iterator, Optional
+
+import anyio
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +294,8 @@ def encode_header(commands: list[str]) -> Optional[bytes]:
     return None
 
 
-def _bearer_role(scope: dict) -> Optional[str]:
+def _bearer_payload(scope: dict) -> Optional[dict]:
+    """서명·만료 검증을 통과한 JWT payload(없거나 무효면 None)."""
     for k, v in scope.get("headers") or []:
         if k == b"authorization":
             val = v.decode("latin-1")
@@ -298,17 +303,74 @@ def _bearer_role(scope: dict) -> Optional[str]:
                 return None
             from app.auth.security import decode_access_token
 
-            payload = decode_access_token(val[7:].strip()) or {}
-            role = payload.get("role")
-            return str(role) if role else None
+            return decode_access_token(val[7:].strip()) or None
     return None
+
+
+# 관리자 판정 캐시 — (username, 로그인 시각) → (만료 monotonic, 관리자 여부). 요청마다 DB 를 치지 않게 짧게만 둔다.
+ADMIN_CACHE_TTL_SEC = 10.0
+_admin_cache: dict[tuple[str, Any], tuple[float, bool]] = {}
+_admin_cache_lock = threading.Lock()
+
+
+def forget_user(username: Optional[str] = None) -> None:
+    """역할·활성 상태가 바뀌면 캐시를 지운다(None = 전부). 역할 변경 API 가 부른다."""
+    with _admin_cache_lock:
+        if username is None:
+            _admin_cache.clear()
+        else:
+            for key in [k for k in _admin_cache if k[0] == username]:
+                _admin_cache.pop(key, None)
+
+
+def _db_is_admin(username: str, payload: dict) -> bool:
+    """DB 의 **현재** 사용자 상태로 관리자 여부를 본다 — 토큰의 role 클레임은 강등 뒤에도 남아 있으므로 믿지 않는다.
+    인증 의존성(get_current_user)과 같은 조건: 활성 사용자 · 비밀번호 변경 전 토큰 아님 · role=admin."""
+    from app.auth.security import is_token_revoked
+    from app.database import SessionLocal
+    from app.models.user import User
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.username == username).first()
+        if user is None or not user.is_active or user.role != "admin":
+            return False
+        return not is_token_revoked(payload, getattr(user, "password_changed_at", None))
+    finally:
+        db.close()
+
+
+def resolve_admin(payload: Optional[dict]) -> bool:
+    """검증된 토큰 payload → 지금 관리자인가(캐시 ``ADMIN_CACHE_TTL_SEC``). 오류는 비관리자로 본다(fail-closed)."""
+    if not payload or payload.get("role") != "admin":
+        return False  # 관리자 토큰이 아니면 DB 를 볼 필요도 없다(승격은 다음 토큰부터)
+    username = payload.get("sub")
+    if not username:
+        return False
+    key = (str(username), payload.get("auth_time") or payload.get("iat"))
+    now = time.monotonic()
+    with _admin_cache_lock:
+        hit = _admin_cache.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
+    try:
+        value = _db_is_admin(str(username), payload)
+    except Exception:  # noqa: BLE001
+        logger.debug("command_trace admin lookup failed", exc_info=True)
+        return False
+    with _admin_cache_lock:
+        if len(_admin_cache) > 1000:
+            _admin_cache.clear()
+        _admin_cache[key] = (now + ADMIN_CACHE_TTL_SEC, value)
+    return value
 
 
 class CommandTraceMiddleware:
     """관리자 요청에만 명령 수집기를 꽂고, 응답 헤더 ``X-PEP-Commands`` 로 돌려준다(순수 ASGI — SSE 무간섭).
 
-    관리자 여부는 서명 검증된 JWT 의 ``role`` 클레임으로 본다. 표시용 판정이라 권한 검사(require_admin)를
-    대신하지 않는다. SSE 응답은 헤더가 먼저 나가므로 스트림 안에서 ``cmd`` 이벤트로 흘린다(services/sse.py)."""
+    관리자 여부는 서명 검증된 JWT 의 ``role`` 이 admin 이고 **DB 의 현재 사용자**도 활성 admin 일 때만 참이다
+    (강등·비활성화·비밀번호 변경 뒤의 옛 토큰은 보지 못한다 — ``resolve_admin``, 10초 캐시 + 역할 변경 시 ``forget_user``).
+    표시용 판정이라 권한 검사(require_admin)를 대신하지 않는다. SSE 응답은 헤더가 먼저 나가므로 스트림 안에서 ``cmd`` 이벤트로 흘린다(services/sse.py)."""
 
     def __init__(self, app):  # noqa: ANN001
         self.app = app
@@ -318,7 +380,9 @@ class CommandTraceMiddleware:
             await self.app(scope, receive, send)
             return
         try:
-            admin = _bearer_role(scope) == "admin"
+            payload = _bearer_payload(scope)
+            # 토큰이 관리자일 때만 DB 의 현재 역할을 본다(스레드에서 — 이벤트 루프를 막지 않게).
+            admin = bool(payload and payload.get("role") == "admin") and await anyio.to_thread.run_sync(resolve_admin, payload)
         except Exception:  # noqa: BLE001
             admin = False
         if not admin:

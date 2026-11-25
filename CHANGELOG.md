@@ -25,6 +25,9 @@
 ### Changed
 - **서비스 구성 ▸ NIC — 노드 수백 대 클러스터 대응**: 인터페이스 표의 검색(이름 일부 또는 glob)·종류·경고만 필터와 페이지(100행)를 서버에서 처리하고, 카운터·offload 전체·본딩 하위 상태는 행을 펼칠 때만 따로 읽는다. 레일 상태 점은 요약만 받는다. 500노드 기준 첫 화면 응답이 약 3MB → 150KB, 레일용 요청은 2KB. 판정 결과는 클러스터별로 20초 캐시하고, 에이전트 보고는 카운터 말고 바뀐 게 없으면 5분 동안 받은 시각만 갱신해 노드마다 매분 다시 쓰지 않는다. Backend: `nic_watch` 조회 쿼리(`q`·`kind`·`only_flagged`·`offset`·`limit`), `GET /nic-watch/clusters/{id}/nodes/{node}/interfaces/{iface}`. Frontend: `NicStatusView` 페이지·상세 지연 조회, `useNicWatchSummary`·`useNicInterfaceDetail`.
 
+### Fixed
+- **실행 로그 명령 줄 — 강등된 관리자 노출·동시 실행 섞임 수정**: 역할을 바꾸거나 비활성화·비밀번호 변경을 해도 옛 관리자 토큰으로 실행 명령(CMD 줄)이 계속 보이던 문제를 고쳤다 — 이제 토큰과 함께 DB 의 현재 역할·활성 상태를 확인한다(10초 캐시, 역할 변경·삭제 시 즉시 지움). 한 화면에 실행 로그가 여럿이고 동시에 돌 때 서로의 명령이 양쪽에 붙던 문제도 고쳤다 — 명령은 그 요청을 보낸 실행에만 붙고, 어느 실행 것인지 모르는 배경 요청의 명령은 실행이 하나일 때만 붙인다. Backend: `command_trace.resolve_admin`·`forget_user`(`routers/auth.py` 역할 변경·삭제). Frontend: `lib/commandTrace.ts` `registerRun`·`claimRequests`(요청 config 에 실행 owner), `RunLogHandle.claim`(`pollIntoRunLog` 가 폴링마다 claim).
+
 ## [1.106.4] - 2026-11-24
 
 ### Removed

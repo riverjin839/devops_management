@@ -4,16 +4,45 @@ import json
 import subprocess
 import sys
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.auth.security import create_access_token
+from app.auth.security import create_access_token, hash_password
+from app.database import Base, SessionLocal, engine
+from app.models.user import User
 from app.services import command_trace as ct
 from app.services.sse import stream_async_job
 
 
-def _auth(role: str) -> dict:
-    return {"Authorization": f"Bearer {create_access_token(subject=f'u-{role}', role=role)}"}
+# DB 사용자 — 미들웨어는 토큰 role 이 admin 이어도 DB 의 현재 역할을 다시 본다.
+_USERS = {"ct-admin": "admin", "ct-operator": "operator", "ct-viewer": "viewer",
+          "ct-demoted": "operator", "ct-inactive": "admin"}
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _db_users():
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        for name, role in _USERS.items():
+            u = db.query(User).filter(User.username == name).first()
+            if u is None:
+                u = User(username=name, hashed_password=hash_password("x" * 12))
+                db.add(u)
+            u.role, u.is_active = role, name != "ct-inactive"
+        db.commit()
+        yield
+        db.query(User).filter(User.username.in_(list(_USERS))).delete(synchronize_session=False)
+        db.commit()
+    finally:
+        db.close()
+        ct.forget_user()
+
+
+def _auth(role: str, user: str | None = None) -> dict:
+    name = user or f"ct-{role}"
+    return {"Authorization": f"Bearer {create_access_token(subject=name, role=role)}"}
 
 
 def _decode_header(raw: str) -> list[str]:
@@ -127,10 +156,31 @@ def test_middleware_returns_commands_header_for_admin_only():
     assert r.status_code == 200 and r.json()["admin"] is True
     assert _decode_header(r.headers[ct.HEADER]) == ["$ [ssh root@n1:22] systemctl restart kubelet"]
 
-    for headers in (_auth("operator"), {}):
+    # operator · 토큰 없음 · 강등됐는데 옛 admin 토큰 · 비활성 admin · DB 에 없는 사용자 — 모두 명령을 받지 못한다.
+    for headers in (_auth("operator"), {}, _auth("admin", "ct-demoted"), _auth("admin", "ct-inactive"),
+                    _auth("admin", "ct-nobody")):
         r = client.post("/run", headers=headers)
         assert r.status_code == 200 and r.json()["admin"] is False
         assert ct.HEADER not in r.headers
+
+
+def test_role_change_takes_effect_immediately():
+    client = TestClient(_app())
+    headers = _auth("admin")
+    assert ct.HEADER in client.post("/run", headers=headers).headers  # 캐시에 관리자로 올라감
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.username == "ct-admin").update({"role": "operator"})
+        db.commit()
+        assert ct.HEADER in client.post("/run", headers=headers).headers  # 캐시(10초) 안에서는 그대로
+        ct.forget_user("ct-admin")  # 역할 변경 API 가 부르는 것
+        r = client.post("/run", headers=headers)
+        assert ct.HEADER not in r.headers and r.json()["admin"] is False
+    finally:
+        db.query(User).filter(User.username == "ct-admin").update({"role": "admin"})
+        db.commit()
+        db.close()
+        ct.forget_user()
 
 
 def _events(body: str) -> list[dict]:

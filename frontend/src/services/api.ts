@@ -1,6 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmProfile, LlmProfileModels, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
-import { publishFromHeaders } from '@/lib/commandTrace';
+import { currentRequestOwner, OWNER_FIELD, publishFromResponse } from '@/lib/commandTrace';
 import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
@@ -82,6 +82,12 @@ api.interceptors.request.use(
     }
     // 요청 추적 ID — 재시도는 같은 ID 를 유지한다(lib/requestId.ts).
     if (!config.headers.has(REQUEST_ID_HEADER)) config.headers.set(REQUEST_ID_HEADER, newRequestId());
+    // 이 요청을 보낸 실행 로그(lib/commandTrace) — 응답의 실행 명령을 그 실행에만 붙인다. 재시도는 같은 config 라 유지된다.
+    const cfgExt = config as unknown as Record<string, unknown>;
+    if (cfgExt[OWNER_FIELD] === undefined) {
+      const owner = currentRequestOwner();
+      if (owner) cfgExt[OWNER_FIELD] = owner;
+    }
     // FormData/Blob/File 은 own-enumerable 프로퍼티가 없어 convertKeysToSnake 가
     // 빈 객체({})로 뭉개버린다 — multipart 업로드(backup import 등)가 깨지므로 건너뛴다.
     if (config.data && typeof config.data === 'object'
@@ -126,8 +132,8 @@ function retryDelay(error: unknown): number | null {
 // Response interceptor - snake_case → camelCase 자동 변환 + debug 로깅
 api.interceptors.response.use(
   (response) => {
-    // 관리자 요청이면 서버가 실제로 날린 명령을 헤더로 돌려준다 — 진행 중인 실행 로그에 CMD 줄로(lib/commandTrace).
-    publishFromHeaders(response.headers);
+    // 관리자 요청이면 서버가 실제로 날린 명령을 헤더로 돌려준다 — 그 요청을 보낸 실행 로그에 CMD 줄로(lib/commandTrace).
+    publishFromResponse(response);
     if (response.data && typeof response.data === 'object' && !(response.data instanceof Blob)) {
       response.data = convertKeys(response.data);
     }
@@ -144,7 +150,7 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    publishFromHeaders(error?.response?.headers);
+    publishFromResponse(error?.response);
     const delay = retryDelay(error);
     if (delay != null) {
       await new Promise((r) => setTimeout(r, delay));

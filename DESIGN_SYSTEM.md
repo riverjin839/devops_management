@@ -850,6 +850,9 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   (`CMD   $ [ssh root@host:22] …`, `LogViewer` 보라색)로 실행 로그에 함께 쌓인다. 화면이 따로 할 일은 없다: 단건 요청은 axios
   인터셉터가 응답 헤더 `X-PEP-Commands` 를 진행 중인 `useRunLog` 에 붙이고(`lib/commandTrace.ts`), SSE 는 서버가 `log{level:"cmd"}`
   를 직접 보낸다(`applyRunEvent`). 표준 이벤트를 쓰지 않는 스트림 소비자(예: `verifyLogged`)는 `log` 이벤트를 `run.log` 로 넘겨야 한다.
+  명령은 **그 요청을 보낸 실행에만** 붙는다 — `begin` 이 실행 owner 를 등록하고 직후(같은 매크로태스크) 나가는 요청에 owner 를 찍는다.
+  타이머·폴링 뒤에 요청을 보내는 실행은 보내기 직전에 핸들의 `run.claim()` 을 부른다(`pollIntoRunLog` 는 자동). owner 없는 요청의
+  명령은 진행 중 실행이 하나일 때만 붙는다. 관리자 판정은 토큰 role + DB 현재 역할·활성(`command_trace.resolve_admin`).
   `RunLogPanel` 헤더의 「명령」 토글(`useLogWindowStore().showCommands`, localStorage `pep.runlog.showCommands`, 기본 켬)은 관리자에게만
   보이고, 비관리자 화면은 `cmd` 줄을 거른다. 백엔드에서 새로 노드에 명령을 보내는 길목을 만들면 `command_trace.record(kind, target, cmd)`
   를 부른다(`ssh_runner`·`subprocess`(감사 훅)·`kubectl_exec.safe_pod_exec` 는 이미 기록한다). DB 에 남는 실행 로그는
