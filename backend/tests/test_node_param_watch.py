@@ -186,7 +186,7 @@ def test_manifest_rust_agent_image_has_no_command_and_small_footprint():
     assert c["resources"]["requests"]["memory"] == "8Mi"
     assert c["securityContext"]["readOnlyRootFilesystem"] is True
     # 이미지가 레지스트리에 없을 때의 대안을 매니페스트에 직접 적는다(Python 이미지 렌더에는 불필요)
-    assert "1.106.0" in text and "backend 이미지" in text
+    assert "1.107.1" in text and "backend 이미지" in text
     py = render_manifest(cluster_id=str(CID), cluster_name="prod-a", api_base_url="https://pep/api/v1",
                          image="reg.local/pep-backend:1.2.3", namespace="k8s-monitor-agent", tls_verify=True)
     assert "이미지 안내" not in py
