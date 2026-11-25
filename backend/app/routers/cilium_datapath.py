@@ -245,6 +245,7 @@ async def collect_now(cluster_id: UUID, body: CollectRequest, request: Request, 
             lines = r.log_lines or []
             for ln in lines[sent:]:
                 node = ln.get("node")
+                # cmd 줄(실제로 노드에 나간 작업)은 그대로 흘린다 — stream_async_job 이 관리자가 아니면 거른다.
                 msg = f"[{node}] {ln.get('message', '')}" if node else str(ln.get("message", ""))
                 emit({"type": "log", "level": ln.get("level") or "info", "ts": ln.get("ts"), "message": msg})
             sent = len(lines)

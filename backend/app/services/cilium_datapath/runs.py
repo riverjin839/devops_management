@@ -20,7 +20,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.cilium_datapath import CiliumBpfAgent, CiliumDatapathRun
 from app.models.cluster import Cluster
-from app.services.cilium_datapath.settings import get_settings
+from app.services import command_trace
+from app.services.cilium_datapath.settings import agent_config, get_settings
 
 LOG_LINE_LIMIT = 5000
 _LEVELS = ("info", "warn", "error")
@@ -31,8 +32,32 @@ def _now_iso() -> str:
 
 
 def _line(level: str, message: str, node: Optional[str] = None, ts: Optional[str] = None) -> dict[str, Any]:
+    """실행 로그 한 줄. ``cmd`` 는 여기서 받지 않는다(에이전트가 보낸 줄이 명령 줄을 흉내 내지 못하게) — ``_cmd_line`` 만 만든다."""
     return {"ts": ts or _now_iso(), "level": level if level in _LEVELS else "info",
             "message": str(message)[:2000], "node": node}
+
+
+def agent_command(cfg: dict[str, Any]) -> str:
+    """에이전트가 이 작업으로 노드에서 실제로 하는 일 — 셸 명령이 아니라 bpf(2) 호출이라 그 순서를 명령 꼴로 적는다."""
+    ac = agent_config(cfg)
+    prefixes = ",".join(ac["map_prefixes"])
+    parts = [
+        f"pep-bpf-agent collect --pin-dirs {','.join(ac['pin_dirs'])} --map-prefix {prefixes}"
+        f" --map-budget-ms {ac['map_budget_ms']} --total-budget-ms {ac['total_budget_ms']}",
+        f"  # bpf(BPF_OBJ_GET, BPF_F_RDONLY) <고정 경로>/{prefixes}* → bpf(BPF_OBJ_GET_INFO_BY_FD) → bpf(BPF_MAP_GET_NEXT_KEY) 키 순회(값은 읽지 않음)",
+    ]
+    if ac["scan_all_ids"]:
+        parts.append("  # bpf(BPF_MAP_GET_NEXT_ID) → bpf(BPF_MAP_GET_FD_BY_ID, BPF_F_RDONLY) 고정되지 않은 맵 조회")
+    if ac["program_inventory"]:
+        parts.append(f"  # bpf(BPF_PROG_GET_NEXT_ID) → bpf(BPF_OBJ_GET_INFO_BY_FD) 프로그램 목록 ({','.join(ac['program_prefixes'])}*)")
+    return "\n".join(parts)
+
+
+def _cmd_line(node: str, command: str) -> dict[str, Any]:
+    """노드에 나간 작업을 ``cmd`` 줄로 — 관리자만 본다(SSE 는 ``stream_async_job`` 이 관리자가 아니면 거른다)."""
+    command_trace.record("agent", node, command)
+    return {"ts": _now_iso(), "level": command_trace.CMD_LEVEL,
+            "message": command_trace.format_command("agent", node, command), "node": node}
 
 
 def _append(run: CiliumDatapathRun, lines: list[dict[str, Any]]) -> None:
@@ -106,7 +131,7 @@ def claim_task(db: Session, cluster_id: UUID, node: str) -> Optional[dict[str, A
             continue
         run.claimed_nodes = list(run.claimed_nodes or []) + [node]
         flag_modified(run, "claimed_nodes")
-        _append(run, [_line("info", "에이전트에 작업 전달", node)])
+        _append(run, [_cmd_line(node, agent_command(cfg)), _line("info", "에이전트에 작업 전달", node)])
         db.commit()
         return {"run_id": str(run.id), "kind": run.kind}
     return None

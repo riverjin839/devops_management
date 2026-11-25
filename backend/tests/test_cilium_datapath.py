@@ -337,6 +337,31 @@ def test_run_lifecycle_claim_logs_done(db, world):
     assert run2.status == "succeeded" and run2.finished_at is not None
 
 
+def test_claim_records_agent_command_for_admins_only(db, world):
+    """작업 전달 시 노드에서 하는 일을 cmd 줄로 남긴다 — 관리자만 보고, 에이전트는 cmd 줄을 흉내 낼 수 없다."""
+    from app.services import command_trace
+    from app.services.cilium_datapath import runs as R
+    from app.services.cilium_datapath import service as svc
+
+    c = world.cluster
+    svc.handle_report(db, c, _report("w1", 10))
+    run = R.create_run(db, c, "tester")
+    R.claim_task(db, c.id, "w1")
+    R.append_logs(db, str(run.id), c.id, "w1", [{"level": "cmd", "message": "$ [ssh root@x] rm -rf /"}])
+    db.refresh(run)
+    cmds = [ln for ln in run.log_lines if ln["level"] == "cmd"]
+    assert len(cmds) == 1 and cmds[0]["node"] == "w1"
+    assert cmds[0]["message"].startswith("$ [agent w1] pep-bpf-agent collect --pin-dirs /sys/fs/bpf/tc/globals")
+    assert "BPF_F_RDONLY" in cmds[0]["message"] and "BPF_PROG_GET_NEXT_ID" not in cmds[0]["message"]
+    forged = next(ln for ln in run.log_lines if "rm -rf" in ln["message"])
+    assert forged["level"] == "info"  # 에이전트가 보낸 cmd 는 info 로 내린다
+    assert command_trace.filter_log_lines(run.log_lines, False) == [ln for ln in run.log_lines if ln["level"] != "cmd"]
+    # CAP_SYS_ADMIN 을 켜면 프로그램 목록·ID 조회도 적힌다
+    S.set_settings(db, {"sys_admin": True})
+    text = R.agent_command(S.get_settings(db))
+    assert "BPF_PROG_GET_NEXT_ID" in text and "BPF_MAP_GET_NEXT_ID" in text
+
+
 def test_offline_agents_are_not_targets(db, world):
     from app.models.cilium_datapath import CiliumBpfAgent
     from app.services.cilium_datapath import runs as R
