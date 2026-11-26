@@ -6,7 +6,7 @@ import {
   ArrowLeft, Boxes, Server, Settings as SettingsIcon, Network, Database, Layers,
   ScrollText, Package, ShieldCheck, Puzzle, Trash2, RotateCw, Scaling, Terminal,
   FileCode, Pencil, Save, X, Search, RefreshCw, Ban, CheckCircle2, AlertTriangle,
-  ChevronRight,
+  ChevronRight, ArrowDownWideNarrow,
 } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
 import * as Tabs from '@radix-ui/react-tabs';
@@ -28,11 +28,12 @@ import { NamespaceMultiSelect } from '@/components/k8s/NamespaceMultiSelect';
 import { useNsSelection } from '@/hooks/useNsPrefs';
 import { ColumnToggle } from '@/components/k8s/ColumnToggle';
 import { NamespaceDashboardPanel } from '@/components/k8s-manage/NamespaceDashboardPanel';
+import { NsQuotaCell } from '@/components/k8s-manage/NsQuotaCell';
 import { useColumnPrefs } from '@/hooks/useColumnPrefs';
 import type {
   K8sResourceRow, K8sResourceCapability, K8sCrdInfo, HelmRelease,
   K8sNodeRichRow, ResourceDetailSection, ResourceDetailKVItem,
-  K8sPodRichRow, K8sCellColor, K8sRelatedEvent,
+  K8sPodRichRow, K8sCellColor, K8sRelatedEvent, K8sNamespaceQuotaRow,
 } from '@/types';
 
 // 셀 색상 → Tailwind 클래스 (정상(green)은 무채색 — §12.12 #3, StatusDot 과 동일)
@@ -645,27 +646,63 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
     },
     enabled: !!clusterId,
   });
+  // Namespaces 목록 전용 — NS 별 ResourceQuota 사용/한도(전 NS quota 1회 조회). 실패해도 목록은 그대로 보인다.
+  const isNsList = kind === 'namespaces';
+  const quotaForceRef = useRef(false);
+  const quotaQ = useQuery({
+    queryKey: ['k8s-mng-ns-quotas', clusterId],
+    queryFn: async () => {
+      const refresh = quotaForceRef.current;
+      quotaForceRef.current = false;
+      return (await k8sResourcesApi.namespaceQuotas(clusterId, refresh)).data;
+    },
+    enabled: !!clusterId && isNsList,
+  });
+  const quotaByNs = useMemo(() => {
+    const m = new Map<string, K8sNamespaceQuotaRow>();
+    for (const r of quotaQ.data?.items ?? []) m.set(r.namespace, r);
+    return m;
+  }, [quotaQ.data]);
+  const [sortByQuota, setSortByQuota] = useState(false);
+
   const forceRefetch = () => {
     forceRef.current = true;
     void refetch();
+    if (isNsList) {
+      quotaForceRef.current = true;
+      void quotaQ.refetch();
+    }
   };
 
   const filtered = useMemo(() => {
     let list = data?.items ?? [];
     if (isNamespaced && selectedNs.size > 1) list = list.filter((r) => r.namespace && selectedNs.has(r.namespace));
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.summary} ${Object.values(r.cols ?? {}).join(' ')}`.toLowerCase().includes(q));
-  }, [data, search, selectedNs, isNamespaced]);
+    if (q) list = list.filter((r) => `${r.name} ${r.namespace ?? ''} ${r.summary} ${Object.values(r.cols ?? {}).join(' ')}`.toLowerCase().includes(q));
+    if (isNsList && sortByQuota) {
+      list = [...list].sort((a, b) => (quotaByNs.get(b.name)?.maxRatio ?? -1) - (quotaByNs.get(a.name)?.maxRatio ?? -1));
+    }
+    return list;
+  }, [data, search, selectedNs, isNamespaced, isNsList, sortByQuota, quotaByNs]);
 
-  const allColumns = data?.columns ?? [];
+  // Quota 열은 `quota:<자원>` 키로 일반 열 뒤에 붙인다 — 같은 ColumnToggle 로 숨길 수 있다.
+  const quotaColumns = useMemo(
+    () => (isNsList ? (quotaQ.data?.resources ?? []).map((c) => ({ key: `quota:${c.key}`, label: c.label, res: c.key })) : []),
+    [isNsList, quotaQ.data],
+  );
+  const allColumns = useMemo(
+    () => [...(data?.columns ?? []), ...quotaColumns.map(({ key, label }) => ({ key, label }))],
+    [data, quotaColumns],
+  );
   const { hidden, toggle } = useColumnPrefs(kind);
-  const columns = allColumns.filter((c) => !hidden.has(c.key));
-  const useSummary = allColumns.length === 0;
+  const columns = allColumns.filter((c) => !hidden.has(c.key) && !c.key.startsWith('quota:'));
+  const visibleQuotaCols = quotaColumns.filter((c) => !hidden.has(c.key));
+  const useSummary = (data?.columns ?? []).length === 0;
   const gridTemplate = [
     'minmax(160px,1.6fr)',
     isNamespaced ? '130px' : '',
     ...(useSummary ? ['minmax(120px,1.5fr)'] : columns.map(() => 'minmax(70px,1fr)')),
+    ...visibleQuotaCols.map(() => 'minmax(118px,1fr)'),
     '60px',
     '170px',
   ].filter(Boolean).join(' ');
@@ -687,9 +724,20 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
             className="rounded-xl border border-border bg-card pl-7 pr-2 py-1 text-sm w-48 focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
+        {isNsList && (
+          <button
+            onClick={() => setSortByQuota((v) => !v)}
+            title={sortByQuota ? 'Quota 사용률 정렬 해제(이름순)' : 'Quota 사용률 높은 순으로 정렬'}
+            aria-label="Quota 사용률 높은 순으로 정렬"
+            aria-pressed={sortByQuota}
+            className={`p-1.5 rounded-lg hover:bg-secondary ${sortByQuota ? 'text-primary bg-secondary' : 'text-muted-foreground'}`}
+          >
+            <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+          </button>
+        )}
         <ColumnToggle columns={allColumns} hidden={hidden} onToggle={toggle} />
         <button onClick={forceRefetch} title="새로고침" aria-label="새로고침" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground">
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${isFetching || quotaQ.isFetching ? 'animate-spin' : ''}`} />
         </button>
       </>}
     >
@@ -700,6 +748,7 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
         <span>이름</span>
         {isNamespaced && <span>네임스페이스</span>}
         {useSummary ? <span>요약</span> : columns.map((c) => <span key={c.key} className="truncate">{c.label}</span>)}
+        {visibleQuotaCols.map((c) => <span key={c.key} className="truncate" title={`ResourceQuota ${c.label} — 사용 / 한도`}>{c.label}</span>)}
         <span className="text-right">Age</span>
         <span className="text-right pr-2">동작</span>
       </div>
@@ -727,6 +776,9 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
                     <span key={c.key} className="truncate text-muted-foreground" title={r.cols?.[c.key] ?? ''}>{r.cols?.[c.key] ?? '—'}</span>
                   ))
                 )}
+                {visibleQuotaCols.map((c) => (
+                  <NsQuotaCell key={c.key} label={c.label} cell={quotaByNs.get(r.name)?.cells[c.res]} />
+                ))}
                 <span className="text-right text-muted-foreground tabular-nums">{age(r.ageSeconds)}</span>
                 <div className="flex items-center justify-end gap-1">
                   <RoleGate allow={['admin', 'operator']}>
@@ -753,6 +805,11 @@ export function ResourceTablePanel(p: ResourceTablePanelProps) {
       </div>
       <div className="px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
         {filtered.length}개 표시{data?.truncated ? ' · 1000개 초과(잘림) — 네임스페이스 필터 권장' : ''} · 이름 클릭 시 상세/YAML
+        {isNsList && (
+          quotaQ.isError ? <span className="text-status-warning"> · Quota 조회 실패: {errMsg(quotaQ.error)}</span>
+          : quotaQ.data ? <> · Quota 있는 NS {quotaQ.data.items.length}개 (사용 / 한도, 80% 이상 경고 · 100% 이상 위험){quotaQ.data.truncated ? ' · quota 목록 잘림' : ''}</>
+          : quotaQ.isLoading ? ' · Quota 불러오는 중…' : null
+        )}
       </div>
     </MacCard>
   );
