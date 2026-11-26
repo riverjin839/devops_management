@@ -852,7 +852,8 @@ runLog.begin('K8s 동기화', '요청 전송'); … runLog.log('info', '생성 3
   를 직접 보낸다(`applyRunEvent`). 표준 이벤트를 쓰지 않는 스트림 소비자(예: `verifyLogged`)는 `log` 이벤트를 `run.log` 로 넘겨야 한다.
   명령은 **그 요청을 보낸 실행에만** 붙는다 — `begin` 이 실행 owner 를 등록하고 직후(같은 매크로태스크) 나가는 요청에 owner 를 찍는다.
   타이머·폴링 뒤에 요청을 보내는 실행은 보내기 직전에 핸들의 `run.claim()` 을 부른다(`pollIntoRunLog` 는 자동). owner 없는 요청의
-  명령은 진행 중 실행이 하나일 때만 붙는다. 관리자 판정은 토큰 role + DB 현재 역할·활성(`command_trace.resolve_admin`).
+  명령은 진행 중 실행이 하나일 때만 붙는다. 관리자 판정은 토큰 role + DB 현재 역할·활성(`command_trace.resolve_admin` — 10초 캐시는 Redis 세대가 같을 때만 쓰고
+  역할 변경 시 `forget_user` 가 세대를 올려 모든 워커에 반영, Redis 없으면 캐시 미사용).
   `RunLogPanel` 헤더의 「명령」 토글(`useLogWindowStore().showCommands`, localStorage `pep.runlog.showCommands`, 기본 켬)은 관리자에게만
   보이고, 비관리자 화면은 `cmd` 줄을 거른다. 백엔드에서 새로 노드에 명령을 보내는 길목을 만들면 `command_trace.record(kind, target, cmd)`
   를 부른다(`ssh_runner`·`subprocess`(감사 훅)·`kubectl_exec.safe_pod_exec` 는 이미 기록한다). DB 에 남는 실행 로그는

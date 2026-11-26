@@ -307,20 +307,73 @@ def _bearer_payload(scope: dict) -> Optional[dict]:
     return None
 
 
-# 관리자 판정 캐시 — (username, 로그인 시각) → (만료 monotonic, 관리자 여부). 요청마다 DB 를 치지 않게 짧게만 둔다.
+# 관리자 판정 캐시 — (username, 로그인 시각) → (만료 monotonic, 세대, 관리자 여부). 요청마다 DB 를 치지 않게 짧게만 둔다.
+# 캐시는 프로세스마다 따로라(uvicorn 워커·replica), 역할 변경은 Redis 의 **세대 값**으로 모든 프로세스에 알린다:
+# `forget_user` 가 사용자별(또는 전체) 세대를 올리고, 캐시를 쓰기 전에 지금 세대와 비교해 다르면 DB 를 다시 본다.
+# Redis 를 못 쓰면 캐시를 쓰지 않는다(매번 DB — fail-closed: 다른 프로세스의 무효화를 놓치지 않게).
 ADMIN_CACHE_TTL_SEC = 10.0
-_admin_cache: dict[tuple[str, Any], tuple[float, bool]] = {}
+_admin_cache: dict[tuple[str, Any], tuple[float, tuple, bool]] = {}
 _admin_cache_lock = threading.Lock()
+
+_GEN_PREFIX = "pep:cmdtrace:admin_gen"
+_GEN_ALL = f"{_GEN_PREFIX}:*"
+_GEN_KEY_TTL_SEC = 24 * 3600  # 세대 값은 캐시 TTL 보다 훨씬 길게만 살아 있으면 된다
+_redis_client: Any = None
+
+
+def _redis() -> Any:
+    """세대 값을 둘 Redis 클라이언트(없으면 None). 연결 오류는 호출마다 다시 시도한다."""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            import redis as _r
+
+            from app.config import settings
+
+            _redis_client = _r.Redis.from_url(settings.redis_url, socket_connect_timeout=1, socket_timeout=1)
+        except Exception:  # noqa: BLE001
+            return None
+    return _redis_client
+
+
+def _gen_key(username: str) -> str:
+    return f"{_GEN_PREFIX}:u:{username}"
+
+
+def _current_gen(username: str) -> Optional[tuple]:
+    """(전체 세대, 사용자 세대) — Redis 를 못 읽으면 None(= 캐시 사용 금지)."""
+    client = _redis()
+    if client is None:
+        return None
+    try:
+        a, u = client.mget([_GEN_ALL, _gen_key(username)])
+        return (a or b"0", u or b"0")
+    except Exception:  # noqa: BLE001
+        logger.debug("command_trace admin gen read failed", exc_info=True)
+        return None
 
 
 def forget_user(username: Optional[str] = None) -> None:
-    """역할·활성 상태가 바뀌면 캐시를 지운다(None = 전부). 역할 변경 API 가 부른다."""
+    """역할·활성 상태가 바뀌면 모든 프로세스의 관리자 판정 캐시를 무효화한다(None = 전체 사용자).
+    역할 변경·사용자 삭제 API 가 부른다. 이 프로세스 캐시는 바로 지우고, 다른 프로세스는 Redis 세대로 알아챈다."""
     with _admin_cache_lock:
         if username is None:
             _admin_cache.clear()
         else:
             for key in [k for k in _admin_cache if k[0] == username]:
                 _admin_cache.pop(key, None)
+    client = _redis()
+    if client is None:
+        return  # Redis 가 없으면 어느 프로세스도 캐시를 쓰지 않는다(_current_gen None)
+    try:
+        key = _GEN_ALL if username is None else _gen_key(username)
+        pipe = client.pipeline()
+        pipe.incr(key)
+        pipe.expire(key, _GEN_KEY_TTL_SEC)
+        pipe.execute()
+    except Exception:  # noqa: BLE001
+        logger.warning("command_trace: 관리자 캐시 무효화를 Redis 에 알리지 못했다 — 다른 워커는 최대 %ss 뒤 반영",
+                       ADMIN_CACHE_TTL_SEC)
 
 
 def _db_is_admin(username: str, payload: dict) -> bool:
@@ -341,7 +394,8 @@ def _db_is_admin(username: str, payload: dict) -> bool:
 
 
 def resolve_admin(payload: Optional[dict]) -> bool:
-    """검증된 토큰 payload → 지금 관리자인가(캐시 ``ADMIN_CACHE_TTL_SEC``). 오류는 비관리자로 본다(fail-closed)."""
+    """검증된 토큰 payload → 지금 관리자인가. 캐시(``ADMIN_CACHE_TTL_SEC``)는 Redis 세대가 같을 때만 쓰고,
+    Redis 를 못 쓰면 매번 DB 를 본다. 오류는 비관리자로 본다(fail-closed)."""
     if not payload or payload.get("role") != "admin":
         return False  # 관리자 토큰이 아니면 DB 를 볼 필요도 없다(승격은 다음 토큰부터)
     username = payload.get("sub")
@@ -349,19 +403,23 @@ def resolve_admin(payload: Optional[dict]) -> bool:
         return False
     key = (str(username), payload.get("auth_time") or payload.get("iat"))
     now = time.monotonic()
-    with _admin_cache_lock:
-        hit = _admin_cache.get(key)
-        if hit and hit[0] > now:
-            return hit[1]
+    # 세대는 DB 조회 **전에** 읽는다 — 조회 중에 역할이 바뀌면 다음 요청에서 세대가 달라 다시 본다.
+    gen = _current_gen(str(username))
+    if gen is not None:
+        with _admin_cache_lock:
+            hit = _admin_cache.get(key)
+            if hit and hit[0] > now and hit[1] == gen:
+                return hit[2]
     try:
         value = _db_is_admin(str(username), payload)
     except Exception:  # noqa: BLE001
         logger.debug("command_trace admin lookup failed", exc_info=True)
         return False
-    with _admin_cache_lock:
-        if len(_admin_cache) > 1000:
-            _admin_cache.clear()
-        _admin_cache[key] = (now + ADMIN_CACHE_TTL_SEC, value)
+    if gen is not None:
+        with _admin_cache_lock:
+            if len(_admin_cache) > 1000:
+                _admin_cache.clear()
+            _admin_cache[key] = (now + ADMIN_CACHE_TTL_SEC, gen, value)
     return value
 
 
@@ -369,7 +427,8 @@ class CommandTraceMiddleware:
     """관리자 요청에만 명령 수집기를 꽂고, 응답 헤더 ``X-PEP-Commands`` 로 돌려준다(순수 ASGI — SSE 무간섭).
 
     관리자 여부는 서명 검증된 JWT 의 ``role`` 이 admin 이고 **DB 의 현재 사용자**도 활성 admin 일 때만 참이다
-    (강등·비활성화·비밀번호 변경 뒤의 옛 토큰은 보지 못한다 — ``resolve_admin``, 10초 캐시 + 역할 변경 시 ``forget_user``).
+    (강등·비활성화·비밀번호 변경 뒤의 옛 토큰은 보지 못한다 — ``resolve_admin``, 10초 캐시 + 역할 변경 시 ``forget_user`` 가
+    Redis 세대를 올려 모든 워커·replica 의 캐시를 무효화).
     표시용 판정이라 권한 검사(require_admin)를 대신하지 않는다. SSE 응답은 헤더가 먼저 나가므로 스트림 안에서 ``cmd`` 이벤트로 흘린다(services/sse.py)."""
 
     def __init__(self, app):  # noqa: ANN001
