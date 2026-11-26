@@ -17,6 +17,7 @@ from typing import Any, Optional
 from kubernetes import client as k8s_client
 from sqlalchemy.orm import Session
 
+from app.services import command_trace
 from app.config import settings
 from app.models import Cluster, Playbook, PlaybookRun
 from app.services.kubeconfig import ensure_kubeconfig_file
@@ -77,7 +78,7 @@ class RunLogBuffer:
         self.dirty = False
 
     def add(self, level: str, message: str) -> None:
-        line = [datetime.utcnow().isoformat() + "Z", level if level in ("info", "warn", "error") else "info", message[:1000]]
+        line = [datetime.utcnow().isoformat() + "Z", level if level in ("info", "warn", "error", "cmd") else "info", message[:1000]]
         with self._lock:
             self._lines.append(line)
             if len(self._lines) > self._limit:
@@ -207,19 +208,21 @@ def perform_playbook_run(
     else:
         buf.add("info", f"인벤토리: {playbook.inventory.name if playbook.inventory else playbook.inventory_path}")
 
-    result = run_playbook(
-        playbook_path=playbook.playbook_path,
-        inventory_path=playbook.inventory_path,
-        playbook_content=pb_content,
-        inventory_content=inv_content,
-        extra_vars=merged_extra_vars(playbook, **creds) or None,
-        tags=playbook.tags,
-        inventory_hosts=inventory_hosts,
-        ssh_private_key=ssh_private_key,
-        timeout=playbook.timeout_seconds or None,
-        on_event=buf.add,
-        should_cancel=should_cancel,
-    )
+    # ansible-playbook 명령 줄(감사 훅이 잡는다)을 실행 로그에 cmd 줄로 남긴다 — 조회 시 관리자에게만.
+    with command_trace.bind_log(buf.add):
+        result = run_playbook(
+            playbook_path=playbook.playbook_path,
+            inventory_path=playbook.inventory_path,
+            playbook_content=pb_content,
+            inventory_content=inv_content,
+            extra_vars=merged_extra_vars(playbook, **creds) or None,
+            tags=playbook.tags,
+            inventory_hosts=inventory_hosts,
+            ssh_private_key=ssh_private_key,
+            timeout=playbook.timeout_seconds or None,
+            on_event=buf.add,
+            should_cancel=should_cancel,
+        )
     finished_at = datetime.utcnow()
     buf.add(
         "warn" if result.status in ("warning", "cancelled") else "error" if result.status == "critical" else "info",

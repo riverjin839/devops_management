@@ -19,6 +19,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 - [K8S_ALLOCATION_GUIDE.md](K8S_ALLOCATION_GUIDE.md) — **K8S 자원 관리 운영 매뉴얼**(`/k8s-allocation`): 노드/NS 용량 계획 화면 + 효율화 탭 사용법(추천 적용/롤백, NS 정책 opt-in, ResourceQuota 탄력, 오퍼레이터 CR 어댑터), 트러블슈팅
 - [OBSERVABILITY_GUIDE.md](OBSERVABILITY_GUIDE.md) — **관측 스택 대시보드 · 인시던트 알람 수신**(Alertmanager receiver 설정, pull/push 수집 모드, 알림 라우팅·중복 억제, 모듈 확장법)
 - [K8S_OPS_CHECKLIST.md](K8S_OPS_CHECKLIST.md) — K8s 운영 점검 체크리스트
+- [LONGHORN_V2_VSAN_TROUBLESHOOTING.md](LONGHORN_V2_VSAN_TROUBLESHOOTING.md) — **Longhorn V2(SPDK) on vSAN VM `nvme` I/O 에러·행 걸림 원인 분석/해결 가이드**(I/O 경로·장애 전파·판별 플로우 Mermaid 다이어그램, 진단 명령, 복구·재발 방지·아키텍처 대안)
 - [K8S_APISERVER_PROTECTION.md](K8S_APISERVER_PROTECTION.md) — **대상 K8s apiserver 보호**(PEP 쪽 클라이언트 풀·동시 호출 상한·목록 캐시·RV=0·페이지 조회·지터 + 대상 클러스터 APF FlowSchema 적용법)
 - [PROJECT_FLOW_GUIDE.md](PROJECT_FLOW_GUIDE.md) — 요청/작업 흐름
 - [SERVICE_TOPOLOGY_GUIDE.md](SERVICE_TOPOLOGY_GUIDE.md) — 서비스 토폴로지(서비스 디스커버리) 사용 가이드
@@ -50,7 +51,7 @@ PEP 문서 모음. 루트의 [README](../README.md) · [CHANGELOG](../CHANGELOG.
 
 ## 설계/기획 (내부)
 - `01-plan/`, `02-design/`, `03-analysis/` — 기능별 계획/설계/분석
-  - [02-design/nic-apply.md](02-design/nic-apply.md) — **NIC 적용(2차) 설계**: ring buffer·채널·offload·본딩 해시/LACP rate/miimon 을 서비스 구성 9번째 서비스 `nic` 으로 버전 관리·드리프트·SSH 적용(하위 인터페이스 순차·LACP 재집계 확인·데드맨 원복)·영구 기록(NetworkManager·networkd·ifcfg·udev). 설계만
+  - [02-design/nic-apply.md](02-design/nic-apply.md) — **NIC 적용(2차) 설계**: ring buffer·채널·offload·본딩 해시/LACP rate/miimon 을 서비스 구성 9번째 서비스 `nic` 으로 버전 관리·드리프트, **SSH 현재 값 수집(에이전트는 선택)**, SSH 적용(하위 인터페이스 순차·LACP 재집계 확인·데드맨 원복)·NetworkManager 영구 기록, 500노드 동시 상한. 2-a(설정 버전·드리프트·SSH 수집)·2-b(적용) 구현
   - [02-design/k8s-efficiency-automation.md](02-design/k8s-efficiency-automation.md) — K8S 자원 효율화 자동화(request 축소 추천·적용/롤백·NS 정책·Quota 탄력·CR 어댑터) 설계와 안전장치
   - [02-design/ops-control-plane/ops-control-plane-proposal.md](02-design/ops-control-plane/ops-control-plane-proposal.md) — **운영 관리 평면 고도화 제안**(Cloudera Manager 설계 원리 적용): 기준 설정 계층·편차 판정, 컴포넌트 Health·수집 생존 신호, 통합 이벤트·유지보수 모드. 그림 원본 `drawio/`(생성기 `_src/build_figures.py`)
   - [02-design/cdp-ds-hosts/cdp-ds-hosts-architecture.md](02-design/cdp-ds-hosts/cdp-ds-hosts-architecture.md) — **Cloudera Data Services 1.5.4 호스트 아키텍처**(ECS·OpenShift 호스트 역할·사양·OS·스토리지·포트·DNS 원문 정리)와 PEP 호스트 준비도 점검 설계·목업(설계만)

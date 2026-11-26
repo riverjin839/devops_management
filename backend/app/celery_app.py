@@ -10,6 +10,10 @@ from datetime import datetime
 import asyncio
 
 from app.config import settings
+from app.services import command_trace
+
+# 실행 명령 추적 — 워커 안 subprocess(kubectl·ansible …)도 실행 로그 sink 가 꽂혀 있으면 기록된다.
+command_trace.install()
 
 # Celery 앱 생성
 celery_app = Celery(
@@ -74,6 +78,17 @@ celery_app.conf.beat_schedule = {
     "log-tables-purge": {
         "task": "app.celery_app.run_log_tables_purge",
         "schedule": crontab(hour=3, minute=20),
+    },
+    # 업무 마감 알림 — 담당자에게 내일 마감·오늘 마감·지연 전환(하루 1회, dedupe_key 로 중복 방지). 08:40 KST.
+    "work-item-due-reminder": {
+        "task": "app.celery_app.run_work_item_due_reminder",
+        "schedule": crontab(hour=8, minute=40),
+    },
+    # 개인 알림 외부 발송(메일·메신저) — 사용자 설정(즉시/하루 요약·방해 금지)에 맞춰 대기 건을 보낸다.
+    "user-notify-delivery": {
+        "task": "app.celery_app.run_user_notify_delivery",
+        "schedule": crontab(minute="*"),
+        "options": {"expires": 55},
     },
     # 기술 트렌드 수집 (07:00 KST)
     "daily-trend-collect": {
@@ -2323,3 +2338,41 @@ def refresh_k8s_alloc_rolling_one(self, cluster_id: str):
     finally:
         db.close()
         store.release_lock(f"{cluster_id}:rolling", token)
+
+
+@celery_app.task(name="app.celery_app.run_work_item_due_reminder", ignore_result=True)
+def run_work_item_due_reminder():
+    """업무 마감 알림(내일 마감·오늘 마감·지연 전환) — `services/work_alarms.run_due_reminders`."""
+    import logging
+
+    from app.database import SessionLocal
+    from app.services.work_alarms import run_due_reminders
+
+    db = SessionLocal()
+    try:
+        return run_due_reminders(db)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).warning("work item due reminder failed: %s", str(e)[:300])
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.celery_app.run_user_notify_delivery", ignore_result=True)
+def run_user_notify_delivery():
+    """개인 알림 외부 채널 발송 — `services/user_notify_delivery.deliver_pending`."""
+    import logging
+
+    from app.database import SessionLocal
+    from app.services.user_notify_delivery import deliver_pending
+
+    db = SessionLocal()
+    try:
+        return deliver_pending(db)
+    except Exception as e:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger(__name__).warning("user notify delivery failed: %s", str(e)[:300])
+        return {"error": str(e)[:200]}
+    finally:
+        db.close()

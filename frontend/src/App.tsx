@@ -6,6 +6,7 @@ import { PlaybooksPage } from '@/pages/PlaybooksPage';
 import { WorkItemBoardPage } from '@/pages/WorkItemBoardPage';
 import { WorkItemFormPage } from '@/pages/WorkItemFormPage';
 import { WorkItemDetailPage } from '@/pages/WorkItemDetailPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
 import { JiraExcelImportPage } from '@/pages/JiraExcelImportPage';
 import { WeeklyReportPage } from '@/pages/WeeklyReportPage';
 import { TodoTodayPage } from '@/pages/TodoTodayPage';
@@ -17,7 +18,6 @@ import { NsMigrationPage } from '@/pages/NsMigrationPage';
 import { CidrCalculatorPage } from '@/pages/CidrCalculatorPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
 import { ClusterMetaFormPage } from '@/pages/ClusterMetaFormPage';
-import { VersionGraphPage } from '@/pages/VersionGraphPage';
 import { BulkExecPage } from '@/pages/BulkExecPage';
 import { McClientPage } from '@/pages/McClientPage';
 import { IsilonNfsPage } from '@/pages/IsilonNfsPage';
@@ -41,6 +41,7 @@ import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
 import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { AlertInboxPage } from '@/pages/AlertInboxPage';
+import { AlarmRequestsPage } from '@/pages/AlarmRequestsPage';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { CheckItemDetailPage } from '@/pages/CheckItemDetailPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
@@ -52,8 +53,10 @@ import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { K8sHubPage } from '@/pages/K8sHubPage';
 import { HomePage } from '@/pages/HomePage';
+import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
+import { ProfileSetupDialog } from '@/components/layout/ProfileSetupDialog';
 import { ManualPage } from '@/pages/ManualPage';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
 import { DailyReportPage } from '@/pages/DailyReportPage';
@@ -173,9 +176,10 @@ function AppShell() {
               <Route path="/cluster-overview" element={<Navigate to="/clusters" replace />} />
               {/* K8s 클러스터 허브(D-240) — 클러스터 레일 하나 + 탭으로 per-cluster K8s 화면을 모은다.
                   아래 옛 경로들(/clusters·/k8s-manage·/k8s-allocation·/cluster-trends·/observability·/k8s-events·
-                  /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/versions·/etcdctl)은
+                  /k8s-logs·/incident-analysis·/daily-check/review, 2단계: /k8s-rbac·/node-images·/etcdctl)은
                   해당 뷰로 redirect(클러스터·쿼리 보존). 3단계: /pod-bottleneck·/cilium-trace·/packet-flow·/ops-checks.
-                  D-243: /node-labels·/k9s·/node-ssh 도 허브 뷰로. /pod-bottleneck/:id(실행 상세)·터미널 새 창(/k9s/popup·/node-ssh/popup)만 단독. */}
+                  D-243: /node-labels·/k9s·/node-ssh 도 허브 뷰로. /pod-bottleneck/:id(실행 상세)·터미널 새 창(/k9s/popup·/node-ssh/popup)만 단독.
+                  /versions·/versions/:id/graph 는 화면을 지우고 서비스 구성 뷰로 redirect(서비스 구성이 대체). */}
               <Route path="/k8s" element={<K8sHubPage />} />
               <Route path="/k8s/:clusterId/:view?" element={<K8sHubPage />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
@@ -193,6 +197,8 @@ function AppShell() {
               <Route path="/tasks-mgmt" element={<WorkItemBoardPage />} />
               <Route path="/tasks-mgmt/new" element={<WorkItemFormPage />} />
               <Route path="/tasks-mgmt/:id" element={<WorkItemDetailPage />} />
+              {/* 받은 알림 전체 이력 + 내 알림 설정 — 개인 화면이라 feature 가드 없음 */}
+              <Route path="/notifications" element={<NotificationsPage />} />
               {/* 별도 수정 페이지 폐지 — 옛 /edit 딥링크/북마크는 상세 페이지의 편집 모드(?edit=1)로 리다이렉트 */}
               <Route path="/tasks-mgmt/:id/edit" element={<RedirectWithId to="/tasks-mgmt" suffix="?edit=1" />} />
               {/* 레거시 경로 — /tasks-mgmt 로 리다이렉트 (북마크/외부 링크 호환) */}
@@ -215,14 +221,16 @@ function AppShell() {
               <Route path="/cidr" element={<CidrCalculatorPage />} />
               <Route path="/cluster-manage" element={<ClusterManagePage />} />
               <Route path="/cluster-manage/:id/edit" element={<ClusterMetaFormPage />} />
-              <Route path="/versions" element={<RedirectToHub view="versions" />} />
-              <Route path="/versions/:clusterId/graph" element={<VersionGraphPage />} />
+              <Route path="/versions" element={<RedirectToHub view="services" />} />
+              <Route path="/versions/:clusterId/graph" element={<RedirectToHub view="services" />} />
               <Route path="/bulk-exec" element={<BulkExecPage />} />
               <Route path="/etcdctl" element={<RedirectToHub view="etcdctl" />} />
               {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크가 홈 첫 탭이 아니라
                   배치잡 서브탭에 바로 떨어지도록 쿼리로 탭/서브뷰를 넘긴다(HomePage 가 읽고 지움, D-129). */}
-              <Route path="/batch-jobs" element={<Navigate to="/?tab=platform&view=batch" replace />} />
+              {/* 홈(Main UI)을 비우면서 "플랫폼 현황 ▸ 배치잡" 서브탭이 사라져 배치잡 화면을 직접 연다. */}
+              <Route path="/batch-jobs" element={<BatchJobsPage />} />
               <Route path="/os-param-watch" element={<RedirectToHub view="os-param-watch" />} />
+              <Route path="/cilium-datapath" element={<RedirectToHub view="cilium-datapath" />} />
               <Route path="/k8s-services" element={<RedirectToHub view="services" />} />
               <Route path="/mc" element={<McClientPage />} />
               <Route path="/isilon-nfs" element={<IsilonNfsPage />} />
@@ -265,6 +273,8 @@ function AppShell() {
               <Route path="/observability" element={<RedirectToHub view="metrics" />} />
               {/* 알람 인박스 — Alertmanager / alert-forwarder 수신 인시던트 알람 */}
               <Route path="/alerts" element={<AlertInboxPage />} />
+              {/* 알람 등록 요청 — 서비스 담당자의 알람 추가·임계치 변경 요청 + 관리자 검토 */}
+              <Route path="/alarm-requests" element={<AlarmRequestsPage />} />
               <Route path="/daily-check/review/:clusterId" element={<RedirectToHub view="review" />} />
               <Route path="/daily-check/review" element={<RedirectToHub view="review" />} />
               <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />
@@ -325,6 +335,8 @@ function AuthedRoot() {
     <>
       <AppShell />
       <AgentChat />
+      {/* 첫 로그인 "내 정보 등록" — 이메일·IP·좌석이 비어 있으면 닫을 수 없는 팝업(터미널 팝업 창 제외). */}
+      <ProfileSetupDialog />
     </>
   );
 }

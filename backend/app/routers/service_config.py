@@ -347,6 +347,9 @@ class ApplyOptions(BaseModel):
     drain: bool = False                  # CONTAINERD
     drain_timeout_sec: int = Field(default=300, ge=30, le=1800)
     node_ready_timeout_sec: Optional[int] = Field(default=None, ge=30, le=1800)
+    member_wait_sec: Optional[int] = Field(default=None, ge=0, le=300)       # NIC — 하위 인터페이스 사이 대기
+    rejoin_timeout_sec: Optional[int] = Field(default=None, ge=10, le=600)   # NIC — 링크·LACP 재합류 대기 제한
+    rollback_timer_sec: Optional[int] = Field(default=None, ge=30, le=900)   # NIC — 데드맨 원복 타이머
 
 
 class ApplyInput(BaseModel):
@@ -493,6 +496,10 @@ class ApplySettingsUpdate(BaseModel):
     kubelet_config: Optional[str] = Field(default=None, max_length=300)
     kubelet_service: Optional[str] = Field(default=None, max_length=100)
     kubelet_restart_cmd: Optional[str] = Field(default=None, max_length=300)
+    nic_ethtool: Optional[str] = Field(default=None, max_length=200)
+    nic_rollback_timer_sec: Optional[int] = None
+    nic_member_wait_sec: Optional[int] = None
+    nic_rejoin_timeout_sec: Optional[int] = None
 
 
 @router.get("/settings")

@@ -59,19 +59,22 @@ def render_manifest(*, cluster_id: str, cluster_name: str, api_base_url: str, im
                     namespace: str, tls_verify: bool, config_dirs: list[str] | None = None) -> str:
     ns = _q(namespace)
     cfg_mounts, cfg_vols = _config_dir_volumes(DEFAULT_CONFIG_DIRS if config_dirs is None else config_dirs)
+    image_note = ""
     if is_python_agent_image(image):
         command = '\n          command: ["python", "-m", "app.node_param_agent"]'
         env_extra = '\n            - name: PYTHONDONTWRITEBYTECODE\n              value: "1"'
         resources = "cpu: 10m\n              memory: 48Mi", "cpu: 100m\n              memory: 128Mi"
     else:  # Rust 정적 바이너리 — ENTRYPOINT 가 에이전트라 command 없음, 상주 메모리가 한 자릿수 MiB
         command, env_extra = "", ""
+        image_note = ("# 이미지 안내: node-agent 이미지는 릴리스 1.107.1 이상에서 제공된다. 레지스트리에 없으면(이전 릴리스·폐쇄망 미반입)\n"
+                      "# 이미지를 PEP backend 이미지로 바꾸면 Python 에이전트 방식(command 포함)으로 다시 렌더된다.\n")
         resources = "cpu: 5m\n              memory: 8Mi", "cpu: 100m\n              memory: 64Mi"
     req, lim = resources
     return f"""# PEP 노드 OS 파라미터 에이전트 — 클러스터: {cluster_name}
 # 1) 아래 Secret 의 NODE_PARAM_INGEST_TOKEN 을 PEP backend 의 NODE_PARAM_INGEST_TOKEN 값으로 바꾼다.
 # 2) kubectl apply -f <이 파일>
 # 3) PEP ▸ K8s 허브 ▸ 점검 ▸ OS 파라미터 감시 에서 노드가 '보고 중' 으로 바뀌는지 확인한다.
-apiVersion: v1
+{image_note}apiVersion: v1
 kind: Namespace
 metadata:
   name: {ns}

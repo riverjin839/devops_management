@@ -17,7 +17,9 @@ import {
   CELL_CLASS, MAX_SESSIONS, NodeMultiSelect, SshFavoritesChips, SshFavoritesDialog, SshFavoritesMenu,
   favoriteIsDanger, firstFreeSlot, pageCount, quadrantOfCell, slotForCell, slotPosition, type FavoritePick, type SshTarget,
 } from '@/components/node-ssh';
+import { useNavigate } from 'react-router-dom';
 import { useK8sHub } from '@/lib/k8sHub';
+import { useClusterSwitchGuard } from '@/stores/clusterSwitchGuardStore';
 import { openNodeSshPopout } from '@/lib/nodeSshPopout';
 import { judgeCommand } from '@/lib/dangerCommand';
 import { formatApiError } from '@/lib/utils';
@@ -95,6 +97,9 @@ export function NodeSshPage() {
   const [favDialogOpen, setFavDialogOpen] = useState(false);
   const [pendingConnect, setPendingConnect] = useState<SshTarget[] | null>(null);
   const [pendingFav, setPendingFav] = useState<PendingFavorite | null>(null);
+  // 허브 탭 이동 확인 대기(D-246) — 떠나면 뷰가 언마운트돼 열린 세션이 전부 끊긴다.
+  const [pendingLeave, setPendingLeave] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const runLog = useRunLog();
   const [showLog, setShowLog] = useLogPref('node-ssh-connect');
@@ -216,6 +221,17 @@ export function NodeSshPage() {
   );
   const visibleIds = sessions.filter(isVisible).map((s) => s.id);
   const openCount = Object.values(statuses).filter((v) => v === 'open').length;
+  // 살아 있는 세션(연결 중 포함) — 끊긴(closed/error) 칸만 있으면 확인 없이 떠난다(k9s 와 같은 기준).
+  const liveCount = sessions.filter((s) => statuses[s.id] !== 'closed' && statuses[s.id] !== 'error').length;
+
+  // 허브 이동 가드(D-244·D-246). SSH 뷰는 클러스터를 바꿔도 다시 마운트하지 않으므로(keepAcrossClusters)
+  // 같은 뷰로의 클러스터 전환은 그대로 보내고, 다른 탭으로 떠날 때만 확인한다.
+  useClusterSwitchGuard(({ path }) => {
+    if (liveCount === 0) return false;
+    if (path.split('/')[3] === 'node-ssh') return false;
+    setPendingLeave(path);
+    return true;
+  }, !!hub);
 
   // ── 즐겨찾기 보내기 ──
   const deliver = (fav: SshFavorite, data: string, ids: string[]) => {
@@ -514,6 +530,20 @@ export function NodeSshPage() {
         </ul>
         <p className="mt-2 text-xs text-muted-foreground">로그인 셸은 계정 권한 그대로 동작합니다(읽기 전용 없음).</p>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={pendingLeave !== null}
+        danger
+        title="화면 이동"
+        description={`열린 SSH 세션 ${liveCount}개를 끊고 이동합니다. 실행 중인 원격 작업이 함께 종료됩니다.`}
+        confirmLabel="세션 끊고 이동"
+        onCancel={() => setPendingLeave(null)}
+        onConfirm={() => {
+          const path = pendingLeave;
+          setPendingLeave(null);
+          if (path) navigate(path);
+        }}
+      />
 
       <ConfirmDialog
         open={pendingFav !== null}

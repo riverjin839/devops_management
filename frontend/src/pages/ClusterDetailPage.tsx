@@ -6,7 +6,9 @@ import { PageShell, RunLogPanel, ConfirmDialog, useToast } from '@/components/co
 import { ClipboardCheck, Settings, AlertTriangle, Loader2, BookOpen, Download, RefreshCw, WifiOff, KeyRound, Plus, MoreHorizontal, ChevronDown, ListChecks, Play, HeartPulse } from 'lucide-react';
 import { ClusterSidebar } from '@/components/common/ClusterSidebar';
 import { MacCard } from '@/components/ui/MacCard';
-import { StatusBadge, statusToVariant } from '@/components/common/StatusBadge';
+import { StatusIcon, statusToVariant } from '@/components/common/StatusBadge';
+import { ClusterCheckIcon } from '@/components/common/ClusterCheckIcon';
+import { useClusterCheckSummaries } from '@/hooks/useOpsCheck';
 import {
   AddonGrid,
   AddAddonModal,
@@ -88,7 +90,7 @@ function clusterItemLines(item: ClusterItem): RunLogEntry[] {
 function ContributorRow({ c }: { c: ClusterStatusContributor }) {
   return (
     <div className="flex items-center gap-2 py-1.5 px-1 text-sm">
-      <StatusBadge variant={statusToVariant(c.status)} size="sm" />
+      <StatusIcon variant={statusToVariant(c.status)} />
       <span className="text-xs rounded-full border border-border px-1.5 py-0.5 text-muted-foreground shrink-0">
         {SOURCE_LABEL[c.sourceType] ?? c.sourceType}
       </span>
@@ -122,6 +124,7 @@ export function ClusterDetailPage() {
   const { canOperate, withHint, ariaWithHint } = useCanOperate(clusterId || null);
 
   const hub = useK8sHub();
+  const { byId: checkSummary } = useClusterCheckSummaries(!hub);
   const { data: breakdown, isLoading: breakdownLoading, isError: breakdownError, refetch: refetchBreakdown } =
     useClusterStatusBreakdown(clusterId || undefined);
   const [showHealthy, setShowHealthy] = useState(false);
@@ -385,7 +388,8 @@ export function ClusterDetailPage() {
               title={cluster && !hub ? `${cluster.name} — 클러스터 상세` : '클러스터 상세'}
               description={clusterId && !breakdownLoading && breakdown ? (
                 <span className="inline-flex items-center gap-2 flex-wrap">
-                  <StatusBadge variant={statusToVariant(breakdown.status)} size="sm" />
+                  {/* 클러스터 상태는 점검 탭 결과가 원천인 아이콘 하나 — 허브 안에서는 허브 헤더가 이미 그린다. */}
+                  {!hub && clusterId && <ClusterCheckIcon clusterId={clusterId} summary={checkSummary.get(clusterId)} />}
                   <span>
                     {breakdown.contributors.length === 0
                       ? '아직 점검 결과가 없습니다'

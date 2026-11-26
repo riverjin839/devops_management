@@ -46,7 +46,7 @@ def drift_rows(values: dict[str, dict[str, str]], scopes: list[dict[str, Any]]) 
             if want in (None, ""):
                 continue
             for node, cur in sorted((values.get(key) or {}).items()):
-                if node in nodes and C.norm(cur) != want:
+                if node in nodes and not C.same_value(want, cur):
                     rows.append({"key": key, "node": node, "current": cur, "expected": want,
                                  "group_id": sc["group_id"], "group_name": sc["group_name"],
                                  "baseline_version_no": sc["baseline_version_no"]})

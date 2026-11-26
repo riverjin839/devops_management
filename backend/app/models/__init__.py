@@ -14,7 +14,7 @@ from app.models.ansible_assets import AnsiblePlaybookFile, AnsibleInventory
 from app.models.metric_card import MetricCard
 from app.models.work_item import WorkItem
 from app.models.work_item_comment import WorkItemComment
-from app.models.user_notification import UserNotification
+from app.models.user_notification import UserNotification, UserNotificationPref, WorkAlarmDismissal
 from app.models.work_item_custom_field import WorkItemCustomField
 from app.models.app_setting import AppSetting
 from app.models.llm_credential import LlmCredential
@@ -27,6 +27,7 @@ from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
 from app.models.ops_note import OpsNote
 from app.models.voc_post import VocPost
+from app.models.alarm_request import AlarmCatalogItem, AlarmRequest
 from app.models.reaction import Reaction
 from app.models.management_server import ManagementServer
 from app.models.isilon_server import IsilonServer, IsilonCommand
@@ -44,6 +45,7 @@ from app.models.cluster_item import ClusterItem
 from app.models.batch_job import BatchJob, BatchJobRun
 from app.models.command_entry import CommandEntry
 from app.models.user import User
+from app.models.signup_request import SignupRequest
 from app.models.user_setting import UserSetting
 from app.models.island import Island
 from app.models.audit_log import AuditLog
@@ -63,6 +65,7 @@ from app.models.ops_check import OpsCheckRun, OpsCheckRunItem
 from app.models.os_param_change import OsParamChange
 from app.models.node_param_watch import NodeParamAgent, NodeParamWatchRule
 from app.models.node_nic import NodeNicState
+from app.models.cilium_datapath import CiliumBpfAgent, CiliumDatapathRun
 from app.models.service_config import (
     ServiceConfigApplyRun,
     ServiceConfigChange,
@@ -116,6 +119,7 @@ from app.models.check_matrix import (
 )
 
 __all__ = [
+    "SignupRequest",
     "Cluster",
     "ResourceCountSnapshot",
     "MetricChecklistItem",
@@ -134,6 +138,8 @@ __all__ = [
     "WorkItem",
     "WorkItemComment",
     "UserNotification",
+    "UserNotificationPref",
+    "WorkAlarmDismissal",
     "WorkItemCustomField",
     "AppSetting",
     "LlmCredential",
@@ -146,6 +152,8 @@ __all__ = [
     "WorkGuide",
     "OpsNote",
     "VocPost",
+    "AlarmCatalogItem",
+    "AlarmRequest",
     "ManagementServer",
     "IsilonServer",
     "IsilonCommand",
@@ -185,6 +193,8 @@ __all__ = [
     "NodeParamWatchRule",
     "NodeParamAgent",
     "NodeNicState",
+    "CiliumBpfAgent",
+    "CiliumDatapathRun",
     "ServiceConfigItem",
     "ServiceConfigVersion",
     "ServiceConfigRule",

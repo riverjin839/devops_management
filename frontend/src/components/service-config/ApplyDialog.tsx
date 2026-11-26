@@ -20,10 +20,11 @@ const IMPACT: Record<string, string> = {
   'kube-controller-manager': '컨트롤 플레인 노드마다 컨트롤러 매니저 매니페스트를 고치고 kubelet 이 다시 띄운다. 리더가 바뀌는 동안 잠시 컨트롤러 동작(파드 재생성 등)이 멈춘다.',
   'kube-scheduler': '컨트롤 플레인 노드마다 스케줄러 매니페스트를 고치고 kubelet 이 다시 띄운다. 리더가 바뀌는 동안 잠시 새 파드 배치가 멈춘다.',
   kubelet: 'kubelet 설정 파일을 고치고 kubelet 을 재시작한다 — 실행 중인 파드는 유지되지만 재시작 동안 노드 상태 보고·새 파드 기동이 멈춘다. 노드 Ready 를 확인하고 configz 로 실효 값을 본다.',
+  nic: '노드마다 본딩 하위 인터페이스를 하나씩 바꾼다 — ring·채널·offload 는 그 인터페이스의 큐를 다시 만들어 잠깐 끊기지만 본딩은 다른 하위로 계속 통신한다. 바꾼 하위가 LACP 에 다시 들어온 뒤 다음으로 가고, 이중화가 확인되지 않은 인터페이스는 건너뛴다. 시작 전에 원복 타이머를 걸어 두어 확인 전에 연결이 끊기면 노드가 스스로 이전 값으로 돌아간다. 본딩 해시·LACP rate·miimon 은 끊김 없이 바뀐다.',
   containerd: 'containerd 를 재시작한다 — 실행 중인 컨테이너는 유지되지만 재시작 동안 새 파드 생성·이미지 받기가 멈춘다. cordon 으로 새 파드 배치를 막고, 필요하면 drain 한다.',
 };
 const STATIC_POD = new Set(['kube-apiserver', 'kube-controller-manager', 'kube-scheduler']);
-const NODE_SERVICES = new Set(['linux', 'etcd', 'containerd', 'kubelet', ...STATIC_POD]);
+const NODE_SERVICES = new Set(['linux', 'etcd', 'containerd', 'kubelet', 'nic', ...STATIC_POD]);
 /** 쿼럼·컨트롤 플레인 보호 — 한 대씩·실패 시 중단 고정(서버도 강제). */
 const ONE_BY_ONE = new Set(['etcd', ...STATIC_POD]);
 
@@ -37,6 +38,7 @@ export interface ApplyRequest {
     persist: boolean; update_watch_rules: boolean; restart: boolean; rollout_timeout_sec: number | null;
     auto_restore: boolean; health_timeout_sec: number | null;
     cordon: boolean; drain: boolean; drain_timeout_sec: number; node_ready_timeout_sec: number | null;
+    member_wait_sec: number | null; rejoin_timeout_sec: number | null; rollback_timer_sec: number | null;
   };
   ssh: { username: string; port: number; password: string | null; private_key: string | null; use_sudo: boolean } | null;
 }
@@ -77,6 +79,7 @@ export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, v
   const oneByOne = ONE_BY_ONE.has(service);
   const isCtd = service === 'containerd';
   const isKubelet = service === 'kubelet';
+  const isNic = service === 'nic';
   const unit = isEtcd ? '멤버' : '노드';
   const [mode, setMode] = useState<'scope' | 'nodes'>('scope');
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -93,6 +96,9 @@ export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, v
   const [drain, setDrain] = useState(false);
   const [drainTimeout, setDrainTimeout] = useState(300);
   const [readyTimeout, setReadyTimeout] = useState(300);
+  const [memberWait, setMemberWait] = useState(10);
+  const [rejoin, setRejoin] = useState(60);
+  const [rollbackTimer, setRollbackTimer] = useState(120);
   const [user, setUser] = useState('root');
   const [port, setPort] = useState(22);
   const [auth, setAuth] = useState<'password' | 'key'>('key');
@@ -113,6 +119,9 @@ export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, v
     setTimeoutSec(st.rolloutTimeoutSec);
     setHealthTimeout(isEtcd ? st.etcdHealthTimeoutSec : st.controlPlaneHealthTimeoutSec);
     setReadyTimeout(st.nodeReadyTimeoutSec);
+    setMemberWait(st.nicMemberWaitSec);
+    setRejoin(st.nicRejoinTimeoutSec);
+    setRollbackTimer(st.nicRollbackTimerSec);
   }, [open, settingsQ.data, isEtcd]);
 
   const nodes = useMemo(() => plan?.scopeNodes ?? [], [plan]);
@@ -132,6 +141,8 @@ export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, v
         restart, rollout_timeout_sec: service === 'cilium' ? timeout : null,
         auto_restore: autoRestore, health_timeout_sec: oneByOne ? healthTimeout : null,
         cordon, drain, drain_timeout_sec: drainTimeout, node_ready_timeout_sec: isCtd || isKubelet ? readyTimeout : null,
+        member_wait_sec: isNic ? memberWait : null, rejoin_timeout_sec: isNic ? rejoin : null,
+        rollback_timer_sec: isNic ? rollbackTimer : null,
       },
       ssh: isNode ? {
         username: user, port, password: auth === 'password' ? password : null,
@@ -231,7 +242,7 @@ export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, v
                 ) : isNode ? (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
-                      <label className="flex items-center gap-1.5">롤링 <input type="number" min={1} max={50} value={batch} onChange={(e) => setBatch(Number(e.target.value) || 1)} className={`${INPUT} w-20`} aria-label="한 번에 적용할 노드 수" /> 대씩</label>
+                      <label className="flex items-center gap-1.5">롤링 <input type="number" min={1} max={isNic ? 20 : 50} value={batch} onChange={(e) => setBatch(Math.min(isNic ? 20 : 50, Number(e.target.value) || 1))} className={`${INPUT} w-20`} aria-label="한 번에 적용할 노드 수" /> 대씩</label>
                       <label className="flex items-center gap-1.5">배치 사이 대기 <input type="number" min={0} max={600} value={pause} onChange={(e) => setPause(Number(e.target.value) || 0)} className={`${INPUT} w-20`} aria-label="배치 사이 대기(초)" /> 초</label>
                     </div>
                     <label className="flex items-center gap-2"><input type="checkbox" checked={stopOnFail} onChange={(e) => setStopOnFail(e.target.checked)} /> 실패하면 남은 노드는 건너뛰고 중단</label>
@@ -239,6 +250,17 @@ export function ApplyDialog({ open, clusterId, service, serviceLabel, groupId, v
                       <>
                         <label className="flex items-center gap-2"><input type="checkbox" checked={persist} onChange={(e) => setPersist(e.target.checked)} /> 영구 설정 파일에도 기록(끄면 sysctl -w 만 — 재부팅 시 원복)</label>
                         <label className="flex items-center gap-2"><input type="checkbox" checked={watch} onChange={(e) => setWatch(e.target.checked)} /> 범위 전체에 적용하면 OS 파라미터 감시 기준값을 이 값으로 갱신</label>
+                      </>
+                    )}
+                    {isNic && (
+                      <>
+                        <p className="text-xs text-muted-foreground">노드 안에서는 하위 인터페이스를 항상 하나씩 바꾼다. 노드 500대면 그룹으로 나누거나 동시 노드 수를 올린다.</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="flex items-center gap-1.5">하위 사이 대기 <input type="number" min={0} max={300} value={memberWait} onChange={(e) => setMemberWait(Number(e.target.value) || 0)} className={`${INPUT} w-20`} aria-label="하위 인터페이스 사이 대기(초)" /> 초</label>
+                          <label className="flex items-center gap-1.5">재합류 대기 <input type="number" min={10} max={600} value={rejoin} onChange={(e) => setRejoin(Number(e.target.value) || 60)} className={`${INPUT} w-20`} aria-label="링크·LACP 재합류 대기 제한(초)" /> 초</label>
+                          <label className="flex items-center gap-1.5">원복 타이머 <input type="number" min={30} max={900} value={rollbackTimer} onChange={(e) => setRollbackTimer(Number(e.target.value) || 120)} className={`${INPUT} w-20`} aria-label="데드맨 원복 타이머(초)" /> 초</label>
+                        </div>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={persist} onChange={(e) => setPersist(e.target.checked)} /> NetworkManager 연결 설정에도 기록(재부팅 뒤 유지 — 연결을 다시 올리지는 않는다. NM 이 관리하지 않는 인터페이스는 런타임만)</label>
                       </>
                     )}
                     {isKubelet && (

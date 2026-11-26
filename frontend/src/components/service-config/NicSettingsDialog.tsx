@@ -24,6 +24,7 @@ const FIELD_LABEL: Record<FieldKey, string> = {
   expectedBondMode: '본딩 모드', expectedHashPolicy: '해시 정책', expectedLacpRate: 'LACP rate', minSpeedMbps: '최소 링크 속도',
   crossNodeCheck: '노드 간 비교', rateWindowMinutes: '증가율 창', dropWarnPerMin: '드롭 경고', crcWarnCount: 'CRC 경고',
   flapWarnCount: '링크 끊김 경고', offloadExpect: 'offload 기대 값', staleMinutes: '보고 끊김',
+  targetMode: '설정 값 대상', targetGlob: '설정 값 대상 이름',
 };
 const FIELD_KEYS = Object.keys(FIELD_LABEL) as FieldKey[];
 // 서버(재정의 목록·reset_fields)는 필드명을 snake_case 로 주고받는다 — 값은 응답 변환을 타지 않는다.
@@ -66,6 +67,7 @@ export function NicSettingsDialog({ open, isAdmin, clusterId, onClose }: { open:
   const [overridden, setOverridden] = useState<Set<FieldKey>>(new Set());
   const [incText, setIncText] = useState('');
   const [excText, setExcText] = useState('');
+  const [targetText, setTargetText] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
   const scoped = scope === 'cluster';
   const src = scoped ? cq.data?.effective : gq.data;
@@ -80,6 +82,7 @@ export function NicSettingsDialog({ open, isAdmin, clusterId, onClose }: { open:
     setForm(src);
     setIncText(src.includeNames.join(', '));
     setExcText(src.excludeNames.join(', '));
+    setTargetText((src.targetGlob ?? []).join(', '));
     setOverridden(scoped ? new Set((serverOverridden ?? []).map(toCamel).filter((k): k is FieldKey => (FIELD_KEYS as string[]).includes(k))) : new Set());
   }, [open, src, scoped, serverOverridden]);
 
@@ -96,6 +99,7 @@ export function NicSettingsDialog({ open, isAdmin, clusterId, onClose }: { open:
     setForm((f) => (f ? { ...f, [k]: globalCfg[k] } : f));
     if (k === 'includeNames') setIncText(globalCfg.includeNames.join(', '));
     if (k === 'excludeNames') setExcText(globalCfg.excludeNames.join(', '));
+    if (k === 'targetGlob') setTargetText((globalCfg.targetGlob ?? []).join(', '));
     setOverridden((prev) => { const n = new Set(prev); n.delete(k); return n; });
   };
 
@@ -132,7 +136,7 @@ export function NicSettingsDialog({ open, isAdmin, clusterId, onClose }: { open:
 
   const onSave = async () => {
     if (!form) return;
-    const next = { ...form, includeNames: splitList(incText), excludeNames: splitList(excText) };
+    const next = { ...form, includeNames: splitList(incText), excludeNames: splitList(excText), targetGlob: splitList(targetText) };
     try {
       if (scoped) {
         const patch: Partial<NicWatchSettings> = {};
@@ -243,7 +247,24 @@ export function NicSettingsDialog({ open, isAdmin, clusterId, onClose }: { open:
                     onChange={(e) => { setExcText(e.target.value); mark(['excludeNames']); }} />
                 </Field>
 
-                <p className="pt-2 text-xs font-semibold text-foreground">본딩 / LACP 기대 값 <span className="font-normal text-muted-foreground">· 비우면 검사하지 않는다(본딩이 없는 클러스터는 비워 둔다)</span></p>
+                <p className="pt-2 text-xs font-semibold text-foreground">설정 값 대상 <span className="font-normal text-muted-foreground">· 서비스 구성 NIC 설정 탭(ring·채널·offload·본딩)이 값을 읽는 인터페이스</span></p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Field label="대상" note={note('targetMode')}>
+                    <select className={INPUT} disabled={dis} value={form.targetMode} aria-label="설정 값 대상 인터페이스"
+                      onChange={(e) => set({ targetMode: e.target.value as NicWatchSettings['targetMode'] })}>
+                      <option value="bond_members">본딩과 그 하위(기본)</option>
+                      <option value="glob">이름(glob)</option>
+                    </select>
+                  </Field>
+                  <div className="col-span-2">
+                    <Field label="이름(glob, 쉼표)" help="대상이 '이름' 일 때. 예: ens1f*, bond0" note={note('targetGlob')}>
+                      <input className={INPUT} disabled={dis || form.targetMode !== 'glob'} value={targetText} aria-label="설정 값 대상 이름"
+                        onChange={(e) => { setTargetText(e.target.value); mark(['targetGlob']); }} />
+                    </Field>
+                  </div>
+                </div>
+
+                <p className="pt-2 text-xs font-semibold text-foreground">본딩 / LACP 기대 값 <span className="font-normal text-muted-foreground">· 비우면 검사하지 않는다(본딩이 없는 클러스터는 비워 둔다). NIC 설정 버전이 있으면 버전 값이 우선</span></p>
                 <div className="grid grid-cols-3 gap-2">
                   <Field label="본딩 모드" note={note('expectedBondMode')}>
                     <select className={INPUT} disabled={dis} value={form.expectedBondMode} onChange={(e) => set({ expectedBondMode: e.target.value })} aria-label="기대 본딩 모드">

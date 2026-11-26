@@ -24,6 +24,7 @@ class NodeNicState(Base):
     node = Column(String(253), nullable=False)
     host_ip = Column(String(64), nullable=True)
     agent_version = Column(String(32), nullable=True)
+    source = Column(String(16), nullable=True)         # agent | ssh — ssh 는 사람이 수집할 때만 갱신되므로 보고 끊김을 보지 않는다
     collected_at = Column(DateTime, nullable=True)     # 에이전트가 읽은 시각(UTC)
     received_at = Column(DateTime, nullable=True)      # PEP 가 받은 시각 — 보고 끊김 판정
     interfaces = Column(JSONB, nullable=False, default=list)

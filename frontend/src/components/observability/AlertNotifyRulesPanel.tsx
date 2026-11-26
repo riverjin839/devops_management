@@ -90,7 +90,8 @@ export function AlertNotifyRulesPanel({ clusters }: { clusters: Cluster[] }) {
   const rules = rulesQuery.data ?? [];
   const settingsQuery = useAlertSettings();
   // 재전파 대상 후보 — 기존 알림 채널 훅을 그대로 재사용한다.
-  const { data: channels = [] } = useNotificationChannels();
+  // 채널 목록은 operator 이상만 조회 가능(서버 403) — viewer 는 부르지 않는다.
+  const { data: channels = [] } = useNotificationChannels(canOperate);
   const createRule = useCreateAlertRule();
   const updateRule = useUpdateAlertRule();
   const deleteRule = useDeleteAlertRule();

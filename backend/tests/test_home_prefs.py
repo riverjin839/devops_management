@@ -127,12 +127,12 @@ def test_installed_apps_partial_update_preserves_other_fields(db, me, cleanup):
     assert updated.locale == "en"
 
 
-def test_installed_apps_defaults_to_task_board_only(db, me, cleanup):
-    """신규 계정 기본값은 사이드바는 완전히 비어있고, 상단바는 "업무 관리"(`/tasks-mgmt`)
-    하나만 미리 설치된 상태다 — 나머지는 전부 사용자가 `+` 로 직접 추가해야 한다."""
+def test_installed_apps_defaults_to_k8s_hub_only(db, me, cleanup):
+    """신규 계정 기본값은 사이드바에 "K8s 클러스터"(`/k8s`) 하나만 미리 설치된 상태다(상단바는 비어 있음)
+    — 나머지는 전부 사용자가 `+` 로 직접 추가해야 한다."""
     cleanup.append(me.id)
     prefs = home_prefs_router.get_home_prefs(db=db, user=me)
-    assert prefs.installed_apps == ["/tasks-mgmt"]
+    assert prefs.installed_apps == ["/k8s"]
     assert prefs.installed_apps_customized is False
 
 
@@ -172,7 +172,7 @@ def test_new_account_follows_org_default_until_it_customizes(db, me, cleanup, or
     home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(locale="en"), db=db, user=me)
     prefs = home_prefs_router.get_home_prefs(db=db, user=me)
     assert prefs.installed_apps_customized is False
-    assert prefs.installed_apps == ["/tasks-mgmt"]
+    assert prefs.installed_apps == ["/k8s"]
 
     # admin 이 조직 기본값을 바꾸면 개인화 안 한 계정에 즉시 반영된다.
     set_default_installed_apps(db, ["/tasks-mgmt", "/bulk-exec"])

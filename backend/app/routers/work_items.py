@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -40,6 +41,7 @@ from app.schemas.work_item_time_block import (
     TimeBlockResponse,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/work-items", tags=["work-items"])
 
 WIP_LIMIT = 2
@@ -559,6 +561,110 @@ def get_today_summary(
     }
 
 
+# ── 업무 일정 알람 (알림 종) ─────────────────────────────────────────────────
+# `/{item_id}` 보다 먼저 선언해야 한다("my-alarms" 가 UUID 경로로 잡히지 않게).
+@router.get("/my-alarms")
+def get_my_alarms(
+    db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
+    user: User = Depends(get_current_user),
+):
+    """내 미완료 업무 중 지연 · 오늘 마감 · 내일 마감(마감일 우선, 없으면 시작일 — `services/work_alarms`).
+
+    예전에는 화면이 최근 업무 500건을 받아 직접 걸렀다 — 업무가 많으면 가장 오래 밀린 건부터
+    빠졌다. 이제 서버가 후보를 SQL 로 좁혀 판정하고, '오늘 그만 보기' 한 라인은 뺀다(`dismissed` 수).
+    """
+    from app.services.work_alarms import compute_my_alarms
+
+    return compute_my_alarms(db, work_item_visibility(scope, db.query(WorkItem), db), user)
+
+
+@router.post("/my-alarms/{item_id}/dismiss")
+def dismiss_my_alarm(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
+    user: User = Depends(get_current_user),
+):
+    """일정 알람 한 라인을 오늘만 숨긴다 — 내일도 미완료면 다시 보인다."""
+    from app.models.user_notification import WorkAlarmDismissal
+    from app.services.work_alarms import local_today
+
+    _visible_item_or_404(db, item_id, scope)
+    today = local_today()
+    exists = db.query(WorkAlarmDismissal).filter(
+        WorkAlarmDismissal.user_id == user.id, WorkAlarmDismissal.work_item_id == item_id,
+        WorkAlarmDismissal.alarm_date == today).first()
+    if exists is None:
+        db.add(WorkAlarmDismissal(user_id=user.id, work_item_id=item_id, alarm_date=today))
+        db.commit()
+    return {"ok": True, "alarm_date": today.isoformat()}
+
+
+@router.delete("/my-alarms/dismissals")
+def restore_my_alarms(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """오늘 숨긴 일정 알람을 모두 다시 보이게 한다."""
+    from app.models.user_notification import WorkAlarmDismissal
+    from app.services.work_alarms import local_today
+
+    n = db.query(WorkAlarmDismissal).filter(
+        WorkAlarmDismissal.user_id == user.id, WorkAlarmDismissal.alarm_date == local_today(),
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True, "restored": n}
+
+
+# ── 구독(watch) — 담당자가 아니어도 댓글·상태 변경 알림을 받는다 ─────────────────
+@router.post("/{item_id}/watch")
+def watch_work_item(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
+    user: User = Depends(get_current_user),
+):
+    item = _visible_item_or_404(db, item_id, scope)
+    cur = [w for w in (item.watchers or []) if w]
+    if user.username not in cur:
+        item.watchers = [*cur, user.username]
+        db.commit()
+    return {"watching": True, "watchers": item.watchers or []}
+
+
+@router.delete("/{item_id}/watch")
+def unwatch_work_item(
+    item_id: UUID,
+    db: Session = Depends(get_db),
+    scope: TenantScope = Depends(get_tenant_scope),
+    user: User = Depends(get_current_user),
+):
+    item = _visible_item_or_404(db, item_id, scope)
+    item.watchers = [w for w in (item.watchers or []) if w and w != user.username] or None
+    db.commit()
+    return {"watching": False, "watchers": item.watchers or []}
+
+
+def _notify_safely(fn, *args) -> None:
+    """알림 실패가 업무 저장을 되돌리지 않게 격리한다(세이브포인트)."""
+    try:
+        db = args[0]
+        nested = db.begin_nested()
+        try:
+            fn(*args)
+            nested.commit()
+        except Exception:  # noqa: BLE001
+            nested.rollback()
+            logger.warning("work item notification failed", exc_info=True)
+            return
+        db.commit()
+    except Exception:  # noqa: BLE001
+        logger.warning("work item notification failed", exc_info=True)
+
+
+def _assignee_set(primary: str | None, secondary: str | None, legacy: str | None = None) -> set[str]:
+    raw = ",".join(x for x in [primary, secondary, legacy] if x)
+    return {n.strip() for n in raw.split(",") if n.strip()}
+
+
 @router.get("/{item_id}", response_model=WorkItemResponse)
 def get_work_item(
     item_id: UUID,
@@ -665,6 +771,9 @@ def create_work_item(
         request=request,
     )
     _queue_embedding_recompute(item.id)  # 비동기 — 쓰기 응답 속도에 영향 없음
+    from app.services.user_notify import notify_work_item_assigned
+    _notify_safely(notify_work_item_assigned, db, item, actor,
+                   sorted(_assignee_set(item.primary_assignee, item.secondary_assignee)))
     return item
 
 
@@ -685,6 +794,8 @@ def update_work_item(
 
     _assert_ownership(item, actor, op="수정", db=db)  # G-C4
 
+    prev_assignees = _assignee_set(item.primary_assignee, item.secondary_assignee, item.assignee)
+    prev_status = item.kanban_status
     update_data = payload.model_dump(exclude_unset=True)
     if "primary_assignee" in update_data:
         update_data["assignee"] = update_data["primary_assignee"]
@@ -730,6 +841,12 @@ def update_work_item(
     # 매번 Ollama 를 호출하지 않도록.
     if "title" in update_data or "content" in update_data:
         _queue_embedding_recompute(item.id)
+    from app.services.user_notify import notify_work_item_assigned, notify_work_item_status
+    added = _assignee_set(item.primary_assignee, item.secondary_assignee, item.assignee) - prev_assignees
+    if added:
+        _notify_safely(notify_work_item_assigned, db, item, actor, sorted(added))
+    if item.kanban_status != prev_status:
+        _notify_safely(notify_work_item_status, db, item, actor, prev_status, item.kanban_status)
     return item
 
 
@@ -776,6 +893,8 @@ def patch_status(
         details={"from": prev_status, "to": payload.kanban_status, "wip_warning": wip_warning},
         request=request,
     )
+    from app.services.user_notify import notify_work_item_status
+    _notify_safely(notify_work_item_status, db, item, actor, prev_status, payload.kanban_status)
     return WorkItemStatusResponse(data=item, wip_warning=wip_warning)
 
 
@@ -848,12 +967,8 @@ def add_comment(
     db.commit()
     db.refresh(comment)
     # 담당자/등록자에게 개인 알림(알림 종) — 실패해도 댓글 자체엔 영향 없음.
-    try:
-        from app.services.user_notify import notify_work_item_comment
-        notify_work_item_comment(db, item, actor, comment)
-        db.commit()
-    except Exception:  # noqa: BLE001
-        db.rollback()
+    from app.services.user_notify import notify_work_item_comment
+    _notify_safely(notify_work_item_comment, db, item, actor, comment)
     return comment
 
 

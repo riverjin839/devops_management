@@ -4,7 +4,7 @@
 - ``/sys/class/net/<iface>/`` : operstate·carrier·speed·duplex·mtu·carrier_changes·statistics/*, 본딩은 ``bonding/*``,
   상·하위 관계는 ``master``·``lower_*`` 링크. 에이전트가 ``hostNetwork`` 라 노드의 인터페이스가 보인다.
 - ``/proc/net/bonding/<bond>`` : 하위 인터페이스별 MII 상태·Aggregator ID·LACP 상대(partner) MAC·링크 실패 횟수.
-- ethtool ioctl(``SIOCETHTOOL``) 의 조회(GET) 명령 : ring buffer(-g), 드라이버(-i), offload(-k), 드라이버 통계(-S), autoneg.
+- ethtool ioctl(``SIOCETHTOOL``) 의 조회(GET) 명령 : ring buffer(-g), 채널 수(-l), 드라이버(-i), offload(-k), 드라이버 통계(-S), autoneg.
   커널이 GET 명령은 권한 없이 허용하므로 ``ethtool`` 바이너리도 capability 도 필요 없다. 드라이버가 지원하지 않으면 그 항목만 비운다.
 
 어떤 오류도 보고 전체를 막지 않는다 — 인터페이스·항목 단위로 비우고 ``errors`` 에 남긴다.
@@ -36,6 +36,7 @@ ETHTOOL_GFLAGS = 0x25
 ETHTOOL_GGRO = 0x2B
 ETHTOOL_GSSET_INFO = 0x37
 ETHTOOL_GFEATURES = 0x3A
+ETHTOOL_GCHANNELS = 0x3C
 ETH_SS_STATS = 1
 ETH_SS_FEATURES = 4
 ETH_FLAG_LRO = 1 << 15
@@ -260,6 +261,15 @@ class _Ethtool:
             return None
         return {"rx": rx, "rx_max": rx_max, "tx": tx, "tx_max": tx_max}
 
+    def channels(self, ifname: str) -> Optional[dict[str, int]]:
+        buf = ctypes.create_string_buffer(struct.pack("=9I", ETHTOOL_GCHANNELS, *([0] * 8)))
+        if not self.call(ifname, buf):
+            return None
+        _, max_rx, max_tx, _max_other, max_comb, rx, tx, _other, comb = struct.unpack_from("=9I", buf.raw)
+        if not (max_comb or max_rx or max_tx):
+            return None
+        return {"combined": comb, "combined_max": max_comb, "rx": rx, "rx_max": max_rx, "tx": tx, "tx_max": max_tx}
+
     def drvinfo(self, ifname: str) -> Optional[dict[str, str]]:
         fmt = "=I32s32s32s32s32s12sIIIII"
         buf = ctypes.create_string_buffer(struct.pack(fmt, ETHTOOL_GDRVINFO, *([b""] * 6), 0, 0, 0, 0, 0))
@@ -396,6 +406,7 @@ def collect(cfg: Optional[dict[str, Any]] = None, *, sys_net: Optional[Path] = N
                 if eth is not None and kind in ("physical", "bond", "vlan", "tunnel"):
                     if kind == "physical":
                         it["ring"] = eth.ring(name)
+                        it["channels"] = eth.channels(name)
                         it["driver"] = eth.drvinfo(name)
                         it["autoneg"] = eth.autoneg(name)
                         counters.update({f"drv:{k}": v for k, v in eth.driver_stats(name).items()})

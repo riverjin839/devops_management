@@ -17,6 +17,7 @@ from app.routers.workflows import router as workflows_router
 from app.routers.work_guide import router as work_guide_router
 from app.routers.ops_note import router as ops_note_router
 from app.routers.voc import router as voc_router
+from app.routers.alarm_requests import router as alarm_requests_router
 from app.routers.reactions import router as reactions_router
 from app.routers.mindmap import router as mindmap_router
 from app.routers.management_servers import router as management_server_router
@@ -49,6 +50,7 @@ from app.routers.ansible_assets import (
 from app.routers.auth import router as auth_router
 from app.routers.auth_oidc import router as auth_oidc_router
 from app.routers.auth_ldap import router as auth_ldap_router
+from app.routers.auth_signup import router as auth_signup_router
 from app.routers.audit_logs import router as audit_logs_router
 from app.routers.system_errors import router as system_errors_router
 from app.routers.system_diagnostics import router as system_diagnostics_router
@@ -67,6 +69,10 @@ from app.routers.k8s_allocation import router as k8s_allocation_router
 from app.routers.k8s_efficiency import router as k8s_efficiency_router
 from app.routers.service_config import router as service_config_router
 from app.routers.nic_watch import router as nic_watch_router
+from app.routers.cilium_datapath import (
+    ingest_router as cilium_datapath_ingest_router,
+    router as cilium_datapath_router,
+)
 from app.routers.node_param_watch import (
     ingest_router as node_param_ingest_router,
     router as node_param_watch_router,
@@ -113,6 +119,8 @@ __all__ = [
     "node_param_watch_router",
     "nic_watch_router",
     "node_param_ingest_router",
+    "cilium_datapath_router",
+    "cilium_datapath_ingest_router",
     "service_config_router",
     "ns_migration_router",
     "daily_report_router",
@@ -144,6 +152,7 @@ __all__ = [
     "work_guide_router",
     "ops_note_router",
     "voc_router",
+    "alarm_requests_router",
     "reactions_router",
     "mindmap_router",
     "management_server_router",
@@ -174,6 +183,7 @@ __all__ = [
     "auth_router",
     "auth_oidc_router",
     "auth_ldap_router",
+    "auth_signup_router",
     "audit_logs_router",
     "system_errors_router",
     "system_diagnostics_router",

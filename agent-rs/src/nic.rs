@@ -16,6 +16,7 @@ const SIOCETHTOOL: u32 = 0x8946;
 const ETHTOOL_GSET: u32 = 0x01;
 const ETHTOOL_GDRVINFO: u32 = 0x03;
 const ETHTOOL_GRINGPARAM: u32 = 0x10;
+const ETHTOOL_GCHANNELS: u32 = 0x3C;
 const ETHTOOL_GRXCSUM: u32 = 0x14;
 const ETHTOOL_GTXCSUM: u32 = 0x16;
 const ETHTOOL_GSG: u32 = 0x18;
@@ -435,6 +436,23 @@ impl Ethtool {
         Some(json!({"rx": rx, "rx_max": rx_max, "tx": tx, "tx_max": tx_max}))
     }
 
+    /// 채널(큐) 수 — `ethtool -l`. Python 에이전트와 같은 키(`combined`·`combined_max`·`rx`…)로 보낸다.
+    fn channels(&self, ifname: &str) -> Option<Value> {
+        let mut b = [0u8; 36];
+        put32(&mut b, 0, ETHTOOL_GCHANNELS);
+        if !self.call(ifname, &mut b) {
+            return None;
+        }
+        let (max_rx, max_tx, max_comb) = (get32(&b, 4), get32(&b, 8), get32(&b, 16));
+        let (rx, tx, comb) = (get32(&b, 20), get32(&b, 24), get32(&b, 32));
+        if max_comb == 0 && max_rx == 0 && max_tx == 0 {
+            return None;
+        }
+        Some(
+            json!({"combined": comb, "combined_max": max_comb, "rx": rx, "rx_max": max_rx, "tx": tx, "tx_max": max_tx}),
+        )
+    }
+
     fn drvinfo(&self, ifname: &str) -> Option<Value> {
         let mut b = [0u8; 196];
         put32(&mut b, 0, ETHTOOL_GDRVINFO);
@@ -640,6 +658,10 @@ pub fn collect(
             if ["physical", "bond", "vlan", "tunnel"].contains(&kind) {
                 if kind == "physical" {
                     it.insert("ring".into(), eth.ring(&name).unwrap_or(Value::Null));
+                    it.insert(
+                        "channels".into(),
+                        eth.channels(&name).unwrap_or(Value::Null),
+                    );
                     it.insert("driver".into(), eth.drvinfo(&name).unwrap_or(Value::Null));
                     it.insert(
                         "autoneg".into(),

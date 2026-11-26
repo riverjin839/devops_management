@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-AGENT_VERSION = "1.2.0"
+AGENT_VERSION = "1.3.0"
 FILE_MAX = 256 * 1024
 
 # systemd-sysctl 우선순위 — 같은 파일 이름이면 앞 디렉터리가 이긴다.

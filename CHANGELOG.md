@@ -8,10 +8,105 @@
 
 ## [Unreleased]
 
-1.106.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.113.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
 - **SSH — 여러 노드 화면 안 4분할 터미널 · 즐겨찾기 명령**: 콘솔 ▸ 「노드 SSH」를 **SSH** 로 이름을 줄이고, 연결하면 새 창(플로팅 창)이 아니라 화면 안 분할 칸에 터미널이 열린다. 허브 「SSH」 탭 옆 「대상 노드」 리스트박스에서 여러 노드를 고르고(다른 K8S 클러스터 노드·직접 입력 호스트도) 한 번에 연결하면 **Ⅰ → Ⅳ → Ⅱ → Ⅲ 사분면** 순서로 칸을 채우고, 4개가 넘으면 다음 쪽으로 넘긴다(최대 16세션, 칸 크게 보기, 클러스터를 바꿔도 세션 유지). 터미널 창마다 **★ 즐겨찾기** 메뉴와 칩 바로 자주 쓰는 명령을 입력·실행하고(변경 명령은 확인, 보이는 모든 창에 동시 보내기), 즐겨찾기는 추가·편집·삭제·순서·기본값 복원이 되며 **서버에 저장**된다(기본 명령 = 옛 커널 파라미터 콘솔 프리셋). 연결 단계·종료 사유·즐겨찾기 보내기는 노드별 실시간 로그(「로그 보기」). Backend: `routers/ssh_favorites.py`, `models/ssh_favorite.py`(`ssh_favorite_commands`), `services/ssh_favorites.py`. Frontend: `NodeSshPage`, `components/node-ssh/`, `SshTerminalWindow` `embedded` 모드, 허브 툴바 자리(`toolbarSlot`)·`keepAcrossClusters`.
+
+## [1.113.0] - 2026-11-26
+
+### Added
+- **알람 등록 요청**: 서비스 담당자가 `/alarm-requests`(사이드바 「관측」)에서 운영 알람 추가·임계치 변경을 요청한다 — 요청자(로그인 사용자 자동), 서비스 명(k8s·cilium·aistor·cnpg·keycloak·nexus·jenkins·argocd 등), metric 명(알람 항목), 알람 의미, 심각도별 **기본 임계치(expr·for)·수정 임계치(expr·for)** 표, 적용 클러스터(복수 선택), 비고. 관리자(operator 이상)는 검토 시작·승인·반려(사유 필수)·반영 완료로 처리하고 모든 처리가 이력·감사 로그에 남으며, 새 요청은 관리자에게·처리 결과는 요청자에게 알림이 간다. 알람 항목을 고르면 서비스별 **알람 카탈로그**의 의미·기본 임계치가 채워지고, 반영 완료된 수정 임계치는 카탈로그 기본 임계치로 저장된다(카탈로그는 화면에서 편집). 반영 완료는 처리 기록이며 클러스터에 명령을 보내지 않는다. Backend: `routers/alarm_requests.py`, `services/alarm_requests.py`, `alarm_requests`·`alarm_catalog_items` 테이블. Frontend: `pages/AlarmRequestsPage.tsx`, `components/alarm-requests/`.
+
+## [1.112.0] - 2026-11-26
+
+### Added
+- **Namespaces 목록 Quota 사용/한도 열** — K8S 상세 관리 Namespaces → 목록에 NS 별 ResourceQuota 의 CPU 요청·메모리 요청·CPU 한도·메모리 한도·Pods 를 "사용 / 한도" + 사용률 막대로 보여준다(80% 이상 경고·100% 이상 위험 색, 정상은 중립색). 같은 자원을 여러 quota 가 걸면 먼저 막히는(사용률이 가장 높은) 것을 보이고, 셀에 마우스를 올리면 quota 이름이 보인다. 「사용률 높은 순」 정렬 버튼, 컬럼 표시/숨김 지원. Backend: `GET /k8s/{id}/namespace-quotas`(전 NS quota 1회 LIST, 목록 캐시 경유). Frontend: `components/k8s-manage/NsQuotaCell.tsx`.
+
+## [1.111.0] - 2026-11-26
+
+### Added
+- **첫 로그인 「내 정보 등록」 팝업**: 이메일·IP 주소·좌석 위치 중 하나라도 비어 있으면 로그인 직후 닫을 수 없는 팝업이 떠서 등록해야 화면을 쓸 수 있다(빠져나가는 길은 로그아웃뿐, 담당 업무는 선택).
+- **첫 로그인 비밀번호 변경**: 초기 비밀번호로 로그인한 계정(사번으로 자동 발급·관리자가 만들거나 재설정·부트스트랩 admin)은 같은 팝업에서 새 비밀번호(영문+숫자 8자 이상, 아이디·사번과 다르게)를 정해야 한다. 이미 사번으로 발급된 뒤 한 번도 바꾸지 않은 계정도 부팅 시 대상으로 표시된다. LDAP·SSO 계정은 제외. Backend: `users.must_change_password` 를 다시 사용(매 부팅 FALSE 초기화 제거), `POST /auth/me/password` 가 아이디·사번과 같은 새 비밀번호를 400 으로 거부. 이메일·IP 형식을 검사하고, 관리자가 값을 지워 다시 비면 다음 접속 때 같은 팝업이 뜬다. 사용자 메뉴의 내 정보 패널도 세 항목을 비운 채 저장할 수 없다. Backend: `GET /ui-settings/assignees/me`(`profileComplete`), `PUT /ui-settings/assignees/me` 이메일·IP 형식 검사. Frontend: `components/layout/ProfileSetupDialog.tsx`.
+
+### Changed
+- **홈(Main UI) 비우기 + 신규 사용자 기본 앱 K8s 클러스터**: 홈(`/`)은 모든 사용자에게 「메인 화면 준비 중」 안내와 「K8s 클러스터 열기」 버튼만 보여 준다(로그인 후 자동 이동 없음). 예전 홈의 업무 현황·플랫폼 현황(점검 매트릭스) 탭은 화면에서 빠지고 코드는 `pages/HomeDashboard.tsx` 에 남겨 둔다. 앱을 직접 고른 적 없는 사용자의 내장 기본 앱이 상단바 「업무 관리」에서 사이드바 「K8s 클러스터(/k8s)」로 바뀐다 — 관리자가 Settings 에 저장한 조직 기본 구성이 있으면 그대로 따른다. 배치잡은 `/batch-jobs` 에서 바로 연다.
+- **정 담당역할·부담당 역할 → 「담당 업무」 한 칸으로 통합**: Settings ▸ 시스템 담당자 표·내 정보 패널·팀원 보드가 담당 업무 하나만 보여 준다. 기존 값은 부팅 시 「정, 부」 순서로 쉼표로 이어 `users.duty` 에 한 번 옮겨지고(옛 두 컬럼은 DB 에 남지만 쓰지 않는다), API 필드는 `primaryRole`/`secondaryRole` 대신 `duty` 다.
+
+## [1.110.1] - 2026-11-26
+
+### Fixed
+- **노드 에이전트 이미지 안내 버전 정정**: 전용 Rust 에이전트 이미지(`node-agent`)가 처음 나온 릴리스를 1.106.0 으로 안내하던 것을 실제 첫 빌드인 **1.107.1** 로 고쳤다(1.107.0 이전 릴리스에는 이 이미지를 빌드하는 단계가 없었다). OS 파라미터 감시 설치 화면 안내·설치 매니페스트 주석·`deploy/k8s/node-param-agent/README.md`·`docs/DEPLOY_GUIDE.md`.
+
+## [1.110.0] - 2026-11-26
+
+### Added
+- **로그인 화면 가입 신청 + 관리자 승인**: 관리자가 Settings ▸ 가입 신청에서 창구를 켜면(기본 꺼짐) 로그인 화면에 "가입 신청" 이 생기고, 아이디·이름·이메일·소속·사유·비밀번호로 신청한다. 관리자는 같은 탭에서 역할(viewer·operator)을 골라 승인하면 계정이 만들어지고, 거절 사유는 신청자가 로그인을 시도할 때 보인다(비밀번호가 맞을 때만 — 신청 여부를 캐는 경로가 되지 않게). 허용 이메일 도메인·비밀번호 최소 길이(영문+숫자, 아이디 포함 금지)·대기 기한·기록 보관 일수·대기 건수 상한을 화면에서 정하고, IP 당 제출 횟수 제한·봇 차단 숨김 필드·예약 아이디 차단·관리자 알림·감사 로그(`signup.*`)가 붙는다. 비밀번호는 신청 때부터 해시로만 보관하고 승인 뒤 신청 기록에서 지운다. Backend: `routers/auth_signup.py`, `services/signup_service.py`, `signup_requests` 테이블(백업 시 해시 마스킹). Frontend: `components/auth/SignupForm.tsx`, `components/settings/SignupRequestsPanel.tsx`.
+
+### Changed
+- **클러스터 상태 — 글자 라벨 대신 아이콘, 점검 탭 결과 기준**: 클러스터 옆 「위험」「경고」 글자를 없애고 아이콘 모양·색(정상 체크 · 경고 삼각형 · 실패 X · 결과 없음 빈 원)으로만 구분한다. 상태는 K8s 허브 「점검」 탭 항목들의 마지막 결과 중 가장 나쁜 값이고, 아이콘을 누르면 그 클러스터의 점검 탭이 경고·실패 항목만 걸러서 열린다(툴팁에 문제 항목 이름). 허브 헤더·사이드바 클러스터 목록·클러스터 레일·클러스터 관리 표·카드·점검 탭 상태 칸에 적용. Backend: `GET /ops-checks/summary`. Frontend: `ClusterCheckIcon`, `StatusIcon`, 점검 탭 `?filter=problem`.
+
+## [1.109.0] - 2026-11-26
+
+### Added
+- **업무 알람 상용화 — 알림 화면·알림 설정·실시간 수신**: 상단 알림 종을 **업무 / 운영** 탭으로 나누고, 업무 탭은 일정 알람(지연·오늘 마감·**내일 마감**)과 업무 알림을 함께 보여준다. 새 알림은 실시간(SSE)으로 받아 토스트로 알린다. 새 화면 `/notifications` 에서 읽은 알림까지 다시 보고(종류·안 읽음·검색 필터, 안 읽음으로 되돌리기·삭제), 알림 종류마다 **앱·메일·메신저** 중 받을 곳과 하루 한 번 요약·방해 금지 시간을 고른다. 관리자는 메일(email 채널)·메신저(webhook 채널) 발송 채널을 지정한다. Backend: `GET /notifications/my/history`·`/my/stream`·`GET|PUT /my/prefs`·`GET|PUT /delivery-settings`, `UserNotificationPref`, Beat `user-notify-delivery`(매분). Frontend: `NotificationsPage`, `components/notifications/`, `ui/popover.tsx`.
+- **업무 이벤트 알림 확대 — 배정·상태 변경·@멘션·마감 알림·구독**: 담당자로 지정되면 '업무 배정', 담당·등록·구독 중인 업무의 상태가 바뀌면 '상태 변경', 댓글에서 `@username` 으로 언급되면 '멘션'(같은 댓글의 댓글 알림과 겹치지 않음) 알림을 받는다. 매일 08:40 담당자에게 내일 마감·오늘 마감·지연 전환 알림을 하루 한 번 보낸다. 업무 상세 「구독」으로 담당자가 아니어도 그 업무의 알림을 받는다. Backend: `services/user_notify.py`, `services/work_alarms.py`, Beat `work-item-due-reminder`, `work_items.watchers`, `POST|DELETE /work-items/{id}/watch`.
+- **일정 알람 라인별 '오늘 그만 보기'**: 알림 종의 지연·마감 라인마다 숨김 버튼을 둔다 — 오늘만 숨기고 내일도 미완료면 다시 보인다. 「숨긴 n건 다시 보기」로 되돌린다. Backend: `POST /work-items/my-alarms/{id}/dismiss`, `DELETE /work-items/my-alarms/dismissals`(`work_alarm_dismissals`, 30일 보존).
+- **알림 채널 API 권한·비밀 값 노출**: 로그인만 하면 viewer 도 알림 채널을 만들고·고치고·지우고·테스트 발송할 수 있었고, 목록 응답에 SMTP 비밀번호·웹훅 헤더가 그대로 담겼다. 이제 조회는 operator(비밀 값 `********`, admin 이 아니면 웹훅 URL 도 가림), 생성·수정·삭제·테스트 발송·발송 이력은 admin 만 한다. 웹훅 대상은 http(s) 만 받고 루프백·링크 로컬(클라우드 메타데이터) 주소는 거부한다(사내 메신저 게이트웨이의 사설 IP 는 허용). 가려진 값을 그대로 저장하면 기존 값을 유지하고, 채널 변경은 감사 로그에 남는다.
+- **동명이인에게 알림이 잘못 가던 문제**: 알림을 이름 문자열로 매칭해 같은 이름의 사용자가 서로의 알림(업무·장애 내용)을 봤다. 이제 생성 시 사용자 ID(`recipient_user_id`)로 저장해 그 ID 로 조회한다. 이름이 두 명 이상에게 해당하면 보내지 않고, 예전 행은 username·사번·유일한 이름일 때만 보인다(기동 시 기존 행 채움).
+- **업무 알람의 지연·마감 판정 오류**: 마감일을 무시하고 시작일로 판정해 진행 중 업무가 전부 'N일 지연'으로 떴고, 지난 회의·교육도 지연으로 쌓였다. 또 화면이 최근 업무 500건만 받아 걸러, 업무가 많으면 가장 오래 밀린 건부터 알람에서 빠졌다. 이제 서버(`GET /work-items/my-alarms`)가 마감일 우선(없으면 시작일, 서비스 시간대)으로 판정하고 완료·회의·교육을 빼며, 담당자를 username·이름·사번으로 정확히 맞춘다.
+- **알림 보관 기간**: 읽은 알림은 90일, 안 읽은 알림은 1년 보관한다(예전엔 안 읽은 알림도 90일에 지웠다).
+- **알림 종 접근성**: 직접 만든 팝오버를 Base UI Popover 로 바꿔 포커스 가둠·Escape·포커스 복귀를 지원하고, 라인별 지우기 버튼을 마우스를 올리지 않아도 보이게 했다.
+
+## [1.108.0] - 2026-11-26
+
+### Added
+- **Cilium 데이터패스(eBPF) — Rust 노드 에이전트로 BPF 맵 용량 상시 감시**: K8S 허브 ▸ 진단 ▸ **Cilium 데이터패스**. 노드마다 뜨는 `pep-bpf-agent`(Rust)가 Cilium 이 고정한 BPF 맵(CT·NAT·LB·ipcache·정책·이웃 등)을 읽기 전용으로 열어 항목 수·최대치를 세고 요약만 보고한다(원본 키·값은 노드 밖으로 나가지 않는다). 노드 × 맵 사용률 히트맵, 칸 상세(설정 추천 — cilium-config 키), 임계치(기본 주의 70%·위험 90%)를 넘으면 알람 인박스 `CiliumBpfMapPressure`. 「지금 수집」 은 에이전트에 바로 작업을 보내고 노드별 단계 로그를 실시간으로 보여준다(로그 보기 선택, 관리자는 노드에 넘긴 작업 명령 줄부터 본다). 노드별 커널 기능(CAP_BPF·drop reason 지원 등)과 BPF 프로그램 목록(기준 대비 다시 로드된 프로그램 표시, CAP_SYS_ADMIN 설정 시)도 본다. 임계치·주기·시간 예산·고정 경로·권한은 화면 설정. Backend: `routers/cilium_datapath.py`(에이전트 수신은 `CILIUM_BPF_AGENT_TOKEN` fail-closed) · `services/cilium_datapath/` · 모델 `CiliumBpfAgent`·`CiliumDatapathRun`. Agent: `agents/pep-bpf-agent/`(libbpf 없이 `bpf(2)` 직접 호출, CAP_BPF 만) · 배포 `deploy/k8s/cilium-bpf-agent/`. 데이터패스 일관성·드롭 사유 탭은 다음 단계.
+
+## [1.107.3] - 2026-11-26
+
+### Fixed
+- **실행 로그 명령 줄 — 역할 변경이 모든 백엔드 워커에 바로 반영**: 관리자 판정 캐시(10초)가 프로세스마다 따로라, 역할을 바꾼 요청을 처리하지 않은 다른 워커·replica 에서는 강등된 관리자가 최대 10초 동안 실행 명령(CMD 줄)을 더 받을 수 있던 문제를 고쳤다. 역할 변경·사용자 삭제 때 Redis 에 사용자별 세대 값을 올리고, 모든 워커가 캐시를 쓰기 전에 세대를 비교한다. Redis 를 못 쓰면 캐시를 쓰지 않고 매번 DB 를 본다. Backend: `command_trace.forget_user`·`resolve_admin`(Redis `pep:cmdtrace:admin_gen:*`).
+
+## [1.107.2] - 2026-11-25
+
+### Fixed
+- **실행 로그 명령 줄 — 강등된 관리자 노출·동시 실행 섞임 수정**: 역할을 바꾸거나 비활성화·비밀번호 변경을 해도 옛 관리자 토큰으로 실행 명령(CMD 줄)이 계속 보이던 문제를 고쳤다 — 이제 토큰과 함께 DB 의 현재 역할·활성 상태를 확인한다(10초 캐시, 역할 변경·삭제 시 즉시 지움). 한 화면에 실행 로그가 여럿이고 동시에 돌 때 서로의 명령이 양쪽에 붙던 문제도 고쳤다 — 명령은 그 요청을 보낸 실행에만 붙고, 어느 실행 것인지 모르는 배경 요청의 명령은 실행이 하나일 때만 붙인다. Backend: `command_trace.resolve_admin`·`forget_user`(`routers/auth.py` 역할 변경·삭제). Frontend: `lib/commandTrace.ts` `registerRun`·`claimRequests`(요청 config 에 실행 owner), `RunLogHandle.claim`(`pollIntoRunLog` 가 폴링마다 claim).
+
+## [1.107.1] - 2026-11-24
+
+### Fixed
+- **node-agent 이미지 빌드가 릴리스를 붙잡지 않도록 분리** — amd64+arm64(QEMU) 빌드가 `build-and-push` 안에 있어 10분 가까이 GitHub Release·dev 배포를 늦추고, 실패하면 함께 막힐 수 있었다. 별도 잡 `build-node-agent` 로 옮겨, 실패해도 릴리스는 진행되고 실패는 그 잡에 남는다(같은 태그로 `workflow_dispatch` 재실행하면 재시도).
+- **노드 에이전트 폐쇄망 반입·canary 전환 절차** — `deploy-airgap.sh` 가 `node-agent` 이미지를 build/push/save 한다(`NODE_AGENT_SOURCE_IMAGE` 로 공개 이미지를 pull+retag 하는 것이 폐쇄망 권장 경로, `SKIP_NODE_AGENT=1` 로 건너뜀, 실패해도 나머지 흐름은 계속). 설치 매니페스트에 이미지 부재 시 안내 주석 추가. `deploy/k8s/node-param-agent/README.md` 에 Python → Rust canary 전환 절차(노드 라벨 분리·출력 비교·확대·되돌리기).
+
+## [1.107.0] - 2026-11-24
+
+### Added
+- **서비스 구성 ▸ NIC 적용(노드 반영)**: NIC 설정 버전을 「적용…」으로 노드에 반영한다(SSH, 자격증명 저장 안 함, 실시간 실행 로그·중지·이력). 노드마다 현재 값을 다시 읽어 `max` 를 인터페이스 최대값으로 풀고, 본딩 해시·LACP rate·miimon 은 끊김 없이 바꾼 뒤 ring·채널·offload 는 **본딩 하위 인터페이스를 하나씩** 바꾸며 바꾼 하위가 링크·LACP 활성 Aggregator 에 다시 들어온 걸 확인하고 다음으로 간다. 시작 전에 노드에 **원복 타이머**(기본 120초)를 걸어, 확인 전에 연결이 끊기면 노드가 스스로 이전 값으로 돌아간다. 재합류 실패·다시 읽은 값 불일치면 그 노드를 즉시 원복하고(실패 시 중단 기본), 이중화가 확인되지 않은 인터페이스·`[fixed]`·드라이버 미지원은 건너뛴다. 최대값을 넘는 값은 시작 전에 막는다. 확인이 끝나면 NetworkManager 연결 설정에도 기록해 재부팅 뒤 유지된다(연결을 다시 올리지 않음, NM 이 관리하지 않는 인터페이스는 런타임만 + 메모). lacp_rate 를 커널이 거부하면 영구 기록만 하고 '본딩 재기동 후 반영' 으로 남긴다. 동시 노드 수 최대 20, 대기·제한 시간·ethtool 경로는 적용 설정에서 바꾼다. Backend: `services/service_config/apply_nic.py`, 적용 옵션 `member_wait_sec`·`rejoin_timeout_sec`·`rollback_timer_sec`, 적용 설정 `nic_*`. Frontend: `ApplyDialog`·`ApplySettingsDialog` NIC 구역, 실행 결과 메모 열.
+- **서비스 구성 ▸ NIC 설정 버전·드리프트 + SSH 현재 값 수집**: NIC 가 서비스 구성의 9번째 서비스가 됐다(탭: 설정·상태·요약). 본딩 하위 인터페이스의 ring buffer·채널 수·offload 6개와 본딩 해시 정책·LACP rate·링크 감시를 다른 서비스처럼 설정 버전으로 관리하고(V1 가져오기·비교·되돌리기·노드 그룹 재정의), 노드 값이 기준 버전과 다르면 드리프트 배너·알람, 값이 바뀌면 변경 이력·알람이 남는다. ring·채널은 숫자 또는 `max`(인터페이스별 최대값)로 적을 수 있고 노드 값은 `현재/최대` 로 보인다. 에이전트 없이도 쓰도록 **SSH 로 수집**(조회 명령만, 동시 20대, 실시간 실행 로그)을 추가했고, 에이전트가 있으면 1분마다 같은 경로로 들어온다. 상태 탭의 판정 기준(해시 정책·LACP rate·offload)은 설정 버전이 있으면 버전 값을 따른다. Backend: `services/nic_watch/{snapshot,ssh_collect}.py`, `POST /clusters/{id}/collect-nic(/stream)`, `current.same_value`, `node_nic_states.source`, 에이전트 채널 수 보고(Rust `agent-rs` 2.1.0 · Python 1.3.0). Frontend: `NicCollectModal`, NIC 탭 구성, `int_or_max` 입력.
+
+### Changed
+- **서비스 구성 ▸ NIC — 노드 수백 대 클러스터 대응**: 인터페이스 표의 검색(이름 일부 또는 glob)·종류·경고만 필터와 페이지(100행)를 서버에서 처리하고, 카운터·offload 전체·본딩 하위 상태는 행을 펼칠 때만 따로 읽는다. 레일 상태 점은 요약만 받는다. 500노드 기준 첫 화면 응답이 약 3MB → 150KB, 레일용 요청은 2KB. 판정 결과는 클러스터별로 20초 캐시하고, 에이전트 보고는 카운터 말고 바뀐 게 없으면 5분 동안 받은 시각만 갱신해 노드마다 매분 다시 쓰지 않는다. Backend: `nic_watch` 조회 쿼리(`q`·`kind`·`only_flagged`·`offset`·`limit`), `GET /nic-watch/clusters/{id}/nodes/{node}/interfaces/{iface}`. Frontend: `NicStatusView` 페이지·상세 지연 조회, `useNicWatchSummary`·`useNicInterfaceDetail`.
+
+## [1.106.4] - 2026-11-24
+
+### Removed
+- **K8S 클러스터 허브 — 구성 ▸ 「버전 / 설정」 화면 삭제**: 서비스 구성이 같은 수집(K8S API·SSH)과 현재 값 보기를 대체해 옛 화면을 지웠다. 컴포넌트 전체 이력·두 스냅샷 비교·CSV 내보내기·3D 관계 그래프(`/versions/:id/graph`)·MinIO 수집 버튼도 함께 없어졌다. 옛 주소(`/versions`, `/versions/:id/graph`, `/k8s/:id/versions`)는 서비스 구성으로 이동한다. Backend: 수집 API(`routers/versions.py` `collect-*`)는 서비스 구성·점검(인증서 만료·etcd defrag)이 계속 써서 유지. Frontend: `VersionsPage`·`VersionGraphPage`·`CsvExportModal` 삭제, 허브 `RETIRED_HUB_VIEWS` 로 옛 뷰 id 연결.
+
+## [1.106.3] - 2026-11-24
+
+### Fixed
+- **사이드바 K8s 클러스터 목록 — 보던 화면 상태 유지** — 허브 화면(예: 서비스 `?service=`)에서 사이드바 목록으로 클러스터를 바꾸면 주소의 쿼리가 빠져 보던 선택이 풀리던 문제를 고쳤다. 허브의 클러스터 선택기처럼 쿼리를 그대로 넘긴다. Frontend: `components/layout/K8sClusterFlyoutBody.tsx`.
+- **실행 로그 — 실제로 나간 명령부터 표시(관리자 전용)**: 모든 "로그 보기"(실행 로그 패널)에서 관리자는 그 실행이 노드·클러스터에 실제로 날린 명령을 `CMD $ [ssh root@10.0.0.1:22] sysctl -e …` 줄로 먼저 본다(SSH·SFTP·kubectl/helm/ansible-playbook 등 로컬 프로세스·파드 exec). 비밀번호·토큰·Authorization·URL 자격증명은 가리고, kubeconfig 경로는 `<kubeconfig>`, heredoc 파일 내용은 앞 몇 줄만 남긴다. 실행 로그 헤더의 「명령」 토글로 숨길 수 있다(전 화면 공통, 관리자에게만 보임). 비관리자에게는 서버가 명령 줄을 보내지 않는다. Backend: `services/command_trace.py`(명령 길목 기록 — `ssh_runner`·`isilon_service`·`kubectl_exec`·`etcd_checker` + `subprocess.Popen` 감사 훅, `CommandTraceMiddleware` → 단건 응답 헤더 `X-PEP-Commands`, SSE `log{level:"cmd"}`, 이벤트 루프 기본 executor 가 contextvars 를 넘기게), DB 실행 로그(서비스 구성 적용·공통 서비스·플레이북·점검 매트릭스 수행)에 `cmd` 줄 저장 + 조회 시 비관리자 제외. Frontend: `lib/commandTrace.ts`(axios 인터셉터 → 진행 중 실행 로그), `RunLogLevel` `cmd`, `RunLogPanel` 「명령」 토글(`logWindowStore.showCommands`), `LogViewer` CMD 줄 색.
+
+## [1.106.2] - 2026-11-24
+
+### Fixed
+- **K8S 클러스터 허브 — 탭 이동 때도 터미널 세션 확인 · `[` `]` 단축키 수정**: k9s·노드 SSH 탭에서 세션이 열려 있거나 연결 중이면 다른 탭으로 옮길 때(클릭·`[` `]` 단축키) 「세션 끊고 이동」 확인 창이 뜬다. 닫힌 사이드 패널이 열린 대화상자로 잘못 세어져 허브 `[` `]` 단축키가 동작하지 않던 문제도 고쳤다. Frontend: `HubTabs` 이동 전 가드 호출, `useHubTabShortcuts` 대화상자 판정.
+- **실행 로그 새 창이 화면을 가리지 않게**: 「로그 보기」 새 창이 760×640(점검 매트릭스는 820×720) 고정 크기라 노트북 화면에서는 작업 화면을 거의 덮었다. 이제 앱 화면을 4등분한 오른쪽 위 1/4(1사분면) 크기·위치로 열린다(너무 작은 화면은 최소 480×320). Frontend: `PopoutWindow` 기본 크기·위치 계산.
+- **K8S 클러스터 허브 — 터미널 세션이 있을 때 클러스터 전환 확인**: 허브 k9s·노드 SSH 탭에서 세션이 열려 있거나 연결 중이면, 「클러스터 전환」이나 사이드바 클러스터 목록으로 다른 클러스터를 고를 때 「세션 끊고 전환」 확인 창이 다시 뜬다(허브로 옮기며 빠졌던 확인). 노드 SSH 도 k9s 처럼 연결 중인 세션에서 확인한다. Frontend: `stores/clusterSwitchGuardStore.ts`, `K8sClusterFlyoutBody` 이동 전 가드 호출.
+
+## [1.106.1] - 2026-11-24
 
 ### Removed
 - **K8S 허브 콘솔 ▸ 커널 파라미터 뷰 삭제**: 커널 파라미터(sysctl) 조회·관리는 구성 ▸ 서비스 구성 LINUX(OS)(현재 값 수집·노드별 비교·설정 버전·적용)로 대체됐다. 옛 `/kernel-params`·`/k8s/:id/kernel-params` 경로는 따로 이동시키지 않는다(허브의 모르는 뷰는 개요로). sysctl 이외의 ad-hoc 조회(ulimit·디스크/IO·커널 모듈 등)는 노드 일괄 실행(`/bulk-exec`)·노드 SSH 를 쓴다. Frontend: `KernelParamsPage` 와 허브 뷰·아일랜드 패널·메뉴 항목 제거(백엔드 SSH 수집 `collect-kernel-params` 는 서비스 구성이 계속 사용).

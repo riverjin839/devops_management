@@ -31,9 +31,11 @@ from app.schemas.auth import (
     SelfPasswordChangeRequest,
     PasswordChangeResponse,
 )
+from app.services import command_trace
 from app.services import audit_logger
 from app.services import ldap_service
 from app.services import login_rate_limiter
+from app.services import signup_service
 from app.services.ldap_service import LdapError, LdapIdentity
 
 logger = logging.getLogger("k8s_monitor.auth")
@@ -100,7 +102,7 @@ def _user_out(db: Session, user: User, source: str | None = None) -> UserOut:
     out = UserOut.model_validate(user)
     out.auth_source = source or _auth_source(db, user)
     if out.auth_source != "local":
-        # 디렉터리·IdP 계정은 PEP 비밀번호를 바꿀 수 없으므로 강제 변경 화면으로 보내지 않는다.
+        # 디렉터리·IdP 계정은 PEP 비밀번호를 바꿀 수 없으므로 첫 로그인 비밀번호 변경을 요구하지 않는다.
         out.must_change_password = False
     return out
 
@@ -259,6 +261,14 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
                 details["detail"] = ldap_detail[:300]
         else:
             details = {"reason": last["reason"]}
+        if user is None:
+            # 계정이 없는 아이디 — 그 아이디의 가입 신청과 비밀번호가 맞으면 승인 대기·거절·만료를 알려 준다.
+            # 비밀번호가 일치할 때만 답하므로 신청 여부를 캐는 경로가 되지 않고, 본인 확인이 된 시도라
+            # 레이트리밋 실패로 세지 않는다(승인을 기다리며 몇 번 시도해도 잠기지 않게).
+            hint = signup_service.login_status_hint(db, payload.username, payload.password)
+            if hint is not None:
+                _login_failure_audit(db, request, payload.username, None, {"reason": f"signup_{hint[0]}"})
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=hint[1])
         _login_failure_audit(db, request, payload.username, user, details)
         # 디렉터리 쪽 인프라 실패뿐이라면(자격증명은 확인조차 못 했다) 401 이 아니라 503 — 사용자가
         # 비밀번호를 틀렸다고 오해하지 않게 하고, 레이트리밋 실패 카운트에도 넣지 않는다.
@@ -385,6 +395,14 @@ def change_my_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="새 비밀번호는 기존 비밀번호와 달라야 합니다.",
         )
+    if payload.new_password.lower() in {
+        (v or "").lower() for v in (user.username, user.employee_id) if v
+    }:
+        # 초기 비밀번호가 사번이므로 사번·아이디를 그대로 새 비밀번호로 쓰면 변경한 의미가 없다.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="아이디·사번과 같은 비밀번호는 쓸 수 없습니다.",
+        )
     user.hashed_password = hash_password(payload.new_password)
     user.must_change_password = False
     # 이 시각 이전에 로그인한 토큰(다른 브라우저·탭의 세션, 그리고 이 요청의 토큰)은 무효가 된다.
@@ -455,6 +473,8 @@ def create_user(
         hashed_password=hash_password(payload.password),
         role=payload.role,
         display_name=payload.display_name,
+        # 관리자가 정해 준 비밀번호 — 첫 로그인 때 본인이 바꾸게 한다.
+        must_change_password=True,
     )
     db.add(user)
     db.commit()
@@ -492,6 +512,7 @@ def delete_user(
     )
     db.delete(user)
     db.commit()
+    command_trace.forget_user(snapshot["username"])  # 실행 명령 표시용 관리자 캐시도 바로 지운다
     audit_logger.record(
         db,
         action="user.delete",
@@ -525,6 +546,8 @@ def update_user_role(
     user.role = payload.role
     db.commit()
     db.refresh(user)
+    # 강등 즉시 실행 명령(cmd 줄)이 보이지 않게 관리자 판정 캐시를 지운다(services/command_trace.py).
+    command_trace.forget_user(user.username)
     audit_logger.record(
         db,
         action="user.role.update",
@@ -550,6 +573,8 @@ def admin_reset_password(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
     user.hashed_password = hash_password(payload.new_password)
+    # 관리자가 정한 임시 비밀번호 — 다음 로그인 때 본인이 바꾸게 한다(첫 로그인 팝업).
+    user.must_change_password = True
     # 재설정 이전에 로그인한 그 사용자의 세션(토큰)을 모두 끊는다.
     user.password_changed_at = utcnow_naive()
     db.commit()

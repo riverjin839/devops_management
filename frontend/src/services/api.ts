@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmProfile, LlmProfileModels, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmProfile, LlmProfileModels, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult, SignupPublicConfig, SignupSubmitPayload, SignupSettings, SignupRequestList, SignupRequestItem, SignupStatus, ClusterCheckSummary } from '@/types';
+import { currentRequestOwner, OWNER_FIELD, publishFromResponse } from '@/lib/commandTrace';
 import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
@@ -81,6 +82,12 @@ api.interceptors.request.use(
     }
     // 요청 추적 ID — 재시도는 같은 ID 를 유지한다(lib/requestId.ts).
     if (!config.headers.has(REQUEST_ID_HEADER)) config.headers.set(REQUEST_ID_HEADER, newRequestId());
+    // 이 요청을 보낸 실행 로그(lib/commandTrace) — 응답의 실행 명령을 그 실행에만 붙인다. 재시도는 같은 config 라 유지된다.
+    const cfgExt = config as unknown as Record<string, unknown>;
+    if (cfgExt[OWNER_FIELD] === undefined) {
+      const owner = currentRequestOwner();
+      if (owner) cfgExt[OWNER_FIELD] = owner;
+    }
     // FormData/Blob/File 은 own-enumerable 프로퍼티가 없어 convertKeysToSnake 가
     // 빈 객체({})로 뭉개버린다 — multipart 업로드(backup import 등)가 깨지므로 건너뛴다.
     if (config.data && typeof config.data === 'object'
@@ -125,6 +132,8 @@ function retryDelay(error: unknown): number | null {
 // Response interceptor - snake_case → camelCase 자동 변환 + debug 로깅
 api.interceptors.response.use(
   (response) => {
+    // 관리자 요청이면 서버가 실제로 날린 명령을 헤더로 돌려준다 — 그 요청을 보낸 실행 로그에 CMD 줄로(lib/commandTrace).
+    publishFromResponse(response);
     if (response.data && typeof response.data === 'object' && !(response.data instanceof Blob)) {
       response.data = convertKeys(response.data);
     }
@@ -141,6 +150,7 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    publishFromResponse(error?.response);
     const delay = retryDelay(error);
     if (delay != null) {
       await new Promise((r) => setTimeout(r, delay));
@@ -200,6 +210,22 @@ export const authApi = {
     api.put<AuthUser>(`/auth/users/${id}/role`, { role }),
   resetPassword: (id: string, newPassword: string) =>
     api.post<AuthUser>(`/auth/users/${id}/password`, { newPassword }),
+
+  // ── 가입 신청 + 관리자 승인 — 설정 원천은 AppSetting `auth.signup`(Settings ▸ 가입 신청). ──
+  /** 로그인 화면의 "가입 신청" 노출 여부·폼 정책(public). */
+  signupConfig: () => api.get<SignupPublicConfig>('/auth/signup/config'),
+  /** 신청 접수(public, 202) — 계정은 관리자 승인 때 만들어진다. */
+  submitSignup: (payload: SignupSubmitPayload) =>
+    api.post<{ ok: boolean; detail: string }>('/auth/signup', payload),
+  signupSettings: () => api.get<SignupSettings>('/auth/signup/settings'),
+  updateSignupSettings: (payload: Partial<Omit<SignupSettings, 'ldapEnabled' | 'oidcEnabled'>>) =>
+    api.put<SignupSettings>('/auth/signup/settings', payload),
+  listSignupRequests: (status: SignupStatus | 'all') =>
+    api.get<SignupRequestList>('/auth/signup/requests', { params: { status } }),
+  approveSignup: (id: string, role: 'viewer' | 'operator', note?: string) =>
+    api.post<SignupRequestItem>(`/auth/signup/requests/${id}/approve`, { role, note: note || null }),
+  rejectSignup: (id: string, note?: string) =>
+    api.post<SignupRequestItem>(`/auth/signup/requests/${id}/reject`, { note: note || null }),
 
   // ── 사내 IdP SSO(OIDC) — R-7. 설정 원천은 AppSetting `auth.oidc`(Settings ▸ 접근 제어). ──
   /** 로그인 화면 버튼 노출 여부(public) — enabled·displayName 만. */
@@ -441,34 +467,8 @@ export const workItemCustomFieldsApi = {
     api.get<{ data: import('@/types').WorkItemCustomField[] }>('/work-item-custom-fields'),
 };
 
-// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집 & 히스토리
-export interface ComponentSnapshot {
-  id: string;
-  component: string;
-  category: string | null;
-  version: string | null;
-  data: Record<string, unknown>;
-  contentHash?: string;
-  collectedAt: string;
-}
-
-export interface VersionGraphNode {
-  id: string;
-  label: string;
-  type: 'cluster' | 'category' | 'component' | 'flag';
-  category?: string;
-  version?: string | null;
-  value?: string;
-  collectedAt?: string;
-  /** component 노드만 — 수집된 플래그 전체 개수(그래프는 앞 6개만 leaf 로 그린다). */
-  flagTotal?: number;
-}
-
-export interface VersionGraphEdge {
-  source: string;
-  target: string;
-  type: 'contains' | 'param' | 'configures' | 'replaces';
-}
+// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집(서비스 구성 "현재 값 수집" 이 쓴다).
+// SSH 수집(etcd systemd·kubelet·커널 파라미터·containerd·kubeadm 인증서·노드 NIC)은 components/versions 모달이 스트림으로 부른다.
 
 /** `POST /collect-versions` 응답의 컴포넌트별 결과 — 실행 로그가 대상마다 한 줄씩 남긴다. */
 export interface VersionCollectComponent {
@@ -486,51 +486,6 @@ export const versionsApi = {
     }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal, timeout: SYNC_RUN_TIMEOUT },
     ),
-  collectMinio: (clusterId: string, signal?: AbortSignal) =>
-    api.post<import('@/types').MinioCollectResponse>(
-      `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
-    ),
-  /** 현재 스냅샷 CSV 내보내기. detail 로 컬럼 풍부도 조절. */
-  exportCsv: (
-    clusterId: string,
-    opts: { detail?: 'summary' | 'full' | 'none'; categories?: string[]; components?: string[] } = {},
-    signal?: AbortSignal,
-  ) => {
-    const q = new URLSearchParams();
-    if (opts.detail) q.set('detail', opts.detail);
-    if (opts.categories?.length) q.set('categories', opts.categories.join(','));
-    if (opts.components?.length) q.set('components', opts.components.join(','));
-    return api.get<Blob>(
-      `/clusters/${clusterId}/versions/export.csv?${q.toString()}`,
-      { signal, responseType: 'blob' },
-    );
-  },
-  current: (clusterId: string) =>
-    api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
-      `/clusters/${clusterId}/versions/current`,
-    ),
-  history: (clusterId: string, component?: string, limit = 200) => {
-    const q = new URLSearchParams();
-    if (component) q.set('component', component);
-    q.set('limit', String(limit));
-    return api.get<{ clusterId: string; component: string | null; snapshots: ComponentSnapshot[] }>(
-      `/clusters/${clusterId}/versions/history?${q.toString()}`,
-    );
-  },
-  diff: (clusterId: string, fromId: string, toId: string) =>
-    api.get<{
-      from: { id: string; component: string; version: string | null; collectedAt: string };
-      to: { id: string; component: string; version: string | null; collectedAt: string };
-      versionChanged: boolean;
-      changes: { key: string; from: unknown; to: unknown }[];
-    }>(`/clusters/${clusterId}/versions/diff?from=${fromId}&to=${toId}`),
-  graph: (clusterId: string) =>
-    api.get<{
-      clusterId: string;
-      clusterName: string;
-      nodes: VersionGraphNode[];
-      edges: VersionGraphEdge[];
-    }>(`/clusters/${clusterId}/versions/graph`),
 };
 
 // Bulk SSH/SCP API
@@ -964,6 +919,12 @@ export const sprintsApi = {
 };
 
 export const workItemsApi = {
+  // 업무 일정 알람(알림 종) — 서버가 지연/오늘/내일 마감을 판정한다.
+  myAlarms: () => api.get<import('@/types').MyWorkAlarms>('/work-items/my-alarms'),
+  dismissAlarm: (id: string) => api.post(`/work-items/my-alarms/${id}/dismiss`),
+  restoreAlarms: () => api.delete<{ ok: boolean; restored: number }>('/work-items/my-alarms/dismissals'),
+  watch: (id: string) => api.post<{ watching: boolean; watchers: string[] }>(`/work-items/${id}/watch`),
+  unwatch: (id: string) => api.delete<{ watching: boolean; watchers: string[] }>(`/work-items/${id}/watch`),
   getAll: (params?: WorkItemFilters) =>
     api.get<WorkItemListResponse>('/work-items', {
       params: params
@@ -1537,6 +1498,30 @@ export const vocApi = {
   delete: (id: string) => api.delete(`/voc/${id}`),
 };
 
+// 알람 등록 요청 API (/alarm-requests)
+export const alarmRequestsApi = {
+  meta: () => api.get<import('@/types').AlarmRequestMeta>('/alarm-requests/meta'),
+  list: (params?: { status?: string; service?: string; mine?: boolean }) =>
+    api.get<{ data: import('@/types').AlarmRequest[]; total: number }>('/alarm-requests', { params: params || undefined }),
+  get: (id: number) => api.get<import('@/types').AlarmRequest>(`/alarm-requests/${id}`),
+  create: (data: import('@/types').AlarmRequestInput) =>
+    api.post<import('@/types').AlarmRequest>('/alarm-requests', data),
+  update: (id: number, data: import('@/types').AlarmRequestInput) =>
+    api.put<import('@/types').AlarmRequest>(`/alarm-requests/${id}`, data),
+  cancel: (id: number) => api.delete(`/alarm-requests/${id}`),
+  act: (id: number, data: { action: import('@/types').AlarmRequestActionKind; comment?: string }) =>
+    api.post<import('@/types').AlarmRequest>(`/alarm-requests/${id}/action`, data),
+  catalog: (params?: { service?: string; includeDisabled?: boolean }) =>
+    api.get<import('@/types').AlarmCatalogItem[]>('/alarm-requests/catalog', {
+      params: { service: params?.service, include_disabled: params?.includeDisabled || undefined },
+    }),
+  createCatalog: (data: import('@/types').AlarmCatalogItemInput) =>
+    api.post<import('@/types').AlarmCatalogItem>('/alarm-requests/catalog', data),
+  updateCatalog: (id: number, data: import('@/types').AlarmCatalogItemInput) =>
+    api.put<import('@/types').AlarmCatalogItem>(`/alarm-requests/catalog/${id}`, data),
+  deleteCatalog: (id: number) => api.delete(`/alarm-requests/catalog/${id}`),
+};
+
 // Mind Map API
 export const mindmapApi = {
   list: () => api.get<MindMapListItem[]>('/mindmaps/'),
@@ -1687,9 +1672,11 @@ export const assigneesApi = {
     api.put<{ data: import('@/types').Assignee[]; accounts?: { created?: string[]; revoked?: string[] } }>(
       '/ui-settings/assignees', { assignees },
     ),
+  // 본인 담당자 정보 + 필수 항목 등록 여부(첫 로그인 "내 정보 등록" 팝업 판정).
+  getMine: () => api.get<import('@/types').MyAssigneeResponse>('/ui-settings/assignees/me'),
   // 본인 담당자 정보만 부분 수정 — admin 이 아닌 사용자(operator/viewer)도 호출 가능.
   updateMine: (patch: import('@/types').SelfAssigneePatch) =>
-    api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee }>(
+    api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee; profileComplete: boolean }>(
       '/ui-settings/assignees/me', patch,
     ),
 };
@@ -2016,7 +2003,7 @@ import type {
 /** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
 export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
 /** versions SSH 수집의 SSE 버전(D-135) — 호스트가 끝날 때마다 log·step, 마지막에 동기 응답과 같은 result. */
-export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config';
+export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config' | 'nic';
 export const versionsCollectStreamUrl = (clusterId: string, kind: VersionsCollectKind) =>
   `/api/v1/clusters/${clusterId}/collect-${kind}/stream`;
 
@@ -2419,11 +2406,26 @@ export const notificationsApi = {
     api.put<NotificationChannel>(`/notifications/channels/${id}`, data),
   remove: (id: string) => api.delete(`/notifications/channels/${id}`),
   test: (id: string) => api.post<NotificationLogEntry>(`/notifications/test/${id}`),
-  // 개인 인앱 알림 (알림 종)
-  listMy: (limit = 30) =>
-    api.get<{ data: import('@/types').UserNotification[]; unread: number }>('/notifications/my', { params: { limit } }),
+  log: (limit = 50) => api.get<NotificationLogEntry[]>('/notifications/log', { params: { limit } }),
+  // 개인 인앱 알림 (알림 종) — 안 읽은 것만
+  listMy: (limit = 30, category?: import('@/types').NotificationCategory) =>
+    api.get<import('@/types').MyNotificationsResponse>('/notifications/my', {
+      params: { limit, ...(category ? { category } : {}) },
+    }),
+  // 알림 화면 — 읽은 것 포함 전체 이력
+  history: (params: { offset?: number; limit?: number; category?: import('@/types').NotificationCategory; type?: string; unread_only?: boolean; q?: string }) =>
+    api.get<import('@/types').NotificationHistoryResponse>('/notifications/my/history', { params }),
   markRead: (id: string) => api.post(`/notifications/my/${id}/read`),
-  markAllRead: () => api.post('/notifications/my/read-all'),
+  markUnread: (id: string) => api.post(`/notifications/my/${id}/unread`),
+  removeMy: (id: string) => api.delete(`/notifications/my/${id}`),
+  markAllRead: (category?: import('@/types').NotificationCategory) =>
+    api.post('/notifications/my/read-all', null, { params: category ? { category } : {} }),
+  getPrefs: () => api.get<import('@/types').NotificationPrefs>('/notifications/my/prefs'),
+  putPrefs: (data: import('@/types').NotificationPrefsInput) =>
+    api.put<import('@/types').NotificationPrefs>('/notifications/my/prefs', data),
+  getDelivery: () => api.get<import('@/types').NotificationDeliverySettings>('/notifications/delivery-settings'),
+  putDelivery: (data: import('@/types').NotificationDeliverySettings) =>
+    api.put<import('@/types').NotificationDeliverySettings>('/notifications/delivery-settings', data),
 };
 
 // ── Observability (관측 스택 지표) + 알람 인박스 ──────────────────────────────
@@ -2538,6 +2540,8 @@ export const observabilityApi = {
 export const opsCheckApi = {
   catalog: (clusterId: string) =>
     api.get<OpsCheckCatalogItem[]>(`/ops-checks/catalog/${clusterId}`),
+  /** 볼 수 있는 클러스터별 점검 탭 상태 요약 — 클러스터 상태 아이콘의 원천. */
+  summary: () => api.get<ClusterCheckSummary[]>('/ops-checks/summary'),
   run: (clusterId: string, items: OpsCheckRunRequestItem[]) =>
     api.post<OpsCheckRun>('/ops-checks/run', { clusterId, items }),
   getRun: (runId: string) => api.get<OpsCheckRun>(`/ops-checks/runs/${runId}`),
@@ -2553,6 +2557,12 @@ export const k8sResourcesApi = {
     api.get<import('@/types').K8sResourceListResponse>(
       `/k8s/${clusterId}/resources/${kind}`,
       { params: { ...(namespace ? { namespace } : {}), ...(refresh ? { refresh: true } : {}) }, timeout: 120_000 },
+    ),
+  /** NS 별 ResourceQuota 사용/한도 요약(전 NS quota 1회 LIST) — Namespaces 목록의 Quota 열 */
+  namespaceQuotas: (clusterId: string, refresh?: boolean) =>
+    api.get<import('@/types').K8sNamespaceQuotaResponse>(
+      `/k8s/${clusterId}/namespace-quotas`,
+      { params: refresh ? { refresh: true } : {}, timeout: 120_000 },
     ),
   yaml: (clusterId: string, kind: string, namespace: string, name: string) =>
     api.get<import('@/types').K8sResourceDetail>(
@@ -2734,7 +2744,14 @@ const toEntries = (values: Record<string, string | null>) =>
   Object.entries(values).map(([key, value]) => ({ key, value }));
 /** NIC 상태(서비스 구성 ▸ NIC) — 노드 파라미터 에이전트 보고의 읽기 전용 판정. 설정 저장은 admin. */
 export const nicWatchApi = {
-  cluster: (clusterId: string) => api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`),
+  // GET 쿼리는 요청 인터셉터가 snake_case 로 바꾸지 않으므로 직접 쓴다.
+  cluster: (clusterId: string, p: import('@/types').NicViewQuery = {}) =>
+    api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`, {
+      params: { q: p.q || undefined, kind: p.kind || undefined, only_flagged: p.onlyFlagged || undefined, offset: p.offset ?? 0, limit: p.limit ?? 100 },
+    }),
+  interfaceDetail: (clusterId: string, node: string, iface: string) =>
+    api.get<import('@/types').NicInterfaceDetail>(
+      `/nic-watch/clusters/${clusterId}/nodes/${encodeURIComponent(node)}/interfaces/${encodeURIComponent(iface)}`),
   settings: () => api.get<import('@/types').NicWatchSettingsOut>('/nic-watch/settings'),
   updateSettings: (body: Partial<import('@/types').NicWatchSettings>) =>
     api.put<import('@/types').NicWatchSettingsOut>('/nic-watch/settings', body),
@@ -2851,6 +2868,24 @@ export const nodeParamWatchApi = {
   settings: () => api.get<import('@/types').NodeParamSettings>('/node-params/settings'),
   updateSettings: (body: Partial<Omit<import('@/types').NodeParamSettings, 'tokenConfigured'>>) =>
     api.put<import('@/types').NodeParamSettings>('/node-params/settings', body),
+};
+
+// ── Cilium 데이터패스 — Rust 노드 에이전트(pep-bpf-agent) 보고 기반. 맵 사용률·프로그램·지금 수집(SSE)·설정(JWT) ──
+export const ciliumDatapathApi = {
+  view: (clusterId: string) => api.get<import('@/types').CiliumDatapathView>(`/cilium-datapath/clusters/${clusterId}`),
+  runs: (clusterId: string, limit = 20) =>
+    api.get<{ items: import('@/types').CiliumDatapathRun[] }>(`/cilium-datapath/clusters/${clusterId}/runs`, { params: { limit } }),
+  /** SSE 엔드포인트 경로 — `streamLogged` 로 호출(본문은 camelCase → snake_case 자동 변환). */
+  collectStreamUrl: (clusterId: string) => `/api/v1/cilium-datapath/clusters/${clusterId}/collect`,
+  setBaseline: (clusterId: string, agentId: string) =>
+    api.post<{ ok: boolean; node: string; baselineAt: string }>(`/cilium-datapath/clusters/${clusterId}/agents/${agentId}/baseline`),
+  deleteAgent: (clusterId: string, agentId: string) =>
+    api.delete(`/cilium-datapath/clusters/${clusterId}/agents/${agentId}`),
+  manifest: (clusterId: string) =>
+    api.get<import('@/types').CiliumDatapathManifest>(`/cilium-datapath/clusters/${clusterId}/manifest`),
+  settings: () => api.get<import('@/types').CiliumDatapathSettings>('/cilium-datapath/settings'),
+  updateSettings: (body: Partial<Omit<import('@/types').CiliumDatapathSettings, 'tokenConfigured'>>) =>
+    api.put<import('@/types').CiliumDatapathSettings>('/cilium-datapath/settings', body),
 };
 
 // ── 외부 서비스 — 조회는 비인증 공개 API(저장 스냅샷), 수집(SSE)·설정은 JWT ──────────────────

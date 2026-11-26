@@ -252,11 +252,24 @@ helm upgrade k8s-monitor ./deploy/helm/k8s-daily-monitor \
 인터넷 되는 PC에서:
 ```bash
 bash scripts/deploy/deploy-airgap.sh save
-# → images/ 디렉토리에 tar.gz 약 8개 생성
-#   (앱: backend, frontend + DB: postgres, redis
+# → images/ 디렉토리에 tar.gz 약 9개 생성
+#   (앱: backend, frontend, node-agent + DB: postgres, redis
 #    + 모니터링 스택: prometheus, grafana, node-exporter, kube-state-metrics)
 # USB 등으로 폐쇄망 전송
 ```
+
+**노드 에이전트 이미지(node-agent)** 는 정적 Rust 바이너리라 수 MB 입니다. 폐쇄망에는 crates.io 가 없어 `agent-rs/` 를 직접 빌드할 수 없으므로,
+인터넷 되는 PC 에서 릴리스된 공개 이미지(1.107.1 이상 — 1.107.0 이전 릴리스에는 node-agent 이미지가 없다)를 지정해 받아 두세요(`build` 와 `save` 모두 같은 변수를 씁니다):
+
+```bash
+NODE_AGENT_SOURCE_IMAGE=ghcr.io/riverjin839/devops_management/node-agent:<릴리스 버전> \
+  bash scripts/deploy/deploy-airgap.sh build   # pull 후 ${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG} 로 태깅
+bash scripts/deploy/deploy-airgap.sh save      # images/node-agent.tar.gz 포함
+```
+
+- 예전 Python 에이전트(backend 이미지)만 쓰면 `SKIP_NODE_AGENT=1` 로 건너뛸 수 있습니다. 이미지가 없거나 pull 이 실패해도 나머지 흐름은 계속 진행합니다(경고만).
+- 반입 뒤 PEP 화면(K8s 허브 ▸ 점검 ▸ OS 파라미터 감시 ▸ 에이전트 설치)의 **에이전트 이미지** 를 `${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG}` 로 바꿔 매니페스트를 받습니다.
+  이미지를 backend 이미지로 두면 Python 에이전트 방식으로 렌더됩니다. 전환 절차는 `deploy/k8s/node-param-agent/README.md` 의 "Python → Rust 전환(canary)".
 
 폐쇄망에서:
 ```bash

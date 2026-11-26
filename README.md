@@ -21,21 +21,22 @@
 | **모니터링** | check-matrix cron 기반 자동 점검, 클러스터/노드/시스템 파드/애드온 헬스, AI 리뷰, kubewatch 실시간 이벤트 수집(심각 이벤트 인앱 알림) |
 | **운영 점검 콘솔** | 점검 항목 리스트 → 선택 일괄/개별 실행(백그라운드 진행률) → 결과·로그. Deep Check 프레임워크(인증서 만료·etcd·CoreDNS·OOM·PVC 등 16종, in-cluster CronJob 지원)로 점검 추가형 구조 |
 | **자원/용량** | K8s 자원 관리(노드·NS·랭킹, req/lim/use + 사용률 R·L, 카드 열수/페이징/검색, 대형 클러스터 가상 스크롤·Redis 공유 스냅샷), **자원 효율화**(request 축소 추천·드라이런/적용/롤백·NS 자동 적용 opt-in·NS 자원 추이/저효율 랭킹·ResourceQuota 탄력·오퍼레이터 CR 어댑터·실행 로그), **일일 자원 리포트**(로그인 없는 공개 화면 · NS 일 단위 request·limit·사용량 · 비효율 랭킹 TOP 10 · 날짜 이동 · NS/파드 검색), **외부 서비스**(로그인 없는 공개 화면 · 외부 노출 도메인·IP:Port · 노드 nslookup 역조회 · 도메인 정방향 검증 · 응답 확인 · TLS 인증서 만료일 · 노출 변경 이력) · 공개 화면 공통(NS 담당자 · 만료 기한 있는 공유 링크 · 일일 리포트 주간·월간 추이), 클러스터 추이(per-node 메트릭 시계열, Prometheus) |
-| **딥 트러블슈팅** | Cilium/Hubble 라이브 트레이스, 패킷 흐름, Pod 병목 진단, AI 장애 분석(분석 전용 — 조치 실행 없음) |
+| **딥 트러블슈팅** | Cilium/Hubble 라이브 트레이스, **Cilium 데이터패스**(Rust 노드 에이전트가 BPF 맵 사용률을 읽기 전용으로 상시 감시 — 히트맵·설정 추천·알람, BPF 프로그램 목록), 패킷 흐름, Pod 병목 진단, AI 장애 분석(분석 전용 — 조치 실행 없음) |
 | **리소스 탐색(읽기전용)** | K8s 리소스 40여 종 조회 + YAML 보기(Secret 마스킹), 파드 로그 스트리밍, 실시간 이벤트 |
 | **NS 마이그레이션** | 개발 → 운영 클러스터로 네임스페이스 리소스 이전(기본: SA·RBAC·ConfigMap·쿼터, 선택: 워크로드·Secret) — 치환 규칙(레지스트리·문자열·replicas·라벨), diff·서버 dry-run 미리보기, server-side apply(실시간 로그) 또는 YAML 번들 다운로드 |
 | **자동화** | Ansible 플레이북(실시간 실행 로그·실행 취소)·배치(SSH), Batch Jobs(cron), etcdctl/mc 콘솔, 노드 일괄 실행 |
-| **설정 변경 이력** | 스냅샷(해시 dedup) + diff + 감사 로그, OS/커널 파라미터 드리프트, **OS 파라미터 감시**(노드 에이전트 DaemonSet — 변경·기준값 위반·영구 설정 불일치·무응답을 알람 인박스로), **서비스 구성**(etcd·containerd·cilium·OS·kube-apiserver·controller-manager·scheduler·kubelet 설정 목록·노드별 현재 값·설정 버전), **NIC 상태**(본딩/LACP·링크·MTU·ring buffer·드롭·offload 경고, 노드 에이전트 보고) |
+| **설정 변경 이력** | 스냅샷(해시 dedup) + diff + 감사 로그, OS/커널 파라미터 드리프트, **OS 파라미터 감시**(노드 에이전트 DaemonSet — 변경·기준값 위반·영구 설정 불일치·무응답을 알람 인박스로), **서비스 구성**(etcd·containerd·cilium·OS·kube-apiserver·controller-manager·scheduler·kubelet 설정 목록·노드별 현재 값·설정 버전), **NIC**(본딩/LACP·링크·MTU·ring buffer·드롭·offload 경고 + ring·채널·offload·본딩 설정 버전·드리프트·적용(하위 하나씩·원복 타이머·NM 기록), SSH 수집 또는 노드 에이전트) |
 | **인프라/스토리지** | 인프라 물리 토폴로지, 노드 서버스펙 자산 대장, DC 인벤토리(랙·장비·케이블·IPAM, Excel 일괄 등록), Isilon NFS 모니터링, 서비스 토폴로지, LAKE 서비스 카탈로그, 공통 서비스(LDAP AD·Keycloak·Jenkins·ArgoCD·Nexus 설정 수집·변경 감지) |
 | **협업/지식** | 업무 보드(칸반/표/캘린더), 스프린트, Jira 양방향 연동(Excel 가져오기·상태/내용 반영), 문서 관리 대시보드(Confluence 문서 가져오기/게시 + 동기화 상태 + AI 시맨틱 검색), 주간 타임라인, WBS, 워크플로우, 마인드맵, 온톨로지 그래프, 지식 허브(문서 에디터·도구 탭 통합), 기술 트렌드 다이제스트 |
 | **개인화** | Your Island — 자주 쓰는 화면을 개인 화면 하나에 모아 탭/좌측 레일로 전환(기존 페이지를 그대로 임베드), 아일랜드 여러 개 + 팀 공유·복제, 화면 언어 선택(한국어/English) |
-| **소통/알림** | 사용자 VOC 게시판, 인앱 알림, 릴리즈 노트 패널(CHANGELOG 자동 파싱), 👍 공감 |
-| **배포/운영** | kind / Helm / Kustomize / ArgoCD / Jenkins, 폐쇄망(airgap) 배포, JSON 백업·복원, 사용자 관리(RBAC: viewer/operator/admin), 사내 SSO(OIDC)·디렉터리(LDAP/AD) 로그인 |
+| **소통/알림** | 사용자 VOC 게시판, **알람 등록 요청**(서비스 담당자가 알람 추가·임계치 변경(기본/수정 expr·for)·적용 클러스터를 요청 → 관리자 검토·승인·반려·반영 완료, 알람 카탈로그), **업무 알림**(알림 종 업무/운영 탭 · 지연·오늘·내일 마감 일정 알람과 라인별 오늘 그만 보기 · 배정·상태 변경·@멘션·댓글·구독 알림 · 실시간 수신 · `/notifications` 받은 알림 이력과 종류별 앱/메일/메신저 설정·하루 요약·방해 금지), 릴리즈 노트 패널(CHANGELOG 자동 파싱), 👍 공감 |
+| **배포/운영** | kind / Helm / Kustomize / ArgoCD / Jenkins, 폐쇄망(airgap) 배포, JSON 백업·복원, 사용자 관리(RBAC: viewer/operator/admin), 사내 SSO(OIDC)·디렉터리(LDAP/AD) 로그인, 가입 신청 + 관리자 승인 |
 
 ## 기술 스택
 
 - **Frontend**: React 18 · TypeScript 5.3 · Vite · Tailwind + shadcn/ui · Zustand · TanStack Query · TipTap
 - **Backend**: FastAPI · SQLAlchemy 2 · Pydantic v2 · Celery · PostgreSQL · Redis · kubernetes SDK · Ansible
+- **Node agent**: Rust(`agents/pep-bpf-agent` — Cilium BPF 맵 읽기 전용 수집, libbpf 없이 `bpf(2)` 직접 호출)
 - **Infra**: Docker · Kustomize · Helm · Skaffold · kind · ArgoCD · GitHub Actions CI/CD
 
 ## 빠른 시작 (로컬, Docker Compose)

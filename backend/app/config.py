@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     # **fail-closed** — 미설정 시 수신 자체를 503 으로 거부한다(alert_ingest_token 과 동일 정책).
     node_param_ingest_token: str = ""
 
+    # Cilium 데이터패스 Rust 노드 에이전트(pep-bpf-agent) 보고·작업 수신 Bearer 토큰(/cilium-datapath/agent/*).
+    # **fail-closed** — 미설정 시 수신 자체를 503 으로 거부한다(node_param_ingest_token 과 동일 정책).
+    cilium_bpf_agent_token: str = ""
+
     # 워커 메모리 진단(services/memory_watch.py) — OOMKilled 직전 어떤 요청이 메모리를 키웠는지 로그로 남긴다.
     # 한 요청 동안 RSS 증가가 이 값(MiB) 이상이면 경고. 0 = 끔.
     mem_watch_delta_mb: int = 100

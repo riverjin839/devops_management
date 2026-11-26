@@ -70,7 +70,7 @@ Jira Excel 가져오기)·문서 관리 그룹 전체·즐겨찾기·Your Island
 이 안내 문구가 있다(상세 `DESIGN_SYSTEM.md` "접근 제어가 아니다").
 로고(홈 버튼)는 유일한 예외로 opt-in 대상이 아니다 — 사용자가 전부 제거해도 "/" 로 돌아올
 방법이 하나는 남아 있어야 하므로 항상 클릭 가능하다. 앱을 직접 고른 적 없는 계정은 **조직 기본
-앱 구성**(admin, Settings → 화면 UI 설정 → "기본 앱 구성", 내장 기본값은 `/tasks-mgmt` 하나)을
+앱 구성**(admin, Settings → 화면 UI 설정 → "기본 앱 구성", 내장 기본값은 사이드바 `/k8s` 하나)을
 따르고, 하나라도 추가·제거하면 그때의 목록으로 고정된다 — `AddAppDialog` 하단 "기본값으로 초기화"로
 다시 기본값을 따른다. 토글은 목록 전체가 아니라 추가/제거 델타만 보내 서버가 행 잠금 아래에서
 합친다(여러 기기·탭 동시 편집 안전). 옛 레이아웃으로 저장된 계정은 `backend/app/main.py`
@@ -124,7 +124,12 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 홈 (`/`)
 
-- **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `pages/BatchJobsPage.tsx`(플랫폼 현황 탭의 배치잡 서브탭으로 임베드 — 아래 Batch Jobs 섹션 참고)). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고).
+> **[2026-11-26] Main UI 일단 비우기** — 지금 `/` 는 `frontend/src/pages/HomePage.tsx` 가 모든 사용자에게 빈 상태
+> 안내(「메인 화면 준비 중」 + 「K8s 클러스터 열기」 버튼, `common/EmptyState`)만 그린다. 로그인 후 자동 이동은 없다.
+> 아래 설명은 예전 홈(업무 현황/플랫폼 현황 탭)으로, 코드는 `frontend/src/pages/HomeDashboard.tsx`(`HomeDashboard`,
+> 어느 라우트에도 연결 안 됨)에 남아 있다 — 다시 채울 때 참고. 배치잡은 `/batch-jobs` 가 `BatchJobsPage` 를 직접 연다.
+
+- **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `pages/BatchJobsPage.tsx`(플랫폼 현황 탭의 배치잡 서브탭으로 임베드 — 아래 Batch Jobs 섹션 참고)). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고 — 알림 종은 §알림 `/notifications`).
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 라벨 있는 **세그먼트 탭**(`업무 현황`/`플랫폼 현황`)이 화면 최상단이고, 이걸로 홈 본문에서 뭘 볼지 고른다. 예전엔 이 선택이 "홈 모드"라는 이름으로 **사이드바 네비게이션 전체를 게이팅**했지만(R-4 5차 D-054 — work 모드에서 클러스터·서버·네트워크 등 36개 화면이 레일에서 통째로 사라짐), 지금은 순수 홈 화면 로컬 상태다 — 사이드바·상단바 노출 범위와 무관하다. **[2026-09-17, Main UI 간소화]** 탭 위에 있던 KPI 스트립(나의 아일랜드 진입 필 + 내 할일/미해결 이슈/위험 클러스터/점검 실패/다음 일정 5종 필)을 통째로 제거했다 — 사용자 요청("정보를 줄이고 중요한 부분을 부각"). 위험 신호는 `플랫폼 현황` 탭 라벨의 배지(아래) 하나로 압축됐고, 아일랜드 진입은 상단바 opt-in 항목("나의 아일랜드")으로만 남는다(§Your Island 참고). KPI 필이 제공하던 개별 카운트(내 할일/미해결 이슈 등)는 각 목적지 화면(`/todo-today`, `/tasks-mgmt`)에서 직접 확인한다.
 - **UI 구성**:
   - 세그먼트 탭(`role="tablist"`, 좌우 화살표 키 이동, 화면 최상단): `[업무 현황]`(`ListTodo` 아이콘) / `[플랫폼 현황]`(`ServerCog` 아이콘, 위험 클러스터 + 점검 실패 합계 배지 — 0이면 숨김, `useCheckMatrixFailureCount()`+`useClusters()` 파생). 선택은 `useHomeStore().homeTab` 에 저장되고 localStorage(`pep:homeTab`)에 영속된다.
@@ -211,6 +216,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 401 등 실패 응답의 `detail`을 그대로 폼 하단에 노출.
   - 이후 모든 API 호출은 axios 인터셉터가 저장된 token을 `Authorization: Bearer` 헤더로 첨부(`get_current_user`가 `OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")`로 검증).
   - **사내 SSO(OIDC, R-7)**: `GET /auth/oidc/config` 가 켜져 있으면 폼 아래 "또는" 구분선과 "{표시 이름}(으)로 로그인" 링크 버튼(`authApi.oidcLoginUrl(returnTo)` → 서버가 state·PKCE 를 만들어 IdP 로 302). 실패하면 서버가 `/login?error=<code>` 로 돌려보내고, 폼 위에 코드별 안내 배너(`role="alert"`)를 띄운다.
+  - **가입 신청**: `GET /auth/signup/config` 가 켜져 있으면 카드 하단에 "계정이 없나요? 가입 신청" 링크. 누르면 같은 카드가 `components/auth/SignupForm.tsx` 로 바뀐다(라우트 아님 — AuthGate 가 어느 경로든 이 화면을 그린다). 아이디·이름·소속·이메일(허용 도메인 안내)·사유·비밀번호(실시간 조건 체크 `lib/signupPolicy.ts`)·확인 → `POST /auth/signup`(202). 접수 후 "로그인으로 돌아가기" 가 아이디를 채워 준다. 승인 전에 로그인하면 `/auth/login` 이 403 으로 승인 대기·거절(사유)·만료를 알려 준다(비밀번호 일치 시만).
   - **문구 i18n(R-6)**: 화면 문자열은 `login.*` 키(`frontend/src/i18n/resources/ko.ts`·`en.ts`). 로그인 전에는 서버 설정이 없으므로 localStorage `pep.locale` 를 따른다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -250,6 +256,25 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 알림 (`/notifications`) + 상단 바 알림 종
+
+- **파일**: `frontend/src/pages/NotificationsPage.tsx` (+ `components/notifications/{NotificationHistoryList,NotificationPrefsPanel,DeliverySettingsCard}.tsx`), 알림 종 `components/layout/WorkAlarmBell.tsx`(전역 `AppTopBar`), `components/ui/popover.tsx`(Base UI Popover 래퍼), 업무 상세 구독 버튼 `components/work-items/WatchButton.tsx`.
+- **목적 / UX**: 업무 알람을 상용 수준으로 — 받는 사람을 사용자 ID 로 판정(동명이인 오배달 없음), 일정 알람은 서버가 마감일 기준으로 판정, 라인마다 지우기, 실시간 수신, 지난 알림 다시 보기, 알림 종류별 앱·메일·메신저 선택.
+- **알림 종(상단 바)**: shadcn/Base UI `Popover`(포커스 가둠·Escape·포커스 복귀). 탭 **업무 / 운영**(`SegTabs mode="tabs"`, 탭에 건수).
+  - 업무 탭: 일정 알람 **지연 · 오늘 마감 · 내일 마감**(`GET /work-items/my-alarms` — 기준일 = 마감일, 없으면 시작일(서비스 시간대). 완료·회의·교육 제외, 백로그는 마감일 있을 때만, 내일 마감은 마감일 명시 건만) + 업무 알림(배정·멘션·댓글·상태 변경·마감 알림·VOC 답변).
+  - 일정 알람 라인 오른쪽 눈 아이콘 = **오늘 그만 보기**(`POST /work-items/my-alarms/{id}/dismiss`, 내일도 미완료면 다시 보임) · 하단 「숨긴 n건 다시 보기」(`DELETE /work-items/my-alarms/dismissals`). 알림 라인 체크 = 읽음 처리. 버튼은 상시 노출(키보드 접근) + `aria-label`.
+  - 운영 탭: 알람 인박스 알림 규칙·critical K8S 이벤트 알림.
+  - 배지 = 지연 + 오늘 마감 + 안 읽은 알림(내일 마감은 예고라 제외). 하단 「알림 전체 보기」 → `/notifications`, 「모두 읽음」은 현재 탭 종류만.
+  - 실시간: `GET /notifications/my/stream`(SSE, 서버 5초 폴링·10분마다 재연결, `Content-Encoding: identity` 로 gzip 제외) — 새 알림이면 토스트(「열기」) + 배지 갱신. 끊기면 지수 백오프 재연결, 그동안은 2분 폴링.
+- **화면 `/notifications`** (`PageShell doc`, 탭 URL `?tab=inbox|settings&category=`):
+  - **받은 알림**: 읽은 알림 포함 전체 이력(`GET /notifications/my/history` — 종류 전체/업무/운영 · 안 읽은 알림만 · 제목·내용 검색 · 더 보기). 행: 안 읽음 점 · 제목 · 종류 · 상대 시각 · 외부 발송 상태(메일·메신저 발송됨/실패 사유). 라인별 읽음 ↔ 안 읽음 전환(`POST /my/{id}/read|unread`), 삭제(`DELETE /my/{id}`), 「모두 읽음」. 보관: 읽은 알림 90일, 안 읽은 알림 1년.
+  - **알림 설정**(본인 설정 — viewer 도 저장): 알림 종류(업무 8 · 운영 2) × 앱(알림 종)/메일/메신저 체크 표(관리자가 채널을 지정하지 않았거나 내 메일이 없으면 「미설정」), 메일·메신저 발송 방식(바로 / 하루 한 번 요약 + 시각), 방해 금지 시간(외부 채널만 보류). `GET|PUT /notifications/my/prefs`(이벤트는 `{type,…}` 목록 — axios 키 camelCase 변환 회피).
+  - **발송 채널**(operator 조회, admin 저장): 외부 발송 켜기 · 메일 채널(email 형 알림 채널의 SMTP 재사용, 받는 사람만 사용자 메일) · 메신저 채널(webhook 형 — 본문에 `recipient`·`employee_id`·`email`·`link`) · PEP 주소(링크 접두). `GET|PUT /notifications/delivery-settings`(AppSetting `user_notify.delivery`, 감사 `notifications.delivery.update`).
+- **업무 상세 구독**: 헤더 「구독/구독 해제 n」(`POST|DELETE /work-items/{id}/watch`, `work_items.watchers`) — 담당자가 아니어도 댓글·상태 변경 알림.
+- **Backend**: `routers/notifications.py`(개인 알림·스트림·설정·발송 채널 + 알림 채널 CRUD — 채널 조회 operator(비밀 값·비 admin 은 URL 도 `********`), 생성·수정·삭제·테스트 발송·발송 이력 admin, 웹훅 대상은 http(s)만·루프백/링크 로컬/메타데이터 거부, 가려진 값은 저장 시 기존 값 유지). `services/user_notify.py`(`EVENT_CATALOG`, `UserIndex`(username → 사번 → 유일한 이름), `create_notification`(설정 적용·`dedupe_key`), 업무 이벤트 알림), `services/work_alarms.py`(일정 알람 판정·아침 마감 알림), `services/user_notify_delivery.py`(외부 발송). Beat `work-item-due-reminder`(08:40) · `user-notify-delivery`(매분). 모델 `UserNotification`(+`recipient_user_id`·`read_at`·`dedupe_key`·`external_*`), `UserNotificationPref`, `WorkAlarmDismissal`(로그성 30일).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
 ### 시스템 설정 (`/settings`, admin)
 
 > **2026-10-15 (D-136)**: Jira 연동 패널의 SSO 진단·로그인 3종이 실행 로그(`jira-sso`)를 남긴다. 연결 테스트는 인라인 결과(§12.9.1 예외).
@@ -265,12 +290,13 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `연동 (ServiceNow)` 탭(`ServiceNowIntegrationPanel`): Base URL·테이블명·필드 매핑/우선순위 매핑(JSON, 실제 인스턴스 스펙 확인 전까지 표준 Table API 가정값을 코드 수정 없이 조정)·연동 활성화·TLS 검증 + 연결 테스트. 1차 구현은 전용 인증 UI가 없어 현재 로그인 사용자의 Jira/SSO 세션을 그대로 재사용한다는 안내만 표시한다(전용 인증은 추후 개선). 업무 목록/상세의 "ServiceNow ITSM 등록" 버튼(`ServiceNowRegisterDialog.tsx`, Jira 연동 업무만 대상)이 이 설정을 사용한다.
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
-  - `시스템 담당자` 탭(`AssigneeManager`, 서브탭 없음): 명부 필드(사번/이름/이메일/IP/좌석/정·부담당역할, 열 리사이즈 가능, CSV/마크다운 내보내기, 사번 등록 시 로그인 계정 자동 생성·해제)와 계정 필드(로그인 아이디=사번, 역할 select, 비밀번호 재설정, 삭제)가 한 표에 함께 있다. 사번 없는 순수 명부 행("로그인 없음" 표시)도 같은 표에서 관리. 명부와 무관한 로그인 전용 계정(예: 2번째 admin)은 "관리자 계정 추가" 버튼(별도 모달)으로 만든다. 본인 행은 역할 변경·삭제 버튼이 비활성화된다(자기 강등·자기 삭제 이중 차단).
+  - `시스템 담당자` 탭(`AssigneeManager`, 서브탭 없음): 명부 필드(사번/이름/이메일/IP/좌석/담당 업무(예전 정·부담당역할을 한 칸으로 통합), 열 리사이즈 가능, CSV/마크다운 내보내기, 사번 등록 시 로그인 계정 자동 생성·해제)와 계정 필드(로그인 아이디=사번, 역할 select, 비밀번호 재설정, 삭제)가 한 표에 함께 있다. 사번 없는 순수 명부 행("로그인 없음" 표시)도 같은 표에서 관리. 명부와 무관한 로그인 전용 계정(예: 2번째 admin)은 "관리자 계정 추가" 버튼(별도 모달)으로 만든다. 본인 행은 역할 변경·삭제 버튼이 비활성화된다(자기 강등·자기 삭제 이중 차단).
   - `화면 UI 설정` 탭: **실행 로그 표시**(`LogDisplaySetting`, 2026-11-23 — 새 창(우측 상단, 기본)/화면 안, localStorage `pep.runlog.displayMode`, DESIGN_SYSTEM §12.9.1), 홈 화면 설정(좌측 상단 홈 아이콘 picker, **기본 홈 탭**(업무 현황/플랫폼 현황 — `home_prefs.defaultHomeTab`, 로그인 기기와 무관하게 서버에 저장), 스케줄 배경색 흰색/크림), **테마 갤러리**(`ThemeGallery`, D-072 — 10종을 카드로 나열해 미리보기(배경/보조/강조 색 미니 칩) + 클릭 즉시 적용, 사이드바 사용자 메뉴의 테마 목록과 같은 `useThemeStore` 선택을 공유 — 고른 테마·강조색은 서버 `home_prefs.theme`/`accent` 에 저장돼 다른 PC·브라우저에서도 따라온다, `hooks/useThemeSync`), **화면 밀도**(`DensitySettings`, 2026-11-04 — 촘촘하게 12/14px · **기본 13/14.5px** · 크게 14/16px. `<html data-density>` 가 `text-xs`/`text-sm` 전체를 바꾸고, 선택값은 localStorage `k8s:density` 로 저장돼 `local_prefs` 동기화로 다른 기기에도 따라온다), `NavMenuManager`, `DefaultAppsManager`(사이드바·상단바 **조직 기본 앱 구성** — 개인화 안 한 계정에 적용, `GET/PUT /ui-settings/home-prefs-defaults`, 변경 감사 기록), `PageStyleManager`, `TerminalAppearanceSettings`.
   - `스키마 점검` 탭: `SchemaHealthPanel` — 모델(`Base.metadata`)과 실제 DB 를 비교해 드리프트(missing_table / missing_column / not_null_drift / orphan_not_null_column — 모델에 없는 DB 전용 컬럼이 NOT NULL+기본값 없음이라 모든 저장이 실패하는 경우)를 표로 보여주고, **안전한 것만**(컬럼 추가 nullable · 레거시 NOT NULL 해제) 복구한다. `실행 계획 보기`(dry-run)로 실행될 SQL 을 먼저 확인할 수 있다. Alembic 없이 `create_all` 로 운영하는 구조상 오래된 DB 가 모델과 어긋나 특정 기능만 500 이 나는 문제를 서버 로그 없이 화면에서 진단·복구하기 위한 탭.
   - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다. 서버도 같은 규칙을 강제한다 — `backend/app/auth/feature_access.py` 의 `FEATURE_API_PATTERNS` 에 등록된 **화면 전용 API** 는 인증 라우터 공통 의존성(`enforce_feature_access`)이 403 으로 막는다(여러 화면이 공유하는 API 는 등록하지 않는다). 새 화면 전용 API 를 만들면 이 표에도 추가한다.
   - `접근 제어` 탭 하단 `ClusterViewerMaskSetting`(MacCard "클러스터 네트워크 정보 (viewer)"): 켜면 viewer(및 admin·operator 외 역할)의 `/clusters` 목록·상세 응답에서 IP·CIDR·bond IP/MAC·호스트명·AS 번호·API 엔드포인트·Prometheus/Alertmanager 주소·`node_ips`·`kubeconfig_path`·`cilium_config` 를 비우고 `network_masked=true` 를 붙이며, `GET /clusters/{id}/cilium-config` 는 kubectl 없이 `source: "masked"` 를 준다. 기본 off. `GET/PUT /api/v1/ui-settings/cluster-viewer-mask`(PUT admin 전용, 값이 바뀌면 감사 `settings.cluster_viewer_mask.update`) — 판정 `backend/app/services/cluster_network_mask.py`. 다른 화면(인프라 노드·토폴로지)의 IP 는 "화면별 노출"로 막는다.
   - `접근 제어` 탭 하단 `ClusterEndpointAllowlistSetting`(MacCard "클러스터 API 엔드포인트 허용 대역"): 한 줄에 하나씩 CIDR 또는 호스트명(`*.k8s.local` 와일드카드). 비어 있으면 제한 없음(기본). 채우면 클러스터 생성(연결 검증 생략 시에도)·`api_endpoint` 변경, 그리고 kubeconfig 등록·교체·경로 변경 시 kubeconfig 의 `server` 가 대역 밖이면 422 로 거절되고, 연결 검증(`/verify`·`/verify/stream`)은 그 주소로 요청을 보내지 않는다(api_endpoint 가 밖이면 api_server 실패 + 나머지 건너뜀, kubeconfig server 만 밖이면 인증 단계만 건너뜀). 호스트명 엔드포인트는 **호스트명 항목으로만** 허용되고 DNS 로 풀어 CIDR 과 비교하지 않는다(DNS rebinding 우회 방지). `GET/PUT /api/v1/ui-settings/cluster-endpoint-allowlist`(PUT admin, 잘못된 항목 422, 변경 시 감사 `settings.cluster_endpoint_allowlist.update`) — 판정 `backend/app/services/cluster_endpoint_policy.py`.
+  - `가입 신청` 탭(사용자·접근 그룹) `components/settings/SignupRequestsPanel.tsx`: MacCard "가입 신청 창구"(켜기·허용 이메일 도메인·안내 문구·비밀번호 최소 길이·대기 기한·보관 일수·대기 상한, LDAP/SSO 가 켜져 있으면 아이디 겹침 경고 — `GET/PUT /auth/signup/settings`) + "가입 신청"(상태별 `SegTabs` 건수, 대기는 오래된 순, 승인=역할 viewer/operator 선택·메모 / 거절=신청자에게 보이는 사유, `ConfirmDialog` + `RunLogPanel` 실행 로그 `settings-signup`). 신청 접수 시 admin 알림 종(`signup_request`, 링크 `/settings?tab=signup`).
   - `접근 제어` 탭 하단 `OidcSettingsPanel`(MacCard "사내 SSO 로그인 (OIDC)", R-7): 사내 IdP 로그인 설정 — AppSetting `auth.oidc`. 상세는 [SSO 로그인 콜백](#sso-로그인-콜백-authcallback) 절. `GET/PUT /api/v1/auth/oidc/settings`·`POST /settings/test`(admin, "연결 확인"은 `runLogged` 실행 로그).
   - `접근 제어` 탭 하단 `LdapSettingsPanel`(MacCard "사내 디렉터리 로그인 (LDAP/AD)", R-7): AppSetting `auth.ldap` — 서버 URL(여러 개 순서대로)·StartTLS·인증서 검증·사설 CA PEM·타임아웃, 바인드 방식(직접 바인드 템플릿 `{username}@도메인` / 서비스 계정 검색 후 재바인드), 표시 이름·이메일·그룹 속성, 허용 그룹, 자동 생성(viewer/operator), 우선순위(`local_first`/`ldap_first`), 로컬 admin 보호(기본 켬). "연결 확인"은 저장 전 입력값으로 연결 → 서비스 바인드 → (테스트 사용자명) 검색을 `runLogged` 실행 로그로 보여준다. 서버·TLS·서비스 계정 DN 을 바꿔 확인할 때는 저장된 비밀번호를 쓰지 않으므로 비밀번호를 다시 입력해야 한다(감사 `settings.ldap.test`). `GET/PUT /api/v1/auth/ldap/settings`·`POST /settings/test`(admin). 로그인은 기존 `/auth/login` 하나 — 디렉터리 미도달·모듈 없음만 있으면 503(비밀번호 오류와 구분).
   - 나머지 탭은 각각 전용 매니저 컴포넌트를 그대로 렌더(운영레벨/서비스/LAKE타입/시스템 담당자/Jira/백업/감사로그).
@@ -304,21 +330,23 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### K8s 클러스터 허브 (`/k8s`, `/k8s/:clusterId/:view?`)
 
+> **클러스터 상태 아이콘 = 점검 탭 결과(2026-11-24)**: 클러스터 옆 「위험」「경고」 같은 글자 라벨을 모두 없애고 아이콘(정상 무채색 체크 · 경고 삼각형 · 실패 X · 결과 없음 빈 원)으로만 구분한다. 원천은 `cluster.status` 가 아니라 **점검 ▸ 점검 항목 탭의 마지막 결과**다 — `GET /api/v1/ops-checks/summary`(볼 수 있는 클러스터별 가장 나쁜 판정 + 문제 항목, `OpsCheckService.summarize`) → `useClusterCheckSummaries`(공유 쿼리, 60초 갱신, 점검 실행이 끝나면 무효화) → `components/common/ClusterCheckIcon.tsx`. 아이콘을 누르면 `/k8s/:clusterId/checks?filter=problem` 으로 가서 경고·실패 항목만 보이고(「문제만」 칩으로 해제), 툴팁·스크린리더 이름에 문제 항목 이름이 들어간다. 적용: 허브 헤더, 사이드바 K8s 클러스터 flyout(「비정상 N개만 보기」도 같은 기준), `ClusterSidebar` 레일 표식, 클러스터 관리 표·카드, 점검 탭 상태 칸(`StatusIcon`). 개요의 「N개 신호 종합」 옆 배지는 허브 안에서는 그리지 않는다(헤더와 중복).
+
 > **개요 = 상태, 점검 = 실행(2026-11-23, D-242)**: Cloudera Manager(클러스터 Status ↔ Actions 의 Command 진행 창)·Ambari(Dashboard ↔ Alerts·Background Operations)처럼 개요는 상태만 보여 주고 점검 카탈로그는 **점검 ▸ 점검 항목**(`checks`)으로 옮겼다. 진단 카테고리는 문제 발생 후 깊이 파는 조사 도구(병목·BPF·패킷)만 둔다. 개요에는 클러스터 전체를 한 번에 돌리는 「전체 점검」만 남는다.
 
 > **레일 클러스터 목록(2026-11-23)**: 사이드바 레일의 K8s 클러스터 아이콘에 마우스를 올리거나 클릭하면 바로 이동하지 않고 오른쪽 flyout 에 **접근 권한이 있는 클러스터 목록**이 뜬다(`components/layout/K8sClusterFlyoutBody.tsx`, `Sidebar.tsx` 의 `k8sFlyoutAnchor`). 목록은 `useClusters()`(서버 `ClusterScope` 로 이미 거른 `GET /clusters`) — 운영 수준(`operationLevel`)으로 묶고, 상태 점은 정상이면 중립색·경고/위험만 상태색+글자, 사용자 지정 읽기 권한(`useMyClusterAccess` = `read`)은 "읽기" 배지, 7개 이상이면 검색창. 항목은 `/k8s/{id}/{현재 뷰}` 로 이동(허브 밖이면 기본 뷰), 하단에 "전체 클러스터 보기"(`/k8s`)·"클러스터 등록"(`/cluster-manage`, viewer 는 비활성+사유).
 
-> **클러스터 레일 제거 · 터미널·노드 라벨 흡수(2026-11-23, D-243)**: 사이드바 레일 "K8s 클러스터" flyout 에 클러스터 목록이 생기면서 허브 안 클러스터 레일(`ClusterSidebar`)과 목록이 두 군데 보이던 것을 정리했다 — 허브 레일을 없애고 h1 옆 **「클러스터 전환」**(`HubClusterSwitcher`, 같은 `K8sClusterFlyoutBody` 를 버튼 아래로 연다)을 두었다. 레일에만 있던 "비정상 N개만 보기"는 목록 상단 토글(`menuitemcheckbox`)로 옮겼고 ↑/↓ 이동은 flyout 메뉴 키보드가 대신한다. 콘솔 ▸ "터미널" 실행 카드(`HubTerminalsView`, 삭제)는 **k9s**·**노드 SSH**(2026-11-24 이름 **SSH**) 두 뷰가 됐다(터미널은 화면 위에 뜨는 창이라 탭 안에서 동작, 옛 `terminals` 뷰 URL 은 `k9s` 로). 노드 라벨의 "전체 클러스터" 모드는 허브 뷰의 범위 토글(`?scope=all`)로 옮겼다. 그래서 `/node-labels`·`/k9s(/:id)`·`/node-ssh(/:id)` 도 허브 뷰로 redirect 되고 메뉴·팔레트·즐겨찾기에서 빠진다(`HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES`). 새 창(`/k9s/popup`·`/node-ssh/popup`)만 단독. 허브 안에서 클러스터를 바꾸면 뷰가 다시 마운트돼 열린 터미널 세션은 닫힌다(SSH 뷰는 예외 — `keepAcrossClusters`, 2026-11-24).
+> **클러스터 레일 제거 · 터미널·노드 라벨 흡수(2026-11-23, D-243)**: 사이드바 레일 "K8s 클러스터" flyout 에 클러스터 목록이 생기면서 허브 안 클러스터 레일(`ClusterSidebar`)과 목록이 두 군데 보이던 것을 정리했다 — 허브 레일을 없애고 h1 옆 **「클러스터 전환」**(`HubClusterSwitcher`, 같은 `K8sClusterFlyoutBody` 를 버튼 아래로 연다)을 두었다. 레일에만 있던 "비정상 N개만 보기"는 목록 상단 토글(`menuitemcheckbox`)로 옮겼고 ↑/↓ 이동은 flyout 메뉴 키보드가 대신한다. 콘솔 ▸ "터미널" 실행 카드(`HubTerminalsView`, 삭제)는 **k9s**·**노드 SSH**(2026-11-24 이름 **SSH**) 두 뷰가 됐다(터미널은 화면 위에 뜨는 창이라 탭 안에서 동작, 옛 `terminals` 뷰 URL 은 `k9s` 로). 노드 라벨의 "전체 클러스터" 모드는 허브 뷰의 범위 토글(`?scope=all`)로 옮겼다. 그래서 `/node-labels`·`/k9s(/:id)`·`/node-ssh(/:id)` 도 허브 뷰로 redirect 되고 메뉴·팔레트·즐겨찾기에서 빠진다(`HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES`). 새 창(`/k9s/popup`·`/node-ssh/popup`)만 단독. 허브 안에서 클러스터를 바꾸면 뷰가 다시 마운트돼 터미널 세션이 닫히므로, k9s·노드 SSH 뷰는 세션이 살아 있으면(연결 중 포함) 「클러스터 전환」·사이드바 flyout 에서 다른 클러스터를 고를 때 「세션 끊고 전환」 확인 창을 먼저 띄운다(D-244 — 화면이 `stores/clusterSwitchGuardStore.ts` `useClusterSwitchGuard` 로 가드를 등록하고 `K8sClusterFlyoutBody` 링크가 이동 전에 부른다). 허브 탭 이동(클릭·`[` `]` 단축키 — `HubTabs` `go`)도 같은 가드를 거쳐 「화면 이동 · 세션 끊고 이동」 확인을 띄운다(D-246, 가드는 `{clusterId, path}` 를 받는다). 브라우저 뒤로가기·주소 직접 입력은 대상이 아니다. **SSH 뷰는 예외**(2026-11-24) — 클러스터를 바꿔도 다시 마운트하지 않아(`keepAcrossClusters`) 세션이 유지되므로 클러스터 전환은 확인 없이 바로 바뀌고, 탭 이동만 「화면 이동 · 열린 세션 끊고 이동」 확인을 띄운다. 단축키 판정은 닫힌 `SidePane`(aria-hidden) 을 열린 대화상자로 세지 않는다.
 
 > **단축키(2026-11-04)**: `[` 이전 / `]` 다음 화면 — `useHubTabShortcuts`. 입력 요소 포커스·모달 열림·수정키 조합에서는 무시, 양 끝에서 순환하지 않는다.
 
 - **파일**: `frontend/src/pages/K8sHubPage.tsx` + `frontend/src/components/k8s-hub/{hubViews.ts,HubTabs.tsx,HubClusterSwitcher.tsx}`, 임베드 컨텍스트 `frontend/src/lib/k8sHub.ts`, 공용 탭 `components/common/SegTabs.tsx`(K8s 자원 관리에서 승격).
-- **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·버전/설정)·콘솔(etcdctl·커널 파라미터(2026-11-24 삭제 — 서비스 구성 LINUX(OS)로 대체)·터미널 실행 카드)을, 3단계로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더하고 메뉴에 남아 있던 옛 화면을 정리했다 — 사이드바·커맨드 팔레트·즐겨찾기에는 이제 허브 하나만 보인다.
+- **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·서비스 구성)·콘솔(etcdctl·커널 파라미터(2026-11-24 삭제 — 서비스 구성 LINUX(OS)로 대체)·터미널 실행 카드)을, 3단계로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더하고 메뉴에 남아 있던 옛 화면을 정리했다 — 사이드바·커맨드 팔레트·즐겨찾기에는 이제 허브 하나만 보인다.
 - **UI 구성**:
   - `PageHeader`(h1 = 클러스터명 + `StatusBadge` + 「클러스터 전환」, 설명 = "K8s 클러스터 · 뷰 이름"). 클러스터 레일은 없다(D-243) — 클러스터는 사이드바 "K8s 클러스터" flyout 또는 「클러스터 전환」으로 고른다. 클러스터 목록 조회 실패는 본문 `ErrorState`(다시 시도).
-  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 점검: 점검 항목·결과 리뷰·OS 파라미터 감시, 진단: 파드 병목·Cilium·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·버전/설정, 콘솔: etcdctl·k9s·SSH). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
+  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 점검: 점검 항목·결과 리뷰·OS 파라미터 감시, 진단: 파드 병목·Cilium·Cilium 데이터패스·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·서비스 구성, 콘솔: etcdctl·k9s·SSH). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
   - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). 옛 `LogViewTabs`(파드 로그 ↔ AI 분석 전환)는 2행 탭이 대체해 3단계에서 지웠다.
-  - 뷰 id: `overview`(클러스터 상세) · `checks`(점검 항목 — 2026-11-23 개요에서 이동, D-242) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `versions` · `etcdctl` · `k9s` · `node-ssh`(D-243, 옛 `terminals` → `k9s`) · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
+  - 뷰 id: `overview`(클러스터 상세) · `checks`(점검 항목 — 2026-11-23 개요에서 이동, D-242) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `etcdctl` · `k9s` · `node-ssh`(D-243, 옛 `terminals` → `k9s`) · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
   - **콘솔 ▸ k9s · SSH**(D-243) — 단독 화면이던 `K9sPage`·`NodeSshPage` 를 그대로 마운트한다(클러스터는 `useClusterRouteParam` 으로 허브 값). k9s 터미널은 화면 위 창(`SshTerminalWindow`), SSH 는 화면 안 분할 칸(`embedded`, 2026-11-24). 접근 제어는 뷰별 navKey(`/k9s`·`/node-ssh`). **허브 툴바 자리**: `HubTabs` 2행 세그먼트 옆 `slotRef` → `K8sHubEmbed.toolbarSlot` — 뷰가 포털로 컨트롤을 꽂는다(SSH 대상 노드 선택). **`HubView.keepAcrossClusters`**: 참이면 클러스터를 바꿔도 뷰를 다시 마운트하지 않는다(SSH).
   - **노드 라벨 범위 토글**(D-243) — 허브 노드 라벨 뷰 툴바의 「이 클러스터 / 전체 클러스터 N」(`SegTabs`, `?scope=all`). 옛 단독 화면 `/node-labels` 는 이 뷰로 redirect.
   - **접근 제어**: 허브 URL 은 `RouteAccessGate` 의 longest-prefix 가 `/k8s` 만 보므로, 뷰마다 흡수한 옛 경로(`HubView.navKey`, 예 `/k8s-manage`)로 `featureAllowed` 를 직접 판정한다 — 꺼진 뷰는 탭에서 빠지고 직접 URL 은 Lock `EmptyState`(아일랜드 패널 호스트와 같은 안내).
@@ -326,7 +354,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **Backend**: 없음(프론트 전용 통합).
 - **핵심 기능**:
   - 옛 URL 은 전부 허브 뷰로 redirect(`App.tsx` `RedirectToHub` — `:clusterId` 와 쿼리 보존, 경로에 클러스터가 없고 쿼리에 `cluster=` 가 있으면 그 클러스터로 보내고 그 키는 뺀다, 그 외 bare URL 은 첫 클러스터). 예외는 터미널 새 창(`/k9s/popup`·`/node-ssh/popup`)·`/versions/:clusterId/graph`(전체 높이 캔버스 — 뒤로가기 링크는 허브 버전 뷰로)·`/pod-bottleneck/:id`(실행 상세 — 목록 링크는 그 실행 클러스터의 허브 병목 뷰로). 앱 안의 링크(클러스터 상세의 "결과 리뷰", 파드 → 로그, 패킷 흐름 → 병목 진단 prefill)는 허브 경로로 직행한다. 홈 매트릭스 클러스터명·커맨드 팔레트는 `/k8s/<id>/overview` 로 직행.
-  - **사이드바·팔레트·즐겨찾기(3단계 잔존 정리)**: 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`)에는 `/k8s` 하나만 있다. 흡수된 옛 화면 23개(`HUB_ABSORBED_PATHS` — 1·2·3단계 + 레거시 `/ops-checks` + `/os-param-watch`·`/k8s-services` + D-243 `/node-labels`·`/k9s`·`/node-ssh`)는 앱 카탈로그·커맨드 팔레트·즐겨찾기·최근 방문에서 숨긴다. 이미 레일에 설치했거나 즐겨찾기에 고정한 옛 경로는 서버가 읽을 때 `/k8s` 로 접는다(`services/home_prefs.py` `RETIRED_PATH_ALIASES`). NAV_MAP 항목은 남는다 — Settings ▸ 접근 제어에서 허브 탭을 하나씩 켜고 끄는 키이고(목록에선 "K8s 클러스터" 그룹 아래), 아일랜드 패널에 화면 하나를 담는 용도로도 쓴다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
+  - **버전 / 설정 화면 삭제(2026-11-23)**: 옛 `/versions` 뷰와 3D 관계 그래프(`/versions/:clusterId/graph`)는 지웠다 — 수집·현재 값은 **서비스 구성**이 대체한다. 옛 URL·`/k8s/:id/versions` 는 서비스 구성 뷰(`services`)로 간다(앞의 둘은 `RedirectToHub`, 허브 경로는 `hubViews.ts` `RETIRED_HUB_VIEWS` — 옛 `terminals` → `k9s`, `kernel-params` → `services` 도 같은 표). 수집 API(`routers/versions.py` `collect-*`)와 수집 모달(`components/versions/`)은 서비스 구성·점검 런북·클러스터 관리가 계속 쓴다.
+  - **사이드바·팔레트·즐겨찾기(3단계 잔존 정리)**: 플랫폼 그룹 **"K8s 클러스터"**(`navConfig.ts` `k8s`)에는 `/k8s` 하나만 있다. 흡수된 옛 화면 24개(`HUB_ABSORBED_PATHS` — 1·2·3단계 + 레거시 `/ops-checks` + `/os-param-watch`·`/k8s-services`·`/cilium-datapath` + D-243 `/node-labels`·`/k9s`·`/node-ssh`)는 앱 카탈로그·커맨드 팔레트·즐겨찾기·최근 방문에서 숨긴다. 이미 레일에 설치했거나 즐겨찾기에 고정한 옛 경로는 서버가 읽을 때 `/k8s` 로 접는다(`services/home_prefs.py` `RETIRED_PATH_ALIASES`). NAV_MAP 항목은 남는다 — Settings ▸ 접근 제어에서 허브 탭을 하나씩 켜고 끄는 키이고(목록에선 "K8s 클러스터" 그룹 아래), 아일랜드 패널에 화면 하나를 담는 용도로도 쓴다. `/k8s` 자체는 아일랜드 패널 불가(`ISLAND_DENYLIST`).
   - 새 뷰 추가: `HUB_VIEWS` 에 항목을 더하고, 옛 라우트를 `RedirectToHub` 로, 옛 경로를 `HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES` 두 목록에 같이 더한다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
@@ -345,6 +374,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 두 번째 sticky 사이드바 — Lens 식 카테고리 내비(`NAV` 상수, `kindAvailability` 응답으로 존재하는 kind만 노출). `LeafMode`(`kind|overview|events|helm|crd|nsdash`)로 분기. **리프가 2개 이상인 대분류는 헤더를 눌러 접기/펼치기** 가능 — 상태는 `localStorage`(`pep:k8s:navCollapsed`)에 저장돼 다음 방문에도 유지되고, 현재 선택된 리프가 속한 대분류는 저장된 상태와 무관하게 항상 펼쳐 보인다.
   - 리소스별 패널: `NodesPanel`(cordon/drain 포함 노드 전용 컬럼), `PodsPanel`(터미널 진입), 그 외 kind는 공통 `ResourceTablePanel`(Virtuoso 가상 스크롤, 네임스페이스 멀티셀렉트, 컬럼 토글, 검색). 두 컴포넌트 모두 `hideNsSelector?` prop 지원 — 네임스페이스가 상위(대시보드)에서 이미 고정된 곳에 임베드할 때 내장 NS 선택기를 숨긴다.
   - `NamespaceDashboardPanel`(**대시보드** 리프) — `NamespaceMultiSelect`(`singleSelect` 모드, 종류별 탐색 화면과 동일한 "전체 네임스페이스" 버튼 + 검색 드롭다운)로 네임스페이스 1개 선택 → 툴바의 **네임스페이스 상세·YAML**(같은 `DetailDrawer`, 라벨·어노테이션 확인) + 엑셀 스타일 **리소스 인벤토리** 표(종류/구분(Workload·Config·Network·Storage·Access Control·Custom Resources·Helm 색 점)/개수/정상/경고/위험/비고, `caps[kind].namespaced` + `avail[kind].available`(API 미지원만 숨김 — 클러스터 전체 기준 `present` 는 쓰지 않아 0개 종류도 표시)로 표시 대상 필터, 종류별 `k8sResourcesApi.list`/`richPods` 병렬 조회로 개수·상태 산출 — 상태 개념이 없는 종류(ConfigMap 등)는 `—`) → 행 클릭 시 상세 목록으로 바로 이동(**탭 드릴인형**: 카테고리 탭 + 종류 필 로우 + 선택한 종류 패널이 먼저 나오고 인벤토리 표는 그 아래 / **전체 나열형**: 인벤토리 표가 위, 4개 카테고리 전부를 세로로 펼쳐 종류별 패널을 다 쌓은 목록이 아래, 상단 토글로 두 레이아웃 전환). 실제 리소스 테이블은 두 모드 다 같은 `ResourceTablePanel`/`PodsPanel` 인스턴스(`KindPanel` 래퍼로 NS 고정)를 쓰므로 스케일/재시작/삭제/YAML 편집·Pod 터미널이 종류별 탐색과 동일하게 동작. PV/StorageClass 등 cluster-scoped 종류는 제외. 고정 종류 외 카테고리: **Access Control** 은 ServiceAccount·Role·RoleBinding + 이 NS 를 subject 로 묶는 ClusterRoleBinding · 다른 NS 의 RoleBinding(두 표 모두 행 앞 화살표로 참조 Role/ClusterRole 권한 규칙 표를 펼침 — `RoleRulesView`, `*` 강조·유효 범위 안내·"권한 모두 펼치기") (둘 다 `NsBindingsPanel` `scope=cluster|external`, 쿼리 정의 `nsBindingQueries.ts` — subject 판정은 `namespace` 가 이 NS 이거나 그룹 `system:serviceaccounts:<ns>`), **Custom Resources** 는 이 NS 에 오브젝트가 있는 namespaced CRD 종류별 표(`NsCrdObjectsPanel`, 확인 못 한 CRD 수 안내), **Helm** 은 이 NS 릴리스(`HelmPanel namespace`), **Events** 는 `EventsStream fixedNamespace`(서버에서 이 NS 만 watch — 탭 드릴인형은 Events 탭을 열 때만 연결). 전체 나열형은 0개 종류의 빈 패널을 쌓지 않는다.
+  - **Namespaces → 목록 Quota 열(2026-11-26)** — 공통 `ResourceTablePanel` 이 `kind === 'namespaces'` 일 때 `GET /k8s/{id}/namespace-quotas`(전 NS ResourceQuota 1회 LIST → NS 별 요약, 목록 캐시 경유, 쿼리 키 `k8s-mng-ns-quotas`)를 함께 불러 CPU 요청·메모리 요청·CPU 한도·메모리 한도·Pods 열(`quota:<자원>` 키, `ColumnToggle` 로 숨김)을 붙인다. 셀은 `NsQuotaCell`(사용 / 한도 + 사용률 막대 `role="meter"`, 80%↑ 경고·100%↑ 위험, 정상 중립색, 툴팁에 quota 이름). 같은 자원을 여러 quota 가 걸면 사용률 최대인 것. 카드 툴바 「사용률 높은 순」 토글, 새로고침은 quota 도 캐시 건너뜀. quota 조회 실패는 푸터에 사유만 — 목록은 그대로.
   - `OverviewPanel`(노드/네임스페이스 통계), `HelmPanel`(릴리스 목록 + values 보기), `CrdPanel`(CRD 목록 → 오브젝트 드릴다운), `EventsStream`(events 탭 — SSE `event: end` 는 종료 사유 `role="status"`, `event: error`·429 사유는 `role="alert"` 로 표시하고 `: ping` 은 무시).
   - `DetailDrawer` — 우측 슬라이드 패널(요약/YAML/이벤트 탭 — 이벤트 탭은 열려 있고 브라우저 탭이 보일 때만 30s 갱신), `RoleGate(['admin','operator'])`로 편집·쓰기 UI 게이팅, viewer는 읽기 전용 배지. 대시보드에서도 페이지 최상단의 같은 `DetailDrawer`/`PodTerminal`/`ConfirmDialog`를 콜백으로 그대로 재사용.
   - `PodTerminal` 모달(WebSocket exec).
@@ -587,6 +617,24 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **15차 감사(2026-10-22, D-238 — D-190 잔여)**: 알림 규칙 탭(`AlertNotifyRulesPanel`)의 필드 오류·"저장하지 않은 변경"·도움말 글자를 표 밖 `text-[11px]` 에서 `text-xs` 로 맞췄다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### 알람 등록 요청 (`/alarm-requests`)
+
+- **파일**: `frontend/src/pages/AlarmRequestsPage.tsx` (+ `components/alarm-requests/{AlarmRequestForm,AlarmRequestDetail,ThresholdTable,AlarmCatalogDialog}`).
+- **목적 / UX**: 서비스 담당자(로그인 사용자 누구나)가 운영 알람 추가·임계치 변경을 양식으로 요청하고, 관리자(operator 이상)가 검토·승인·반려·반영 완료로 처리한다. 사이드바 「관측」 그룹.
+- **UI 구성**:
+  - `PageShell hub` + `PageHeader`(액션: 알람 카탈로그 · 새 요청). 본문 2열 — 좌 요청 목록 / 우 요청서(새 요청·수정) 또는 선택한 요청 상세. 선택은 `?id=` (알림 링크가 이 주소로 연다).
+  - 요청 목록 — 상태 `SegTabs`(전체/요청됨/검토 중/승인/반영 완료/반려) · 서비스 · 내 요청만 · 검색. 열: 번호(AR-0001) · 상태 · 서비스 · 알람 항목(+의미) · 임계치 변경(신규 알람 / N개 심각도 변경 / 기본값 유지) · 적용 클러스터 · 요청자 · 요청일.
+  - 요청서 — 요청자(로그인 사용자 고정) · 서비스 명 · metric 명(알람 항목 — 카탈로그 datalist, 고르면 의미·기본 임계치 채움, 새 이름이면 신규 알람) · 알람 의미 · **임계치 표**(심각도별 행, 열 `기본 임계치 [expr | for]` · `수정 임계치 [expr | for]`, 기본과 다른 수정 칸 강조, 기존 알람의 기본 칸은 읽기 전용) · 적용 클러스터(칩 다중 선택 + 검색·전체 선택·선택 해제) · 비고.
+  - 상세 — 요청서 읽기 보기 + 검토 의견 + 처리 이력. 요청자: requested 동안 수정·요청 취소(확인), 반려되면 「복사해서 다시 요청」. 관리자: 검토 시작·승인·반려(사유 필수)·반영 완료 처리(확인 — 클러스터에 명령을 보내지 않는다는 안내). viewer 에게는 처리 버튼을 숨기지 않고 비활성 + 사유(`useCanOperate`).
+  - 알람 카탈로그 다이얼로그 — 서비스별 알람 항목·의미·기본 임계치·사용 여부 편집(operator 이상, viewer 는 보기만).
+- **Frontend**: `hooks/useAlarmRequests.ts`(`useAlarmRequestMeta`·`useAlarmRequests`(60초 refetch, 필터는 화면에서)·`useAlarmCatalog`·`useSaveAlarmRequest`·`useCancelAlarmRequest`·`useActOnAlarmRequest`·`useSaveAlarmCatalogItem`·`useDeleteAlarmCatalogItem`), `services/api.ts` `alarmRequestsApi`, 클러스터 목록은 `useClusters`.
+- **Backend**: `routers/alarm_requests.py` — `GET /alarm-requests/meta`, `GET|POST /alarm-requests`, `GET|PUT|DELETE /alarm-requests/{id}`(수정·취소는 본인 또는 운영자, requested 에서만 — 그 외 409), `POST /alarm-requests/{id}/action`(`require_operator`, reviewing/approved/rejected/applied), `GET|POST /alarm-requests/catalog`, `PUT|DELETE /alarm-requests/catalog/{id}`(`require_operator`). 서비스 `services/alarm_requests.py`(상태 전이·카탈로그 시드·직렬화·알림), 모델 `models/alarm_request.py`(`alarm_requests`, `alarm_catalog_items`).
+- **핵심 기능**:
+  - 상태 전이 requested → reviewing → approved → applied, 반려는 applied 전 어느 단계에서나(사유 필수). 끝 상태는 더 처리할 수 없다.
+  - 「반영 완료」는 처리 기록이다 — 클러스터에 명령을 보내지 않는다. 반영 완료된 수정 임계치(비면 기본값)가 카탈로그 기본 임계치가 되고, 카탈로그에 없던 알람은 새 항목으로 추가된다.
+  - 적용 클러스터는 id + 이름 스냅샷으로 저장(클러스터가 지워져도 읽힘). 등록 때 볼 수 없는 클러스터가 섞이면 403, 목록에서는 볼 수 없는 클러스터 이름을 가린다.
+  - 알림 — 새 요청은 admin·operator 에게(`alarm_request`), 처리 결과는 요청자에게(`alarm_request_status`). 감사 로그 `alarm_request.*`·`alarm_catalog.*`.
 
 ### 파드 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
 
@@ -944,53 +992,6 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 버전 / 설정 관리 (`/versions`)
-
-> **허브로 통합(2026-10-23, D-240 2단계)**: 이 화면은 K8s 클러스터 허브 `/k8s/:clusterId/versions` 의 서브뷰로 마운트된다. 옛 URL 은 그 뷰로 redirect. "관계 그래프"(`/versions/:clusterId/graph`)는 전체 높이 캔버스라 단독 화면으로 열리고, 그 화면의 뒤로가기는 허브 버전 뷰로 돌아온다.
-
-> **2026-10-14 (D-128)**: 수집 모달 5종(etcd systemd·kubeadm 인증서·커널 파라미터·kubelet 설정·노드 NIC)의 "수집 실행" 이 모달 안 실행 로그를
-> 띄운다 — 요청 줄, 응답 대기 하트비트, 호스트별 상태·exit·저장 여부·오류 줄, 요약(`components/versions/collectRunLog.ts`).
-> **2026-10-15 (D-135)**: 수집 모달은 `POST …/collect-*/stream`(SSE)으로 호스트가 끝날 때마다 줄·칩이 실시간으로 찍힌다(`streamLogged`). 화면 상단 "지금 수집"·MinIO 는 자체 수집 로그 카드 대신 표준 실행 로그(`versions-collect`).
-
-- **파일**: `frontend/src/pages/VersionsPage.tsx` (+ `components/versions/EtcdSystemdModal.tsx`, `KubeadmCertsModal.tsx`, `KernelParamsCollectModal.tsx`, `NodeNicsCollectModal.tsx`, `KubeletConfigCollectModal.tsx`, `CsvExportModal.tsx`)
-- **목적 / UX**: kubeconfig(+ SSH)로 클러스터의 K8s/Cilium 버전, 컨트롤플레인·kubelet·CNI·OS(sysctl/etcd systemd/kubeadm 인증서)·MinIO/DirectPV 스토리지 설정을 스냅샷으로 수집하고, 컴포넌트별 현재값·변경 히스토리·diff를 확인한다. 운영자가 "언제 무엇이 바뀌었는지" 추적하는 감사 성격의 화면.
-- **UI 구성**:
-  - `ClusterSidebar` 단일 선택(`iconOnly`)
-  - 헤더 액션: `3D 그래프` 링크(`/versions/:clusterId/graph`), CSV 내보내기, etcd(systemd)/**K8s 인증서(kubeadm)**/kubelet config/커널 파라미터/노드 NIC SSH 수집 모달 5개, MinIO 수집, "지금 수집"(kubeconfig 기반, 중지 가능)
-  - 컴포넌트를 카테고리(`control_plane`/`cni`/`kubelet`/`os`/`storage`/`other`)별 접기 섹션으로 그룹핑, 각 항목 펼치면 현재값(모듈별 전용 디테일: MinIO Tenant/DirectPV/kernel sysctl/etcd systemd/kubelet config, kubeadm_certs 는 원시 필드 fallback) + 히스토리 타임라인(최대 2개 선택해 diff 자동 표시)
-  - 노드/컴포넌트/버전/config 경로 통합 검색
-- **Frontend**: `useClusters()`, 순수 `useQuery(['versions','current',clusterId])`(`versionsApi.current`), `useQuery(['versions','history',...])`(`versionsApi.history`), `useQuery(['versions','diff',...])`(`versionsApi.diff`) — 별도 훅 파일 없이 `VersionsPage.tsx`/`VersionGraphPage.tsx` 내부에 인라인. Mutation은 `useAbortableMutation`으로 `versionsApi.collect`, `.collectMinio` 등. 호출 함수: `versionsApi.{current,history,diff,collect,collectMinio,collectEtcdSystemd,collectKubeadmCerts,collectKernelParams,collectKubeletConfig,collectNodeNics,exportCsv}`.
-- **Backend**: `POST /api/v1/clusters/{id}/collect-versions`, `POST .../collect-etcd-systemd`, `POST .../collect-kernel-params`, `POST .../collect-kubelet-config`, `POST .../collect-etcdctl-config`, `POST .../collect-kubeadm-certs`, `POST .../collect-node-nics`, `POST .../collect-minio`, `GET .../versions/current`, `GET .../versions/history`, `GET .../versions/diff`, `GET .../versions/export.csv` — `backend/app/routers/versions.py`. DB 모델은 `ClusterConfigSnapshot`(`backend/app/models/config_snapshot.py`, `cluster_config_snapshots` 테이블) — 동일 `component`에 대해 `content_hash`가 바뀔 때만 새 행 추가(히스토리 누적), `data` JSONB에 image/flags/configmap/host별 원시 데이터 저장.
-- **핵심 기능**:
-  - kubeconfig 기반 컴포넌트 버전/플래그/ConfigMap 자동 수집 (변경 시에만 히스토리 적재)
-  - SSH 기반 보조 수집: etcd systemd config, **kubeadm 인증서 만료(`kubeadm certs check-expiration`)**, kubelet 실사용 config, 커널 sysctl, 노드 NIC, MinIO/DirectPV
-  - kubeadm 인증서 스냅샷(`kubeadm_certs:{host}`)은 Ops Checks의 `cert_expiry` 점검이 `source=snapshot`(또는 auto 폴백)일 때 읽는다 — kube-apiserver 파드가 distroless 라 kubectl exec 로는 확인 불가한 환경 대응
-  - 컴포넌트별 히스토리 타임라인 + 2-스냅샷 diff 뷰
-  - CSV 내보내기(디테일 레벨 선택), 3D 관계 그래프로 이동
-- **12차 감사(2026-10-20)**: 클러스터 목록·히스토리·diff·현재값 조회 실패는 `ErrorState`. 수집 7버튼과 빈 상태 "지금 수집"은 `useCanOperate(clusterId)` 비활성 + 사유, 빈 상태 수집도 `runCollect`(실행 로그·중지). 수집 모달 라벨 한국어화(SSH 사용자·포트·systemd 유닛·동시 실행 수)·접근성 라벨, 헤더 아이콘 타일 제거.
-- **요청사항 (수정 요청)**:
-  - _(여기에 개선/수정 요청을 직접 적어주세요)_
-
-### 버전 컴포넌트 관계 그래프 (`/versions/:clusterId/graph`)
-
-- **파일**: `frontend/src/pages/VersionGraphPage.tsx` (react-force-graph-3d + three.js)
-- **목적 / UX**: `/versions` 페이지의 스냅샷 데이터를 클러스터→카테고리→컴포넌트→플래그 계층의 3D 노드-엣지 그래프로 시각화해, 어떤 플래그/설정이 어떤 컴포넌트에 속하는지 탐색한다.
-- **UI 구성**: 좌측 `ClusterSidebar iconOnly` 레일 + 오른쪽 열(상단 툴바: 뒤로가기, 색상 범례(한국어 유형 라벨), "표로 보기" 토글, 재수집 버튼 / 전체 높이 3D 그래프 캔버스 + "화면 맞춤" 버튼), 노드 클릭 시 우상단 상세 패널(`NodeDetail`: 유형·버전·값·분류·수집 시각, 컴포넌트는 "플래그 6/N — 전체는 버전 화면" 링크). 재수집 실행 로그(`RunLogPanel`)는 중지 버튼과 컴포넌트별 줄을 갖는다.
-- **Frontend**: `useClusters()`, `useQuery(['versions','graph',selectedId])` → `versionsApi.graph`. 선택은 `useClusterRouteParam('/versions', clusters, { pathFor })` — URL 이 곧 선택이다. 로컬 state: `dims`(ResizeObserver), `selectedNode`, 표/그래프 보기. 노드·링크·툴팁 색은 `lib/chartTokens.ts` `cssVarColor`(테마 전환 시 다시 칠함), 툴팁 HTML 의 라벨·버전·값은 `lib/html.ts` `escapeHtml` 을 거친다. 그리기 전에 끝점 없는 링크를 버린다(방어). 호출 함수: `versionsApi.graph`, `versionsApi.collect`(재수집 — `AbortController` signal 전달, `useCanOperate(selectedId)`).
-- **Backend**: `GET /api/v1/clusters/{cluster_id}/versions/graph` — `backend/app/routers/versions.py`. `ClusterConfigSnapshot`을 카테고리/컴포넌트/플래그 노드+엣지(`contains`/`param`/`configures`/`replaces`)로 변환해 반환. 양 끝 노드가 없는 엣지는 마무리 단계에서 거르고, 컴포넌트 노드에 `flag_total`(플래그 노드는 앞 6개만)을 싣는다. 재수집은 `POST /clusters/{id}/collect-versions` 재사용 — 응답에 `components[]`(`component`·`version`·`changed`). 테스트 `test_version_graph_round15.py`.
-- **핵심 기능**:
-  - 클러스터/카테고리/컴포넌트/플래그 4-tier 3D 그래프 (타입별 색상/크기)
-  - 노드 클릭 시 카메라 이동 + 상세 패널
-  - `/versions` 페이지와 캐시 공유(`queryKey: ['versions', ...]`) — 재수집 시 양쪽 모두 무효화
-- **요청사항 (수정 요청)**:
-  - ~~`<select>` 드롭다운 클러스터 선택기 표준화~~ — 2026-10-15 D-113 에서 `ClusterSidebar iconOnly` 로 교체 완료(select 를 바꿔도 URL 이 그대로라 화면과 어긋나던 문제도 해소)
-  - _(추가 개선/수정 요청을 여기에 적어주세요)_
-- **15차 감사(2026-10-22, D-219·D-224·D-225·D-226·D-231·D-237)**:
-  - **XSS 차단**: 툴팁 HTML 이스케이프로 클러스터 이름·파드 인자를 통한 저장형 XSS 를 막았다.
-  - **분기 순서**: 클러스터 미선택 → 로딩 → `ErrorState`(다시 시도) → 컴포넌트 0개면 `EmptyState`("수집 이력이 없습니다") 순서다. 클러스터 목록 실패도 `ErrorState` 다.
-  - **3D 대안**: 캔버스는 `role="group"` + 요약 `aria-label` + sr-only 조작 안내를 단다. "표로 보기"(분류·컴포넌트·버전·플래그 수·수집 시각, 행 선택 = 상세)를 둔다. `prefers-reduced-motion` 이면 카메라 이동 시간이 0 이다.
-  - **표기**: 유형·카테고리는 한국어 라벨(원문은 `title`)이고, 수집 시각은 `formatDateTime` 이다.
-
 ### 노드 일괄 실행 (SSH/SCP) (`/bulk-exec`)
 
 - **파일**: `frontend/src/pages/BulkExecPage.tsx` (+ `components/common/{ConfirmDialog,LogViewer,DebugLogPanel,ResizeGrip,DoubleScrollX}`, `components/bulk-exec/{SavedScriptPanel,SavedScriptEditorModal}`)
@@ -1037,6 +1038,8 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
 ### 클러스터 관리 (`/cluster-manage`)
+
+> **2026-11-24**: 상태 칸·카드의 「정상/경고/위험」 글자 배지를 `ClusterCheckIcon`(점검 탭 결과 원천, 누르면 점검 탭 문제 항목)으로 바꿨다. 「문제만」·상태 정렬도 같은 기준(+ CIDR 겹침).
 
 > **2026-10-15 (D-135)**: 자체 실행 로그(`appendLog`·LogViewer 카드·수동 SSE 파서)를 표준 실행 로그(`cluster-manage`)로 대체했다. 검증은 `components/cluster-manage/verifyLogged.ts`(`/verify/stream` → 단계 칩, 설정 화면과 공유), 재수집·IP 수집·일괄 수집(클러스터별 칩)·적용은 `runLogged`, 실패 재시도는 패널 버튼.
 
@@ -1241,14 +1244,18 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
     - **요약 탭** `ServiceSummary`: 상태(사유 문장·기준 버전·미적용·마지막 적용·마지막 수집·에이전트 무응답) / 기준 버전과 다른 노드 값(그룹별 표 + 그룹별 다시 적용) / 열린 알람(LINUX → 알람 인박스 `?cluster=&q=`) / 최근 변경 24시간(LINUX) / 최근 적용 5건(→ 적용 이력). KPI 타일 없이 문장·표.
     - 편집 중이 아니면 설정 화면 현재 값도 60초마다 다시 읽는다(편집 중엔 멈춤).
   - **적용 이력** `ApplyHistoryDialog`(요약 탭 「최근 적용 ▸ 적용 이력」): 실행 목록 → 상세(노드별 결과 + 저장된 실행 로그 `LogViewer`). **적용 설정**(툴바 「적용 설정」 버튼, admin 편집) `ApplySettingsDialog`: **지금 보고 있는 서비스의 구역만** 보인다(변경 감지는 서비스 공통이라 함께) — LINUX 관리 sysctl 파일(기본 `/etc/sysctl.d/99-zz-pep.conf`) · CILIUM 네임스페이스·ConfigMap·DaemonSet · 롤아웃 기본 제한 시간 · ETCD 실행 방식(auto|정적 파드|systemd)·매니페스트·env 파일·유닛·백업 디렉터리(매니페스트 디렉터리 밖이어야 함)·health 명령·정상 판정 문자열·대기 시간 · CONTAINERD 설정 파일·유닛·재시작 명령·노드 Ready 대기 시간(명령은 한 줄·제어문자 금지 검증).
-  - **NIC**(레일 구분선 아래, `?service=nic`, 읽기 전용 — 설정 버전·적용 없음) `NicStatusView`: 노드 파라미터 에이전트(1.2.0+)가 보고 주기마다 보내는 인터페이스 상태.
+  - **NIC**(9번째 서비스, `?service=nic`) — 탭 **설정 / 상태 / 요약**. 설정·요약은 다른 서비스와 같은 화면(설정 버전·비교·되돌리기·노드 그룹·드리프트 배너·변경 이력·알람). **적용…**(operator, 9개 서비스 공통 `ApplyDialog` 의 NIC 구역 — 동시 노드 수 최대 20·하위 사이 대기·재합류 대기·원복 타이머·NetworkManager 기록, SSH 저장 안 함) → 로그 중심 실행 화면. 노드마다 `services/service_config/apply_nic.py`: 현재 값 다시 읽기(SSH 수집 스크립트) → 계획(`max` 풀기·최대값 초과는 실패·`[fixed]`·미지원·값 같음 건너뜀·이중화 없는 인터페이스는 ring·채널·offload 건너뜀) → 원복 스크립트 `/run/pep/nic-rollback.sh` + `systemd-run` 데드맨 타이머 → 본딩 sysfs(해시·miimon·lacp_rate — 거부되면 영구 기록만) → 하위 하나씩 `ethtool -G/-L/-K` + `/proc/net/bonding` 재합류 대기 → 새 세션으로 다시 읽어 확인·타이머 해제 → `nmcli connection modify`(속성 확인, 재활성화 안 함). 실패하면 즉시 원복. 결과 표는 키별 `현재/최대` 전→후와 메모(NM 미관리·lacp 재기동 후 반영). 성공하면 `nic:{node}` 스냅샷을 source `apply` 로 갱신(변경 알람 없음)·버전 `applied`. 설계 `docs/02-design/nic-apply.md`.
+    설정 키: `ring.rx`·`ring.tx`·`channels.combined`(값 형식 `int_or_max` — 숫자 또는 `max`, 입력 칸에 `max` 제안) · `offload.*` 6개(on/off) · `bond.xmit_hash_policy`·`bond.lacp_rate`·`bond.miimon`. 반영 방식 `하위 인터페이스 큐 재설정 (1개씩)`/`즉시 반영`.
+    노드 현재 값은 `nic:{node}` 스냅샷(대상 = 본딩과 그 하위, NIC 설정에서 glob 으로 바꿀 수 있음): ring·채널은 `현재/최대`, 인터페이스마다 다르면 `ens1f0=… ens1f1=…`. 기대 값 `max` 는 `현재 = 최대` 면 일치(백엔드 `current.same_value`, 화면 `ServiceConfigSections.sameValue` 같은 규칙). V1 가져오기는 `현재/최대` 의 현재 값을 쓴다.
+    현재 값 수집: 툴바 **SSH 로 수집** → `NicCollectModal`(대상 노드·동시 실행 수 기본 20·SSH 자격증명(저장 안 함) — 노드에서 조회 명령만: sysfs·`/proc/net/bonding`·`ethtool -g -l -k -i -S`, 실행 로그 `RunLogPanel` + 로그 보기 토글 `useLogPref('service-config-collect')`, 호스트별 결과·원본 출력) → `POST /clusters/{id}/collect-nic/stream`(SSE). 결과는 에이전트 보고와 같은 `node_nic_states`(source `ssh` — 보고 끊김 판정 제외) + `nic:{node}` 스냅샷. 노드 파라미터 에이전트(Rust 2.1.0 이상이면 채널 수 포함)가 있으면 1분마다 같은 경로로 들어온다(채널 수를 보고하지 않는 출처는 이전 값을 유지).
+    **상태** 탭 = `NicStatusView embedded`: 노드 파라미터 에이전트·SSH 수집이 보낸 인터페이스 상태.
     헤더(노드 수·마지막 보고 · **NIC 설정**) / NIC 를 보고하지 않는 노드(구버전 에이전트 등 사유) / **경고** `MacCard`(위험·확인 필요·참고 건수, '참고 포함' 토글 — 수준 배지 · 노드·인터페이스 · 제목 · 상세 · 조치 힌트) /
-    **인터페이스** 표(검색·종류·경고만 필터 — 노드 · 인터페이스(종류·상위 본딩·드라이버) · 상태 · 속도 · MTU · 본딩/LACP(모드·해시·rate·Aggregator, 하위는 Aggregator·상대 MAC) · Ring(현재/최대) · 드롭/분 · CRC·끊김 · 주요 offload · 판정).
-    행을 펼치면 그 행의 경고 + 드라이버·펌웨어·autoneg·본딩 하위 상태 표 + 전체 offload(ethtool -k 이름, fixed 표시) + 전체 카운터(`drv:` = ethtool -S). 판정 수준이 있으면 레일 NIC 아이콘에 상태 점.
+    **인터페이스** 표(검색(이름 일부 또는 glob)·종류·경고만 필터와 페이지(100행)는 **서버에서** — 노드 수백 대 클러스터용 · 인터페이스(종류·상위 본딩·드라이버) · 상태 · 속도 · MTU · 본딩/LACP(모드·해시·rate·Aggregator, 하위는 Aggregator·상대 MAC) · Ring(현재/최대) · 드롭/분 · CRC·끊김 · 주요 offload · 판정).
+    행을 펼치면 그때 상세를 따로 읽어(`GET …/nodes/{node}/interfaces/{iface}`) 그 행의 경고 + 드라이버·펌웨어·autoneg·본딩 하위 상태 표 + 전체 offload(ethtool -k 이름, fixed 표시) + 전체 카운터(`drv:` = ethtool -S). 판정 수준이 있으면 레일 NIC 아이콘에 상태 점.
     판정: 본딩(모드·해시 정책·LACP rate 기대 값, 링크 감시 꺼짐, 하위 다운·속도·MTU 차이, LACP 집계 실패(활성 Aggregator 밖 하위 — 하위 행에도 표시)·상대 MAC 0(협상 안 됨)·하위마다 상대 다름(MLAG 안내)) · 링크(다운, half duplex, 최소 속도, 플래핑) · VLAN MTU > 부모 · 창(기본 15분) 동안 증가한 NIC 드롭(큐별·합계 카운터 중 최대 증가분, xdp 제외 — ring 여유가 있으면 `ethtool -G` 제안)·CRC · offload 기대 값(기본 LRO off) · 노드 간 같은 이름 인터페이스의 MTU·속도·본딩 설정·offload·펌웨어 차이(다수 값 기준) · 보고 끊김.
-    `NicSettingsDialog`(admin) — **「이 클러스터」/「공통 기준」 두 탭**. 공통 기준은 모든 클러스터의 기본값, 이 클러스터 탭은 항목마다 "공통 값 · 재정의/공통 따름 · 공통으로 되돌리기"를 보이고 바꾼 항목만 재정의로 저장한다(나머지는 공통을 따라 공통 기준을 바꾸면 따라간다). "관측 값으로 채우기" = 보고된 구성(본딩 모드·해시·LACP 최빈값, 최소 속도, 본딩 없으면 본딩 기준 비움)을 제안(저장 전 확인). 인터페이스 이름은 입력 불필요 — 종류로 자동 수집. 공통 탭 하단에 재정의한 클러스터 목록. 항목: 수집 켜기·인터페이스 종류·포함/제외 이름(glob — 에이전트 다음 보고부터) · 본딩/LACP 기대 값(비우면 검사 안 함) · 최소 속도·증가율 창·드롭/CRC/끊김 임계치·보고 끊김 · 노드 간 비교 · offload 기대 값 목록.
-    Frontend `useNicWatch`(60초 다시 읽기)·`useNicWatchSettings`·`useUpdateNicWatchSettings`(`hooks/useNicWatch.ts`), api.ts `nicWatchApi`. 이름이 키인 값(카운터·offload·본딩 하위)은 응답 camelCase 변환에 깨지지 않게 목록으로 받는다.
-    Backend `GET /nic-watch/clusters/{id}`(`_cluster_scoped`) · `GET|PUT /nic-watch/settings`(PUT admin, AppSetting `nic_watch.settings`, 감사 `nic_watch.settings.update`) · 클러스터별 재정의 `GET|PUT|DELETE /nic-watch/clusters/{id}/settings`(PUT·DELETE admin, AppSetting `nic_watch.cluster_overrides`, 감사 `nic_watch.cluster_settings.update|clear`, 에이전트 보고 응답의 수집 대상과 판정이 모두 실효 기준=공통+재정의) · `GET /nic-watch/clusters/{id}/observed`(기준 제안) · `GET /nic-watch/overrides` — `routers/nic_watch.py`, 수신은 `POST /node-params/agent/report` 의 `nic`(실패해도 파라미터 보고는 성공, 응답 `nic` 에 수집 대상), 저장 `services/nic_watch/service.py`(`NodeNicState`, 5분 간격 카운터 표본), 판정 `analyze.py`(조회 때마다 현재 설정으로 다시 계산), 제안 `learn.py`, 에이전트 `agent-rs/src/nic.rs`(Python `node_param_agent/nic.py` 와 같은 보고 계약).
+    `NicSettingsDialog`(admin) — **「이 클러스터」/「공통 기준」 두 탭**. 공통 기준은 모든 클러스터의 기본값, 이 클러스터 탭은 항목마다 "공통 값 · 재정의/공통 따름 · 공통으로 되돌리기"를 보이고 바꾼 항목만 재정의로 저장한다(나머지는 공통을 따라 공통 기준을 바꾸면 따라간다). "관측 값으로 채우기" = 보고된 구성(본딩 모드·해시·LACP 최빈값, 최소 속도, 본딩 없으면 본딩 기준 비움)을 제안(저장 전 확인). 인터페이스 이름은 입력 불필요 — 종류로 자동 수집. 공통 탭 하단에 재정의한 클러스터 목록. 항목: 수집 켜기·인터페이스 종류·포함/제외 이름(glob — 에이전트 다음 보고부터) · 본딩/LACP 기대 값(비우면 검사 안 함) · 최소 속도·증가율 창·드롭/CRC/끊김 임계치·보고 끊김 · 노드 간 비교 · offload 기대 값 목록. · 설정 값 대상(본딩과 그 하위 | 이름 glob — 서비스 구성 NIC 설정 탭이 값을 읽는 인터페이스, 재정의 가능).
+    Frontend `useNicWatch(clusterId, {q, kind, onlyFlagged, offset, limit})`(60초 다시 읽기, 이전 페이지 유지)·`useNicWatchSummary`(레일 상태 점 — `limit=0`, 요약만)·`useNicInterfaceDetail`·`useNicWatchSettings`·`useUpdateNicWatchSettings`·클러스터 재정의 훅(`hooks/useNicWatch.ts`), api.ts `nicWatchApi`. 이름이 키인 값(카운터·offload·본딩 하위)은 응답 camelCase 변환에 깨지지 않게 목록으로 받는다.
+    Backend `GET /nic-watch/clusters/{id}?q=&kind=&only_flagged=&offset=&limit=`(`_cluster_scoped` — 요약·경고 앞 300건·가벼운 행, 노드 목록은 보내지 않음, 판정은 클러스터별 20초 캐시 — 설정·재정의를 바꾸면 비움) · `GET /nic-watch/clusters/{id}/nodes/{node}/interfaces/{iface}`(행 상세) · `GET|PUT /nic-watch/settings`(PUT admin, AppSetting `nic_watch.settings`, 감사 `nic_watch.settings.update`) · 클러스터별 재정의 `GET|PUT|DELETE /nic-watch/clusters/{id}/settings`(PUT·DELETE admin, AppSetting `nic_watch.cluster_overrides`, 감사 `nic_watch.cluster_settings.update|clear`, 에이전트 보고 응답의 수집 대상과 판정이 모두 실효 기준=공통+재정의) · `GET /nic-watch/clusters/{id}/observed`(기준 제안) · `GET /nic-watch/overrides` — `routers/nic_watch.py`, 수신은 `POST /node-params/agent/report` 의 `nic`(실패해도 파라미터 보고는 성공, 응답 `nic` 에 수집 대상), 저장 `services/nic_watch/service.py`(`NodeNicState`, 5분 간격 카운터 표본 — 카운터 말고 바뀐 게 없으면 5분 동안은 받은 시각만 갱신), 판정 `analyze.py`(조회 때마다 실효 기준 = 공통 + 클러스터 재정의 + NIC 설정 버전 값으로 다시 계산), 제안 `learn.py`, 에이전트 `agent-rs/src/nic.rs`(Python `node_param_agent/nic.py` 와 같은 보고 계약).
   - 모달을 닫으며 URL 쿼리를 바꾸는 동작(그룹 만들기·삭제, 버리고 이동)은 `afterModalClose` 로 모달 history 기록이 회수된 뒤에 한다(`common/modalHistory.ts` 의 `history.back()` 이 바꾼 쿼리를 되돌리던 문제).
 - **Frontend**: `useServiceConfigServices`, `useServiceConfigView(clusterId, service, version, groupId)`, `useServiceConfigEvaluate`(디바운스 초안), `useSaveServiceConfigVersion`, `useServiceConfigCompare`, `useRevertServiceConfig`, `useSaveServiceConfigGroup`·`useDeleteServiceConfigGroup`, `useImportServiceConfig`, `useInvalidateServiceConfig`(`hooks/useServiceConfig.ts`), `useUrlParams({service, version, group})`, `useDebouncedValue`. api.ts `serviceConfigApi.*` — 설정 값은 `[{key, value}]` 목록으로 보낸다(요청 인터셉터가 객체 키를 snake_case 로 바꿔 `SystemdCgroup` 같은 키가 망가지므로).
 - **Backend**: 라우터 `backend/app/routers/service_config.py`(`_cluster_scoped`):
@@ -1329,6 +1336,26 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `cilium monitor` 실시간 스트림(type 필터: drop/trace/capture/debug/recorder/agent/l7), 80ms throttle 버퍼링.
   - Hubble flow 실시간 관측(FORWARDED/DROPPED/AUDIT verdict 카운트, drop reason 표시).
 - **13차 감사(2026-10-20)**: cilium-dbg 직접 명령은 서버 읽기 전용 allowlist(`GET /cilium/{id}/exec-command/allowlist`, 실패 시 로컬 `lib/ciliumCommand.ts`) 밖이면 danger 확인 + admin 만 실행(서버 403). Enter 는 즉시 실행 대신 확인. 직접 명령 카드는 `RoleGate` 숨김 → 비활성 + 사유. 모니터·Hubble 일시정지 동작, 서버가 스트림을 닫으면 "실행 중" 해제. Hubble 상태 조회 실패·hubble-relay 확인 실패(`hubble_relay_error` — RBAC 거부 등)는 "미설치"가 아니라 오류/"확인 실패"로 표시.
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### Cilium 데이터패스 (`/cilium-datapath`)
+
+> K8s 클러스터 허브 `/k8s/:clusterId/cilium-datapath`(**진단** 카테고리, `Cilium BPF 추적` 옆)의 서브뷰로만 마운트된다. 옛 형식 URL `/cilium-datapath` 는 그 뷰로 redirect. 아일랜드 패널(`panelRegistry`)로도 임베드된다(그때는 자체 `ClusterSidebar iconOnly`).
+
+- **파일**: `frontend/src/pages/CiliumDatapathPage.tsx` (+ `components/cilium-datapath/{CiliumMapPressureView,CiliumAgentsView,CiliumInstallCard}.tsx`)
+- **목적 / UX**: 노드마다 뜨는 **Rust 에이전트 `pep-bpf-agent`**(`agents/pep-bpf-agent/`)가 Cilium 이 고정(pin)한 BPF 맵을 **읽기 전용**(`BPF_F_RDONLY`)으로 열어 센 항목 수·최대치를 보고 → 맵 용량 부족(CT·NAT·LB·정책·ipcache 등)을 장애 전에 본다. 원본 키·값은 노드 밖으로 나오지 않는다. `/cilium-trace`(kubectl exec 로 그때그때 조회)와 달리 상시 감시이고 임계치를 넘으면 알람 인박스(`CiliumBpfMapPressure`)로 간다.
+- **UI 구성**: `PageHeader`(우측 "알람 인박스" 링크 · 실행 중이면 「중지」 · **「지금 수집」**(operator, 보고 중인 에이전트가 없으면 비활성 + 사유)) + 요약 한 줄(보고 중 에이전트 수 · 주기·예산 · 판정 기준 · 마지막 「지금 수집」) + `RunLogPanel`(노드별 단계 칩 + 실시간 로그, "로그 보기" 는 사용자 선택 — `useLogPref('cilium-datapath-collect')`) + `SegTabs mode="tabs"` 3개(URL `?tab=maps|agents|install`).
+  - **맵 용량**: `MacCard` 노드 × 맵 그룹 히트맵 — 칸 = 사용률(%), 정상은 중립색·주의/위험만 상태색, 시간 예산 초과로 일부만 센 값은 `≥` + 기울임(하한). 엔드포인트별 맵(`cilium_policy_v2_*`)은 그룹으로 묶어 가장 찬 맵만. 카탈로그 밖 맵이 있으면 "주요 맵/전체" 토글. 칸을 누르면 우측 상세(맵 이름·유형·키/값 크기·항목/최대·사용률 막대·집계 시간·그룹 크기·메모 + **설정 추천**(cilium-config 키 ×2 검토 문구 → 서비스 구성 링크)). 기본 선택 = 가장 찬 칸.
+  - **프로그램·에이전트**: 노드 에이전트 표(상태 보고 중/무응답/보고 없음 · 커널 · CAP_BPF · CAP_SYS_ADMIN · drop reason 지원(5.17+) · bpf_stats · 맵 수 · 수집 ms · 오류 · 목록에서 지우기(operator, danger 확인)) → 행을 고르면 아래에 그 노드의 **BPF 프로그램 목록**(이름별 묶음 — 유형·개수·tag·마지막 로드·평균 실행 시간·**기준 대비** 같음/바뀜/새로 붙음/사라짐) + 「현재를 기준으로」(operator — Cilium 설정 적용 직전에 누르면 전후 비교). 프로그램 목록은 CAP_SYS_ADMIN 이 있어야 해서 꺼져 있으면 `EmptyState` 로 안내.
+  - **에이전트 설치**: 이 클러스터 UUID·PEP 주소·이미지를 채운 매니페스트(Namespace+Secret+DaemonSet, 토큰 자리표시자) 복사·내려받기 + 토큰 설정 여부 배지 + 권한 설명. 아래 **에이전트 설정**(admin) — 주의/위험 임계치 · 보고 주기 · 맵당/전체 시간 예산 · 「지금 수집」 대기 · 무응답 표시 · 고정 경로 · 맵/프로그램 이름 접두어 · 이미지·네임스페이스·API 주소 · 사용률 알람 · CAP_SYS_ADMIN 부여 · TLS 검증.
+- **Frontend**: `useCiliumDatapath`(30초 폴링), `useCiliumDatapathManifest`, `useCiliumDatapathSettings`, `useUpdateCiliumDatapathSettings`/`useSetCiliumProgramBaseline`/`useDeleteCiliumBpfAgent`(`hooks/useCiliumDatapath.ts`, 성공 시 `['cilium-datapath']` 무효화). api.ts: `ciliumDatapathApi.*`. 「지금 수집」 은 `streamLogged` + `ciliumDatapathApi.collectStreamUrl`. 허브 안에서는 `useK8sHub()` 의 clusterId.
+- **Backend**: 라우터 `backend/app/routers/cilium_datapath.py`.
+  - 수신(`ingest_router`, **JWT 없음**, Bearer `CILIUM_BPF_AGENT_TOKEN` — **미설정 시 503 fail-closed**, 불일치 401, 클러스터 없음 404): `POST /cilium-datapath/agent/report`(응답 `config` = 다음 주기 수집 설정 — 화면 설정이 내려간다) · `GET /cilium-datapath/agent/tasks?cluster&node&wait`(long-poll, 최대 30초) · `POST /cilium-datapath/agent/runs/{run_id}/log`.
+  - JWT(`_cluster_scoped`): `GET /cilium-datapath/clusters/{id}`(에이전트별 맵 + 판정·라벨·추천, 열 목록, 요약, 마지막 실행) · `GET …/runs` · `POST …/collect`(operator, **SSE** — 실행 생성 → 에이전트가 long-poll 로 받아 로그를 흘림 → 노드 보고 시 완료, 제한 시간 뒤 partial/failed. 작업을 넘길 때 그 노드가 실제로 하는 일(`pep-bpf-agent collect` 인자 + bpf(2) 호출 순서)을 `cmd` 줄로 남겨 관리자만 본다 — `command_trace`, 에이전트가 보낸 줄은 `cmd` 를 쓸 수 없음) · `POST …/agents/{id}/baseline` · `DELETE …/agents/{id}`(operator) · `GET …/manifest` · `GET/PUT /cilium-datapath/settings`(PUT admin). 감사 `cilium_datapath.collect`·`.baseline`·`.agent.delete`·`.settings.update`.
+  - 서비스 `services/cilium_datapath/`(`settings` AppSetting `cilium_datapath.settings` · `catalog` 맵 그룹 → 라벨·cilium-config 키 · `service` 보고 처리·알람·화면 모델 · `runs` 실행 전달·로그·완료 · `manifest`). 모델 `models/cilium_datapath.py`(`CiliumBpfAgent` 노드당 1행 · `CiliumDatapathRun` 실행 1회=1행, 로그성 90일).
+  - 에이전트(Rust, `agents/pep-bpf-agent/`): libbpf 없이 `bpf(2)` 직접 호출(`OBJ_GET`·`MAP_GET_NEXT_KEY`·`OBJ_GET_INFO_BY_FD`, 쓰기 명령 없음), 맵당·전체 시간 예산, 배열류 제외, 숫자 꼬리 그룹 축약. 배포 번들 `deploy/k8s/cilium-bpf-agent/`(CAP_BPF 만, `/sys/fs/bpf` 읽기 전용).
+- **다음 단계(미구현)**: 데이터패스 일관성(LB 맵 ↔ Service/EndpointSlice · ipcache 노드 간 · 정책 맵 ↔ 선언 정책) · 드롭 사유(`cilium_metrics` 맵 + 커널 `skb:kfree_skb`) — Cilium 버전별 맵 레이아웃 디코드가 필요해 별도 단계로 둔다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -1771,7 +1798,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 등록된 담당자(Assignee)별로 작업/이슈를 묶어 한눈에 보고, 특정 주(이번주/지난주)에 진행·완료된 업무만 필터링해 팀 업무 현황을 텍스트로 복사·공유할 수 있는 화면.
 - **UI 구성**:
   - 헤더: 멤버 수/전체 수, 진행중 합계 배지
-  - 필터 바: 보기범위(나만/전체 — localStorage 영속), 검색(이름/사번/이메일/역할), 멤버 필터(전체/업무있음/미완료있음), 기간 필터(전체/이번주/지난주), 텍스트 복사, 부담당자 포함 체크박스
+  - 필터 바: 보기범위(나만/전체 — localStorage 영속), 검색(이름/사번/이메일/담당 업무), 멤버 필터(전체/업무있음/미완료있음), 기간 필터(전체/이번주/지난주), 텍스트 복사, 부담당자 포함 체크박스
   - 멤버별 `MemberSection` 카드: 아바타(이니셜)+사번/이메일/역할, 작업 배지(진행/완료), 이슈 배지(미조치/완료), 펼치면 좌(작업)·우(이슈) 2단 리스트(각 최대 10건 + 더보기)
 - **Frontend**: `useAssignees`(hooks/useAssignees.ts), `useWorkItems()`(전체 목록, 클라이언트에서 담당자별로 buckets 구성), `useAuthStore`(Zustand, 본인 식별 및 정렬 최상단 배치). 서버 mutation 없음 — 순수 조회/집계/클립보드 복사(`navigator.clipboard.writeText`).
 - **Backend**: `GET /api/v1/work-items`(전체) — `work_items.py`. 담당자 마스터 데이터는 별도 assignees 엔드포인트(`useAssignees` 훅, 담당자 관리 라우터) 사용. 모델: `WorkItem`(primary/secondary assignee 콤마 구분 문자열 파싱).

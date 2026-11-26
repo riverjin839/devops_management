@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -19,6 +20,8 @@ from app.services.request_context import (
     HEADER as REQUEST_ID_HEADER, get_request_id, install_logging, new_request_id,
 )
 from app.services.request_id_middleware import RequestIdMiddleware
+from app.services import command_trace
+from app.services.command_trace import CommandTraceMiddleware
 from app.services.memory_watch import MemoryWatchMiddleware
 from app.services.dc_inventory.errors import DcError
 from app.services.dc_inventory.importer import FileError as DcFileError
@@ -47,6 +50,7 @@ from app.routers import (
     work_guide_router,
     ops_note_router,
     voc_router,
+    alarm_requests_router,
     reactions_router,
     mindmap_router,
     management_server_router,
@@ -77,6 +81,7 @@ from app.routers import (
     auth_router,
     auth_oidc_router,
     auth_ldap_router,
+    auth_signup_router,
     audit_logs_router,
     system_errors_router,
     system_diagnostics_router,
@@ -95,6 +100,8 @@ from app.routers import (
     node_param_watch_router,
     nic_watch_router,
     node_param_ingest_router,
+    cilium_datapath_router,
+    cilium_datapath_ingest_router,
     service_config_router,
     ns_migration_router,
     daily_report_router,
@@ -1421,15 +1428,30 @@ def _run_migrations():
         _safe_add_column("users", "seat_location", "VARCHAR(64)")
         _safe_add_column("users", "primary_role", "VARCHAR(64)")
         _safe_add_column("users", "secondary_role", "VARCHAR(64)")
+        # 정/부 담당역할 → "담당 업무"(duty) 하나로 통합. 옛 두 값을 ", " 로 이어 1회 백필한다
+        # (duty 가 비어 있는 행만 — 멱등). 옛 컬럼은 남겨 두되 코드에서는 더 이상 쓰지 않는다.
+        _safe_add_column("users", "duty", "VARCHAR(255)")
+        _safe_exec(
+            "UPDATE users SET duty = NULLIF(CONCAT_WS(', ', "
+            "NULLIF(TRIM(primary_role), ''), NULLIF(TRIM(secondary_role), '')), '') "
+            "WHERE duty IS NULL AND (COALESCE(TRIM(primary_role), '') <> '' "
+            "OR COALESCE(TRIM(secondary_role), '') <> '')",
+            label="users.primary_role/secondary_role → duty 통합",
+        )
         _safe_exec(
             "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_employee_id ON users (employee_id) "
             "WHERE employee_id IS NOT NULL",
             label="users.employee_id unique index",
         )
-        # 강제 변경 정책 폐기 — 과거 시드/리셋으로 True 였던 사용자를 모두 해제.
+        # 첫 로그인 비밀번호 변경 — 사번으로 자동 발급된 뒤 한 번도 비밀번호를 바꾸지 않은 계정
+        # (username = 사번, password_changed_at 없음)은 아직 초기 비밀번호(=사번)이므로 변경 대상으로 표시한다.
+        # 예전엔 강제 변경 정책을 폐기하면서 매 부팅 플래그를 FALSE 로 되돌렸지만, 첫 로그인 변경을 다시
+        # 도입하면서 그 초기화는 없앴다. 비밀번호를 바꾸면 password_changed_at 이 채워져 다시 걸리지 않는다(멱등).
         _safe_exec(
-            "UPDATE users SET must_change_password = FALSE WHERE must_change_password = TRUE",
-            label="users.must_change_password → FALSE (강제 변경 정책 해제)",
+            "UPDATE users SET must_change_password = TRUE "
+            "WHERE must_change_password = FALSE AND password_changed_at IS NULL "
+            "AND hashed_password IS NOT NULL AND employee_id IS NOT NULL AND username = employee_id",
+            label="users.must_change_password ← 초기 비밀번호(=사번) 계정",
         )
 
     # audit_logs: create_all 이 테이블 자체는 만들지만 보조 인덱스만 명시.
@@ -1495,9 +1517,15 @@ def _run_migrations():
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
         _safe_create_index("ix_os_param_changes_cluster_detected", "os_param_changes", "(cluster_id, detected_at DESC)")
+    # node_nic_states: NIC 상태 — 수집 출처(agent|ssh). 테이블은 create_all, 1.103 이전 DB 는 컬럼 보강.
+    if "node_nic_states" in inspector.get_table_names():
+        _safe_add_column("node_nic_states", "source", "VARCHAR(16)")
     # node_param_agents: 노드 파라미터 에이전트 상태 — 테이블은 create_all, 워치독 조회 인덱스 보강.
     if "node_param_agents" in inspector.get_table_names():
         _safe_create_index("ix_node_param_agents_last_seen", "node_param_agents", "(last_seen_at)")
+    # cilium_datapath_runs: 「지금 수집」 실행 — 에이전트 작업 수신(long-poll)이 진행 중 실행을 자주 찾는다.
+    if "cilium_datapath_runs" in inspector.get_table_names():
+        _safe_create_index("ix_cilium_datapath_runs_cluster_status", "cilium_datapath_runs", "(cluster_id, status, created_at)")
     # service_config_versions: 서비스 구성 설정 버전 — 테이블은 create_all, 화면 조회 인덱스 보강.
     if "service_config_versions" in inspector.get_table_names():
         _safe_create_index("ix_service_config_versions_lookup", "service_config_versions",
@@ -1594,6 +1622,32 @@ def _run_migrations():
         _safe_create_index("ix_check_logs_checked_at", "check_logs", "(checked_at)")
     if "user_notifications" in inspector.get_table_names():
         _safe_create_index("ix_user_notifications_created_at", "user_notifications", "(created_at)")
+        # 업무 알람 상용화(P0~P3) — 받는 사람을 users.id 로 판정 + 읽은 시각·중복 방지 키·외부 발송 상태.
+        _safe_add_column("user_notifications", "recipient_user_id", "VARCHAR(36)")
+        _safe_add_column("user_notifications", "read_at", "TIMESTAMP")
+        _safe_add_column("user_notifications", "dedupe_key", "VARCHAR(200)")
+        _safe_add_column("user_notifications", "external_status", "VARCHAR(20)")
+        _safe_add_column("user_notifications", "external_channels", "JSONB")
+        _safe_add_column("user_notifications", "external_error", "TEXT")
+        _safe_add_column("user_notifications", "external_sent_at", "TIMESTAMP")
+        _safe_create_index("ix_user_notifications_recipient_user_id", "user_notifications", "(recipient_user_id)")
+        _safe_create_index("ix_user_notifications_dedupe_key", "user_notifications", "(dedupe_key)")
+        _safe_create_index("ix_user_notifications_external_status", "user_notifications", "(external_status)")
+        # 예전 행 채우기 — username·사번은 유일하므로 그대로, display_name 은 활성 사용자 중 한 명일 때만
+        # (동명이인이면 비워 둔다 — 조회도 그런 이름은 매칭하지 않는다).
+        _safe_exec(
+            "UPDATE user_notifications n SET recipient_user_id = u.id FROM users u "
+            "WHERE n.recipient_user_id IS NULL AND (n.recipient = u.username OR n.recipient = u.employee_id)",
+            label="user_notifications.recipient_user_id backfill (username)",
+        )
+        _safe_exec(
+            "UPDATE user_notifications n SET recipient_user_id = u.id FROM users u "
+            "WHERE n.recipient_user_id IS NULL AND n.recipient = u.display_name "
+            "AND (SELECT count(*) FROM users u2 WHERE u2.display_name = u.display_name) = 1",
+            label="user_notifications.recipient_user_id backfill (unique display_name)",
+        )
+    if "work_items" in inspector.get_table_names():
+        _safe_add_column("work_items", "watchers", "JSONB")
         # k8s 효율화 샘플/실행 로그 — purge(log_retention_service) 가 sampled_at/queued_at 로 스캔.
         _safe_create_index("ix_k8s_ns_samples_at", "k8s_ns_samples", "(sampled_at)")
         _safe_create_index("ix_k8s_wl_samples_at", "k8s_workload_samples", "(sampled_at)")
@@ -2057,6 +2111,17 @@ def _seed_node_param_watch_rules():
     db = SessionLocal()
     try:
         seed_default_rules(db)
+    finally:
+        db.close()
+
+
+def _seed_alarm_catalog():
+    """알람 등록 요청 화면의 서비스별 알람 카탈로그 — 비어 있을 때만(지운 항목은 되살리지 않는다)."""
+    from app.services.alarm_requests import seed_catalog
+
+    db = SessionLocal()
+    try:
+        seed_catalog(db)
     finally:
         db.close()
 
@@ -2526,6 +2591,8 @@ def _seed_initial_admin():
             hashed_password=hash_password(settings.initial_admin_password),
             role="admin",
             display_name="Administrator",
+            # 설정 파일의 초기 비밀번호 — 첫 로그인 "내 정보 등록" 팝업에서 바꾸게 한다.
+            must_change_password=True,
         )
         db.add(admin)
         db.commit()
@@ -2575,6 +2642,15 @@ async def lifespan(app: FastAPI):
     # sync 라우트(89%) 가 공유하는 anyio 스레드풀을 기본값(40)보다 넉넉하게 —
     # §config.py sync_threadpool_size 주석 참고.
     current_default_thread_limiter().total_tokens = settings.sync_threadpool_size
+
+    # 실행 명령 추적(관리자 "로그 보기") — subprocess 감사 훅 + run_in_executor(None) 가 contextvars 를 넘기게.
+    command_trace.install()
+    try:
+        asyncio.get_running_loop().set_default_executor(
+            command_trace.ContextThreadPoolExecutor(thread_name_prefix="pep-exec"),
+        )
+    except Exception:  # noqa: BLE001
+        _startup_log.warning("command_trace: default executor 교체 실패 — 스레드 안 명령은 실행 로그에 안 남을 수 있음")
 
     boot_state.begin()
     boot_state.pending_ddl_provider = lambda: list(_pending_ddl)
@@ -2650,6 +2726,7 @@ async def lifespan(app: FastAPI):
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
             ("seed_dc_inventory_defaults", _seed_dc_inventory_defaults),
+            ("seed_alarm_catalog", _seed_alarm_catalog),
             ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_observability_catalog", _seed_observability_catalog),
             # 행 단위 버전 이관 — 전역 sentinel 이 없어 몇 번을 다시 돌아도 개인 설정을
@@ -2697,7 +2774,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.106.0",
+    version="1.113.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2719,6 +2796,8 @@ if extra_origins:
 
 # 요청 ID — 가장 안쪽(gzip·CORS 보다 먼저 add)이라 5xx 응답 본문을 압축 전에 읽어 사유로 남긴다.
 app.add_middleware(RequestIdMiddleware)
+# 실행 명령 추적 — 관리자 요청에서 노드·클러스터에 나간 명령을 X-PEP-Commands 헤더로 돌려준다(services/command_trace.py).
+app.add_middleware(CommandTraceMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2726,7 +2805,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=[REQUEST_ID_HEADER],
+    expose_headers=[REQUEST_ID_HEADER, command_trace.HEADER],
 )
 
 
@@ -2782,6 +2861,8 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(auth_oidc_router, prefix="/api/v1")
 # 사내 디렉터리(LDAP/AD) 설정 — 로그인은 /auth/login 이 처리하고, 이 라우터의 설정·연결 확인은 엔드포인트가 require_admin.
 app.include_router(auth_ldap_router, prefix="/api/v1")
+# 로그인 화면 가입 신청 — 신청 접수·공개 설정만 public, 설정·목록·승인·거절은 엔드포인트가 require_admin.
+app.include_router(auth_signup_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 # Super pod ingest 는 bearer 토큰만 자체 검증 — JWT 의존성 없음.
 app.include_router(check_ingest_router, prefix="/api/v1")
@@ -2815,6 +2896,7 @@ app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(voc_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(alarm_requests_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)
@@ -2871,6 +2953,10 @@ app.include_router(node_param_ingest_router, prefix="/api/v1")
 app.include_router(node_param_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NIC 상태(본딩/LACP·링크·MTU·ring buffer·드롭·offload) — 에이전트 보고의 nic 필드를 저장, 서비스 구성 ▸ NIC 화면(읽기 전용).
 app.include_router(nic_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# Cilium 데이터패스(eBPF) — Rust 노드 에이전트 보고·작업 수신·로그(Bearer CILIUM_BPF_AGENT_TOKEN 자체 검증, fail-closed)를
+# 먼저 include 하고, 화면 API(맵 사용률·프로그램·지금 수집 SSE·설정·매니페스트)는 JWT.
+app.include_router(cilium_datapath_ingest_router, prefix="/api/v1")
+app.include_router(cilium_datapath_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # 서비스 구성(etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전) — K8S 허브 ▸ 구성.
 app.include_router(service_config_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NS 마이그레이션(개발 → 운영) — 소스 read·타깃 operate 는 body 의 클러스터라 라우터가 직접 검사한다.
@@ -2925,7 +3011,7 @@ app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.106.0",
+        "version": "1.113.0",
         "status": "running"
     }
 

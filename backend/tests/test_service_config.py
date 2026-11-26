@@ -109,7 +109,7 @@ def test_summarize_and_status():
 
 
 def test_catalog_shape():
-    assert list(SERVICE_KEYS) == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"]
+    assert list(SERVICE_KEYS) == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet", "nic"]
     keys = [(i["service"], i["key"]) for i in ITEMS]
     assert len(keys) == len(set(keys))
     for i in ITEMS:
@@ -213,7 +213,7 @@ def test_api_requires_operator_for_import(db, cluster):
     try:
         client = TestClient(app)
         r = client.get("/api/v1/service-config/services")
-        assert r.status_code == 200 and [s["key"] for s in r.json()["items"]] == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"]
+        assert r.status_code == 200 and [s["key"] for s in r.json()["items"]] == ["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet", "nic"]
         r = client.get(f"/api/v1/service-config/clusters/{cluster.id}/cilium")
         assert r.status_code == 200, r.text
         assert r.json()["counts"]["same"] >= 1
@@ -1116,7 +1116,7 @@ def test_service_status_drift_alerts_changes_and_api(db, linux_v1):
         app.dependency_overrides[get_current_user] = lambda: viewer
         client = TestClient(app)
         r = client.get(f"/api/v1/service-config/clusters/{c.id}/status")
-        assert r.status_code == 200 and set(r.json()["services"]) == set(["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet"])
+        assert r.status_code == 200 and set(r.json()["services"]) == set(["etcd", "containerd", "cilium", "linux", "kube-apiserver", "kube-controller-manager", "kube-scheduler", "kubelet", "nic"])
         r = client.get(f"/api/v1/service-config/clusters/{c.id}/linux/status")
         assert r.status_code == 200 and r.json()["drift"]["rows"][0]["key"] == "net.ipv4.ip_forward"
         assert client.get(f"/api/v1/service-config/clusters/{c.id}/nope/status").status_code == 404

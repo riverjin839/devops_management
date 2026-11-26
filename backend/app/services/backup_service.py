@@ -85,6 +85,10 @@ LOG_TABLES: frozenset[str] = frozenset({
     # 노드 OS 파라미터 에이전트 상태(마지막 보고 시각 등) — 다음 보고로 다시 생기는 파생 데이터.
     # 감시 규칙(node_param_watch_rules)은 설정이라 제외하지 않는다.
     "node_param_agents",
+    # Cilium 데이터패스 에이전트 상태(맵·프로그램 요약) — 다음 보고로 다시 생기는 파생 데이터.
+    "cilium_bpf_agents",
+    # Cilium 데이터패스 「지금 수집」 실행 이력 — 에이전트 로그 포함(로그성, 90일).
+    "cilium_datapath_runs",
     # 서비스 구성 적용 실행 이력 — 노드별 결과·로그(로그성, 365일).
     "service_config_apply_runs",
     # 서비스 구성 노드 설정 값 변경 이력(로그성, 400일).
@@ -93,6 +97,8 @@ LOG_TABLES: frozenset[str] = frozenset({
     "common_service_snapshots",
     "common_service_changes",
     "common_service_runs",
+    # 일정 알람 '오늘 그만 보기' 기록 — 그날만 의미 있는 로그성 행.
+    "work_alarm_dismissals",
 })
 
 # 민감 컬럼을 마스킹할 때 쓰는 센티널. ``None`` 을 쓰면 "값이 원래 없었다"와
@@ -106,6 +112,8 @@ SENSITIVE_COLUMNS: dict[str, list[str]] = {
     "clusters": ["kubeconfig_content", "kubeconfig_path"],
     # bcrypt 해시지만 외부 유출 시 오프라인 브루트포스 가능성이 있어 기본 마스킹.
     "users": ["hashed_password"],
+    # 가입 신청 비밀번호 해시(대기·거절 행) — users 와 같은 이유로 기본 마스킹.
+    "signup_requests": ["password_hash"],
     # Jira PAT/세션쿠키 + 저장된 SSO 로그인 정보 — 암호문이지만 export 기본 마스킹
     # (SECRET_KEY 유출 시 복호 방지).
     "user_jira_credentials": ["token_encrypted", "sso_login_encrypted", "confluence_cookie_encrypted", "servicenow_cookie_encrypted"],

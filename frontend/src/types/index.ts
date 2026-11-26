@@ -677,6 +677,8 @@ export interface WorkItem {
   jiraStatus?: string | null;
   jiraSyncedAt?: string | null;
   jiraWatchers?: string[] | null;
+  /** 구독자 username — 담당자가 아니어도 댓글·상태 변경 알림을 받는다. */
+  watchers?: string[] | null;
   /** Jira 원본 항목 — 게시판 표를 Jira 와 같은 축으로 보여주기 위한 읽기 전용 필드.
    *  task = Epic, sub task = Epic 아래 이슈 매핑 기준. */
   jiraIssueType?: string | null;
@@ -1156,15 +1158,109 @@ export interface WorkItemActivity {
   createdAt: string;
 }
 
+export type NotificationCategory = 'work' | 'ops';
+
 export interface UserNotification {
   id: string;
   type: string;
+  /** 알림 종류 표시명(예: '멘션', '알람') — 서버 EVENT_CATALOG. */
+  typeLabel?: string;
+  /** work = 업무 탭, ops = 운영 탭 */
+  category: NotificationCategory;
   title: string;
   body?: string | null;
   link?: string | null;
   workItemId?: string | null;
   isRead: boolean;
+  readAt?: string | null;
+  /** 외부 채널(메일·메신저) 발송 상태 — null 이면 외부 발송 대상 아님. */
+  externalStatus?: 'pending' | 'sent' | 'failed' | 'skipped' | null;
+  externalChannels?: Array<'email' | 'webhook'>;
+  externalError?: string | null;
   createdAt: string;
+}
+
+export interface UnreadCounts {
+  unread: number;
+  unreadWork: number;
+  unreadOps: number;
+}
+
+export interface MyNotificationsResponse extends UnreadCounts {
+  data: UserNotification[];
+}
+
+export interface NotificationHistoryResponse extends UnreadCounts {
+  data: UserNotification[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface NotificationEventChannels {
+  inapp: boolean;
+  email: boolean;
+  webhook: boolean;
+}
+
+export interface NotificationCatalogEntry {
+  type: string;
+  label: string;
+  category: NotificationCategory;
+  help: string;
+  defaults: NotificationEventChannels;
+}
+
+export interface NotificationEventPref extends NotificationEventChannels {
+  /** 알림 종류(snake_case 값 — 키가 아니라 값이라 인터셉터가 바꾸지 않는다). */
+  type: string;
+}
+
+export interface NotificationPrefs {
+  events: NotificationEventPref[];
+  digestMode: 'immediate' | 'daily';
+  digestHour: string;
+  quietStart?: string | null;
+  quietEnd?: string | null;
+  catalog: NotificationCatalogEntry[];
+  available: { email: boolean; webhook: boolean };
+  myEmail?: string | null;
+}
+
+export type NotificationPrefsInput = Pick<NotificationPrefs, 'events' | 'digestMode' | 'digestHour' | 'quietStart' | 'quietEnd'>;
+
+export interface NotificationDeliverySettings {
+  enabled: boolean;
+  emailChannelId: string | null;
+  webhookChannelId: string | null;
+  appBaseUrl: string;
+}
+
+export type WorkAlarmKind = 'overdue' | 'due_today' | 'due_tomorrow';
+
+export interface WorkAlarm {
+  id: string;
+  title?: string | null;
+  content?: string | null;
+  category: string;
+  type: string;
+  priority: string;
+  kanbanStatus: string;
+  kind: WorkAlarmKind;
+  /** 기준일(YYYY-MM-DD) — 마감일, 없으면 시작일. */
+  dueDate: string | null;
+  basis: 'due_date' | 'started_at';
+  overdueDays: number;
+}
+
+export interface MyWorkAlarms {
+  today: string;
+  overdue: WorkAlarm[];
+  dueToday: WorkAlarm[];
+  dueTomorrow: WorkAlarm[];
+  /** 오늘 숨긴(오늘 그만 보기) 라인 수 */
+  dismissed: number;
 }
 
 export interface WorkItemListResponse {
@@ -1838,8 +1934,8 @@ export interface Assignee {
   email?: string;
   ip?: string;
   seatLocation?: string;
-  primaryRole?: string;
-  secondaryRole?: string;
+  /** 담당 업무 — 예전 정/부 담당역할 두 칸을 하나로 합친 필드. */
+  duty?: string;
   // 로그인 계정 필드 — admin 으로 조회할 때만 채워진다(비-admin 응답에는 없음).
   id?: string;
   username?: string;
@@ -1850,7 +1946,14 @@ export interface Assignee {
 }
 
 /** 본인이 직접 수정할 수 있는 담당자 필드 (이름/사번은 admin 전용이라 제외). */
-export type SelfAssigneePatch = Pick<Assignee, 'email' | 'ip' | 'seatLocation' | 'primaryRole' | 'secondaryRole'>;
+export type SelfAssigneePatch = Pick<Assignee, 'email' | 'ip' | 'seatLocation' | 'duty'>;
+
+/** GET /ui-settings/assignees/me — 본인 행 + 필수 항목(이메일/IP/좌석) 등록 여부. */
+export interface MyAssigneeResponse {
+  data: Assignee;
+  profileComplete: boolean;
+  requiredFields: ('email' | 'ip' | 'seatLocation')[];
+}
 
 // Management Server
 export interface ManagementServer {
@@ -2323,6 +2426,43 @@ export interface KernelParamsCollectResponse {
   errors: string[];
 }
 
+// ── NIC 수집 (SSH, 서비스 구성 ▸ NIC 현재 값) ──────────────────────────────
+
+export interface NicCollectRequest {
+  hosts: string[];
+  /** host(IP) → 쿠버네티스 노드 이름. NIC 상태·스냅샷은 노드 이름으로 저장된다. */
+  hostNames?: Record<string, string>;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+}
+
+export interface NicCollectPerHost {
+  host: string;
+  node?: string;
+  status: string;
+  interfaceCount?: number;
+  warnings?: string[];
+  stored?: boolean;
+  error?: string;
+  rawStdout?: string;
+  rawStderr?: string;
+  exitCode?: number | null;
+}
+
+export interface NicCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: NicCollectPerHost[];
+  errors: string[];
+}
+
 // ── kubelet config 수집 (SSH) ────────────────────────────────────────────
 
 export interface KubeletConfigCollectRequest {
@@ -2624,49 +2764,6 @@ export interface ScriptTestRunResponse {
   exitCode?: number | null;
   durationMs: number;
   error?: string | null;
-}
-
-// ── MinIO / AIStor 수집 응답 ──────────────────────────────────────────
-export interface MinioCollectTenantSummary {
-  namespace: string | null;
-  name: string | null;
-  image: string | null;
-  version: string | null;
-  totalServers: number;
-  totalDrives: number;
-  drivesPerSet: number;
-  ecParity: number;
-  ecDataShards: number;
-  currentState: string | null;
-  healthStatus: string | null;
-  drivesOnline: number | null;
-  drivesOffline: number | null;
-}
-
-export interface MinioCollectDirectPVSummary {
-  totalDrives: number;
-  readyDrives: number;
-  totalCapacity: number;
-  nodeCount: number;
-}
-
-export interface MinioCollectOperatorSummary {
-  namespace: string | null;
-  name: string | null;
-  image: string | null;
-  version: string | null;
-}
-
-export interface MinioCollectResponse {
-  clusterId: string;
-  changed: number;
-  warnings: string[];
-  summary: {
-    operator: MinioCollectOperatorSummary | null;
-    tenants: MinioCollectTenantSummary[];
-    directpv: MinioCollectDirectPVSummary | null;
-  };
-  collectedAt: string;
 }
 
 // ── 노드 서버스펙 관리 대장 ────────────────────────────────────────────
@@ -4030,6 +4127,28 @@ export interface K8sResourceRow {
   ageSeconds?: number | null;
 }
 export interface K8sColumnDef { key: string; label: string }
+/** Namespaces 목록의 ResourceQuota 사용/한도 — `GET /k8s/{id}/namespace-quotas`. */
+export interface K8sQuotaUsageCell {
+  used: string;
+  hard: string;
+  /** used / hard (0~1+). hard 가 0 이면 null */
+  ratio: number | null;
+  /** 이 값을 정한 ResourceQuota 이름(같은 자원을 여러 quota 가 걸면 사용률이 가장 높은 것) */
+  quota: string;
+}
+export interface K8sNamespaceQuotaRow {
+  namespace: string;
+  quotaCount: number;
+  cells: Record<string, K8sQuotaUsageCell>;
+  maxRatio: number | null;
+}
+export interface K8sNamespaceQuotaResponse {
+  resources: K8sColumnDef[];
+  items: K8sNamespaceQuotaRow[];
+  truncated: boolean;
+  cache?: string | null;
+  cacheAgeSeconds?: number | null;
+}
 export interface K8sResourceListResponse {
   kind: string;
   columns?: K8sColumnDef[];
@@ -6653,9 +6772,9 @@ export interface ContainerdConfigCollectResponse {
 
 // ── 서비스 구성 (`/k8s/:clusterId/services`) ─────────────────────────────────
 /** 현재 값을 다시 읽는 수집 종류 — 화면의 '현재 값 수집' 이 여는 모달. */
-export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config';
+export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config' | 'nic';
 export type ServiceConfigRestartScope = 'immediate' | 'restart_member' | 'restart_service' | 'rolling_restart_ds' | 'reboot'
-  | 'restart_static_pod' | 'restart_kubelet';
+  | 'restart_static_pod' | 'restart_kubelet' | 'nic_queue_reset';
 export type ServiceConfigItemStatus = 'same' | 'differs' | 'mixed' | 'unknown';
 
 export interface ServiceConfigServiceDef {
@@ -6816,6 +6935,8 @@ export interface ServiceConfigApplyNodeResult {
   after: Record<string, string | null>;
   error: string | null;
   durationMs: number;
+  /** NIC — 적용은 됐지만 알아 둘 것(lacp_rate 재기동 후 반영·NM 미관리 런타임만 등). */
+  notes?: string[];
 }
 export interface ServiceConfigApplyRun {
   id: string;
@@ -6926,6 +7047,10 @@ export interface ServiceConfigApplySettings {
   kubeletConfig: string;
   kubeletService: string;
   kubeletRestartCmd: string;
+  nicEthtool: string;
+  nicRollbackTimerSec: number;
+  nicMemberWaitSec: number;
+  nicRejoinTimeoutSec: number;
 }
 
 // ── NIC 상태(서비스 구성 ▸ NIC, `/nic-watch`) ──
@@ -6972,6 +7097,7 @@ export interface NicRates {
   flaps: number;
   bondLinkFailures: number;
 }
+/** 목록 행(가벼운 형태) — 카운터·offload 전체·본딩 하위·경고는 `NicInterfaceDetail`(펼칠 때 따로 조회). */
 export interface NicInterfaceRow {
   node: string;
   name: string;
@@ -6987,28 +7113,32 @@ export interface NicInterfaceRow {
   vlanId: number | null;
   driver: { driver: string | null; version: string | null; firmware: string | null; bus: string | null } | null;
   ring: { rx: number | null; rxMax: number | null; tx: number | null; txMax: number | null } | null;
-  bond: NicBond | null;
+  bond: Omit<NicBond, 'slaveState'> | null;
   lacp: NicSlaveState | null;
   offload: { name: string; label: string; on: boolean }[];
+  rates: NicRates | null;
+  level: NicLevel;
+  /** 위험·확인 필요 경고 수. */
+  findingCount: number;
+}
+export interface NicInterfaceDetail extends Omit<NicInterfaceRow, 'bond' | 'findingCount'> {
+  bond: NicBond | null;
   features: { name: string; label: string; on: boolean; fixed: boolean }[];
   counters: { name: string; value: number }[];
-  rates: NicRates | null;
   findings: NicFinding[];
-  level: NicLevel;
 }
-export interface NicNodeInfo {
-  node: string;
-  hostIp: string | null;
-  agentVersion: string | null;
-  collectedAt: string | null;
-  receivedAt: string | null;
-  stale: boolean;
-  interfaceCount: number;
-  rateReady: boolean;
-  level: NicLevel;
+export interface NicViewQuery {
+  q?: string;
+  kind?: string;
+  onlyFlagged?: boolean;
+  offset?: number;
+  limit?: number;
 }
 export interface NicWatchSettings {
   enabled: boolean;
+  /** 서비스 구성 nic 설정 값을 읽을 대상 — 본딩과 그 하위(기본) | glob. */
+  targetMode: 'bond_members' | 'glob';
+  targetGlob: string[];
   includeKinds: string[];
   includeNames: string[];
   excludeNames: string[];
@@ -7044,10 +7174,14 @@ export interface NicObserved {
 }
 export interface NicOverrideSummary { clusterId: string; clusterName: string; fields: string[] }
 export interface NicClusterView {
-  nodes: NicNodeInfo[];
   interfaces: NicInterfaceRow[];
+  interfacesTotal: number;
+  offset: number;
+  limit: number;
+  /** 앞 300건(요약만 요청하면 5건). 전체 수는 `findingsTotal`. */
   findings: NicFinding[];
-  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel };
+  findingsTotal: number;
+  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel; latestReceivedAt: string | null };
   pendingAgents: { node: string; agentVersion: string | null; reason: string }[];
   agentCount: number;
   settings: NicWatchSettings;
@@ -7218,3 +7352,297 @@ export interface SshFavoriteCreate {
   runMode: SshFavoriteRunMode;
 }
 export type SshFavoriteUpdate = Partial<SshFavoriteCreate>;
+
+// ── 가입 신청 + 관리자 승인 (/auth/signup*) ───────────────────────────────
+export type SignupStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'withdrawn';
+
+/** 로그인 화면용 공개 설정 — 운영값(상한·보존 기간)은 싣지 않는다. */
+export interface SignupPublicConfig {
+  enabled: boolean;
+  minPasswordLength: number;
+  allowedEmailDomains: string[];
+  notice: string;
+}
+
+export interface SignupSubmitPayload {
+  username: string;
+  password: string;
+  displayName: string;
+  email: string;
+  department?: string;
+  reason?: string;
+  /** 봇용 숨김 필드(honeypot) — 사람은 비워 둔다. */
+  website?: string;
+}
+
+export interface SignupSettings {
+  enabled: boolean;
+  minPasswordLength: number;
+  allowedEmailDomains: string[];
+  pendingExpireDays: number;
+  retentionDays: number;
+  maxPending: number;
+  notice: string;
+  ldapEnabled: boolean;
+  oidcEnabled: boolean;
+}
+
+export interface SignupRequestItem {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string;
+  department: string | null;
+  reason: string | null;
+  status: SignupStatus;
+  requestIp: string | null;
+  userAgent: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  grantedRole: 'viewer' | 'operator' | null;
+  userId: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface SignupRequestList {
+  items: SignupRequestItem[];
+  counts: Record<SignupStatus, number>;
+}
+
+// ── 클러스터 점검 상태 요약 (/ops-checks/summary) — K8s 허브 점검 탭 결과가 원천 ──
+export type ClusterCheckLevel = 'healthy' | 'warning' | 'critical' | 'none';
+
+export interface ClusterCheckProblem {
+  source: OpsCheckSource;
+  itemRefId: string;
+  name: string;
+  status: 'warning' | 'critical';
+  lastRunAt: string | null;
+}
+
+export interface ClusterCheckSummary {
+  clusterId: string;
+  /** 점검 탭 항목 마지막 결과 중 가장 나쁜 값. 결과가 없으면 `none`. */
+  status: ClusterCheckLevel;
+  counts: Record<ClusterCheckLevel, number>;
+  total: number;
+  /** 경고·위험 항목 — 심각한 것부터. */
+  problems: ClusterCheckProblem[];
+}
+
+// ── Cilium 데이터패스 (`/k8s/:clusterId/cilium-datapath`) — Rust 노드 에이전트(pep-bpf-agent) 보고 ──────
+export type CiliumMapLevel = 'critical' | 'warning' | 'ok' | 'unknown';
+
+export interface CiliumBpfMap {
+  name: string;
+  group: string;
+  mapType: string;
+  maxEntries: number;
+  /** 센 항목 수 — 시간 예산이 남지 않아 세지 못했으면 null. */
+  entries: number | null;
+  /** 끝까지 세지 못함 — entries 는 하한. */
+  partial: boolean;
+  /** 같은 그룹(엔드포인트별 맵) 개수 — 이 맵은 그 중 가장 찬 맵. */
+  members: number;
+  elapsedMs: number;
+  pinned: boolean;
+  keySize: number;
+  valueSize: number;
+  error: string | null;
+  pct: number | null;
+  level: CiliumMapLevel;
+  label: string;
+  configKey: string | null;
+  note: string;
+  recommendation: string | null;
+}
+
+export interface CiliumBpfProgram {
+  name: string;
+  progType: string;
+  count: number;
+  tags: string[];
+  loadedAt: string | null;
+  runTimeNs: number | null;
+  runCnt: number | null;
+  diff: 'same' | 'changed' | 'new' | 'removed';
+}
+
+export interface CiliumBpfFeatures {
+  kernel?: string;
+  capBpf?: boolean;
+  capSysAdmin?: boolean;
+  capPerfmon?: boolean;
+  kernelCapBpf?: boolean;
+  kernelBatchOps?: boolean;
+  kernelDropReason?: boolean;
+  btf?: boolean;
+  bpfStatsEnabled?: boolean;
+  pinDirsFound?: string[];
+}
+
+export interface CiliumBpfAgent {
+  id: string;
+  node: string;
+  hostIp: string | null;
+  agentVersion: string | null;
+  state: 'reporting' | 'offline' | 'never';
+  lastSeenAt: string | null;
+  collectedAt: string | null;
+  collectMs: number | null;
+  features: CiliumBpfFeatures;
+  maps: CiliumBpfMap[];
+  mapsSkipped: number;
+  programs: CiliumBpfProgram[];
+  programsOther: number;
+  programsError: string | null;
+  baselineAt: string | null;
+  errors: string[];
+}
+
+export interface CiliumDatapathRun {
+  id: string;
+  clusterId: string;
+  kind: string;
+  status: 'running' | 'succeeded' | 'partial' | 'failed';
+  targetNodes: string[];
+  doneNodes: string[];
+  summary: { critical?: number; warning?: number; missing?: string[] };
+  requestedBy: string | null;
+  createdAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface CiliumDatapathView {
+  clusterId: string;
+  settings: {
+    warnPct: number;
+    critPct: number;
+    intervalSec: number;
+    sysAdmin: boolean;
+    alertsEnabled: boolean;
+    mapBudgetMs: number;
+    totalBudgetMs: number;
+    offlineMinutes: number;
+  };
+  columns: { group: string; label: string; configKey: string | null; known: boolean }[];
+  agents: CiliumBpfAgent[];
+  summary: { agents: number; reporting: number; critical: number; warning: number };
+  lastRun: CiliumDatapathRun | null;
+  tokenConfigured: boolean;
+}
+
+export interface CiliumDatapathSettings {
+  intervalSec: number;
+  mapBudgetMs: number;
+  totalBudgetMs: number;
+  warnPct: number;
+  critPct: number;
+  alertsEnabled: boolean;
+  pinDirs: string[];
+  mapPrefixes: string[];
+  programPrefixes: string[];
+  sysAdmin: boolean;
+  runTimeoutSec: number;
+  offlineMinutes: number;
+  agentImage: string;
+  agentNamespace: string;
+  ingestBaseUrl: string;
+  tlsVerify: boolean;
+  tokenConfigured: boolean;
+}
+
+export interface CiliumDatapathManifest {
+  yaml: string;
+  apiBaseUrl: string;
+  apiBaseUrlFromSettings: boolean;
+  tokenConfigured: boolean;
+  sysAdmin: boolean;
+}
+
+// ── 알람 등록 요청 (/alarm-requests) ─────────────────────────────────────────
+export type AlarmRequestStatus = 'requested' | 'reviewing' | 'approved' | 'applied' | 'rejected';
+export type AlarmSeverity = 'critical' | 'warning' | 'info';
+export type AlarmRequestActionKind = 'reviewing' | 'approved' | 'rejected' | 'applied';
+
+/** 카탈로그 기본 임계치 한 행 — JSON 키 `for` 는 그대로 쓴다. */
+export interface AlarmCatalogThreshold {
+  severity: AlarmSeverity;
+  expr: string;
+  for: string;
+}
+
+export interface AlarmCatalogItem {
+  id: number;
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  thresholds: AlarmCatalogThreshold[];
+  enabled: boolean;
+  updatedBy?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface AlarmCatalogItemInput {
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  thresholds: AlarmCatalogThreshold[];
+  enabled: boolean;
+}
+
+/** 요청 임계치 한 행 — 기본(카탈로그 값) / 수정(요청 값). */
+export interface AlarmRequestThreshold {
+  severity: AlarmSeverity;
+  baseExpr: string;
+  baseFor: string;
+  newExpr: string;
+  newFor: string;
+}
+
+export interface AlarmRequestHistoryEntry {
+  at: string;
+  by: string;
+  action: 'created' | 'updated' | AlarmRequestActionKind;
+  comment?: string | null;
+}
+
+export interface AlarmRequest {
+  id: number;
+  code: string;
+  status: AlarmRequestStatus;
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  catalogItemId?: number | null;
+  thresholds: AlarmRequestThreshold[];
+  clusters: { id: string; name: string; hidden: boolean }[];
+  note?: string | null;
+  requestedBy: string;
+  requesterName?: string | null;
+  reviewComment?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  appliedAt?: string | null;
+  history: AlarmRequestHistoryEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlarmRequestInput {
+  service: string;
+  metricName: string;
+  meaning: string;
+  catalogItemId?: number | null;
+  thresholds: AlarmRequestThreshold[];
+  clusterIds: string[];
+  note?: string | null;
+}
+
+export interface AlarmRequestMeta {
+  services: string[];
+  statuses: { key: AlarmRequestStatus; label: string }[];
+  severities: { key: AlarmSeverity; label: string }[];
+}

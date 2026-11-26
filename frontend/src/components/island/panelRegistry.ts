@@ -16,7 +16,6 @@ import { TodoTodayPage } from '@/pages/TodoTodayPage';
 import { SprintsPage } from '@/pages/SprintsPage';
 import { MemberBoardPage } from '@/pages/MemberBoardPage';
 import { ClusterManagePage } from '@/pages/ClusterManagePage';
-import { VersionsPage } from '@/pages/VersionsPage';
 import { BulkExecPage } from '@/pages/BulkExecPage';
 import { EtcdCtlPage } from '@/pages/EtcdCtlPage';
 import { BatchJobsPage } from '@/pages/BatchJobsPage';
@@ -34,6 +33,7 @@ import { K8sEventsPage } from '@/pages/K8sEventsPage';
 import { IncidentAnalysisPage } from '@/pages/IncidentAnalysisPage';
 import { PacketFlowPage } from '@/pages/PacketFlowPage';
 import { CiliumTracePage } from '@/pages/CiliumTracePage';
+import { CiliumDatapathPage } from '@/pages/CiliumDatapathPage';
 import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
 import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
@@ -76,7 +76,6 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/sprints': SprintsPage,
   '/members': MemberBoardPage,
   '/cluster-manage': ClusterManagePage,
-  '/versions': VersionsPage,
   '/bulk-exec': BulkExecPage,
   '/etcdctl': EtcdCtlPage,
   '/batch-jobs': BatchJobsPage,
@@ -94,6 +93,7 @@ export const PANEL_COMPONENTS: Record<string, ComponentType> = {
   '/incident-analysis': IncidentAnalysisPage,
   '/packet-flow': PacketFlowPage,
   '/cilium-trace': CiliumTracePage,
+  '/cilium-datapath': CiliumDatapathPage,
   '/service-topology': ServiceTopologyPage,
   '/service-architecture': ServiceArchitecturePage,
   '/architecture': ArchitecturePage,

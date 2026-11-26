@@ -1,4 +1,5 @@
-// 로그 새 창(팝업) — 자식을 브라우저 우측 상단에 띄운 별도 창으로 portal 한다.
+// 로그 새 창(팝업) — 자식을 앱 창의 1사분면(4등분했을 때 우측 상단 1/4)에 띄운 별도 창으로 portal 한다.
+// 작업 화면을 가리지 않게 기본 크기는 앱 화면의 가로·세로 절반이다(D-245).
 // 같은 React 트리라 실시간 로그(state 갱신)가 그대로 따라가고, 테마·스타일은 열 때 복사 + 변경을 계속 동기화한다.
 // 팝업이 차단되면 onBlocked 로 알려 호출 측이 화면 안 표시로 폴백한다.
 import { useEffect, useRef, useState } from 'react';
@@ -8,7 +9,9 @@ interface Props {
   /** 창 이름(같은 이름이면 같은 창을 재사용). */
   name: string;
   title: string;
+  /** 생략하면 앱 화면 너비의 절반(최소 MIN_W). */
   width?: number;
+  /** 생략하면 앱 화면 높이의 절반(최소 MIN_H). */
   height?: number;
   /** 사용자가 창을 닫았을 때. */
   onClose: () => void;
@@ -18,6 +21,10 @@ interface Props {
   focusKey?: number;
   children: React.ReactNode;
 }
+
+// 1/4 크기가 너무 작아 읽을 수 없는 좁은 화면용 하한.
+const MIN_W = 480;
+const MIN_H = 320;
 
 // 동시에 여러 로그 창이 열리면 같은 자리에 겹치지 않게 조금씩 비켜 놓는다.
 let openSlots = 0;
@@ -46,7 +53,7 @@ function syncRoot(src: HTMLElement, dst: HTMLElement) {
 }
 
 export function PopoutWindow({
-  name, title, width = 760, height = 640, onClose, onBlocked, focusKey, children,
+  name, title, width, height, onClose, onBlocked, focusKey, children,
 }: Props) {
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const winRef = useRef<Window | null>(null);
@@ -56,12 +63,15 @@ export function PopoutWindow({
   useEffect(() => {
     const slot = openSlots++;
     const offset = (slot % 6) * 32;
-    // 현재 브라우저 창의 우측 상단 기준(멀티 모니터에서도 앱 창 옆에 뜬다).
-    const left = Math.max(0, window.screenX + window.outerWidth - width - 24 - offset);
-    const top = Math.max(0, window.screenY + 72 + offset);
+    // 앱 화면(뷰포트)을 4등분한 1사분면 — 우측 상단 1/4 에 맞춘다(멀티 모니터에서도 앱 창 기준).
+    const w = Math.round(width ?? Math.max(MIN_W, window.innerWidth / 2));
+    const h = Math.round(height ?? Math.max(MIN_H, window.innerHeight / 2));
+    const chromeTop = Math.max(0, window.outerHeight - window.innerHeight); // 탭·주소창 높이
+    const left = Math.max(0, window.screenX + window.outerWidth - w - offset);
+    const top = Math.max(0, window.screenY + chromeTop + offset);
     const win = window.open(
       '', `pep-log-${name}`,
-      `popup=yes,width=${width},height=${height},left=${left},top=${top}`,
+      `popup=yes,width=${w},height=${h},left=${Math.round(left)},top=${Math.round(top)}`,
     );
     if (!win) {
       openSlots = Math.max(0, openSlots - 1);

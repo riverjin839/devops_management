@@ -73,8 +73,8 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             description=(
                 "kubeadm certs check-expiration 으로 컨트롤 플레인 인증서 잔여일 점검. "
                 "kube-apiserver 파드 이미지는 distroless(쉘 없음)라 pod exec 이 실패하는 "
-                "경우가 흔하다 — '버전/설정 관리(/versions)' 화면의 'K8s 인증서(kubeadm)' "
-                "버튼으로 SSH 수집한 스냅샷을 쓰려면 source 를 snapshot(또는 auto 폴백)으로."
+                "경우가 흔하다 — 점검 매트릭스 셀 ▸ 실행 방식 탭의 'SSH 로 지금 수집'(K8s 인증서 kubeadm)"
+                "으로 SSH 수집한 스냅샷을 쓰려면 source 를 snapshot(또는 auto 폴백)으로."
             ),
             threshold_fields=[
                 DeepCheckFieldSpec("warning_days", "int", "경고 (일)", 30,
@@ -86,7 +86,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
                 DeepCheckFieldSpec("source", "string", "실행 경로 (auto|pod|snapshot)", "auto",
                                    help="auto: pod exec 시도 후 없거나 실패하면 수집 스냅샷 폴백 / "
                                         "pod: kubectl exec 전용(대부분 distroless 이미지에서 실패) / "
-                                        "snapshot: /versions 에서 SSH 로 수집한 kubeadm_certs 스냅샷만 사용"),
+                                        "snapshot: 실행 방식 탭 'SSH 로 지금 수집'이 남긴 kubeadm_certs 스냅샷만 사용"),
                 DeepCheckFieldSpec("snapshot_max_age_hours", "int", "스냅샷 허용 나이 (시간)", 24,
                                    help="수집 시각이 이보다 오래되면 판정하지 않고 대기(pending) 처리"),
             ],
@@ -102,8 +102,8 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             exec_tech="kubectl",
             description=(
                 "etcdctl endpoint status + alarm list 로 단편화율과 alarm 점검. "
-                "파드형 etcd 는 pod exec, 데몬(systemd) etcd 는 '버전/설정 관리' 화면에서 "
-                "수집한 etcdctl_config 스냅샷으로 점검(auto 는 pod → 스냅샷 폴백)."
+                "파드형 etcd 는 pod exec, 데몬(systemd) etcd 는 SSH 로 "
+                "수집한 etcdctl_config 스냅샷(collect-etcdctl-config)으로 점검(auto 는 pod → 스냅샷 폴백)."
             ),
             threshold_fields=[
                 DeepCheckFieldSpec("warning_fragmentation_pct", "float", "단편화 경고 (%)", 30),
@@ -112,7 +112,7 @@ REGISTRY: dict[str, tuple[type[DeepCheckerBase], DeepCheckTypeSpec]] = {
             param_fields=[
                 DeepCheckFieldSpec("source", "string", "실행 경로 (auto|pod|snapshot)", "auto",
                                    help="auto: pod 탐색 후 없으면 수집 스냅샷 폴백 / pod: 파드형 etcd 전용 / "
-                                        "snapshot: 데몬(systemd) etcd — /versions 에서 수집한 스냅샷만 사용"),
+                                        "snapshot: 데몬(systemd) etcd — SSH 로 수집한 etcdctl_config 스냅샷만 사용"),
                 DeepCheckFieldSpec("snapshot_max_age_hours", "int", "스냅샷 허용 나이 (시간)", 24,
                                    help="수집 시각이 이보다 오래되면 판정하지 않고 대기(pending) 처리"),
             ],

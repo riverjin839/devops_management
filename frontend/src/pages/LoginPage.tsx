@@ -6,6 +6,7 @@ import { Loader2, LogIn, Clock, KeyRound, ShipWheel, ShieldCheck, AlertCircle } 
 import { authApi } from '@/services/api';
 import { useAuthStore, consumeReturnTo } from '@/stores/authStore';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
+import { SignupForm } from '@/components/auth/SignupForm';
 import type { TranslationResource } from '@/i18n/resources/ko';
 
 /** SSO 콜백 경로 — 미로그인 상태에서는 AuthGate 가 어느 경로든 이 화면을 그리므로 여기서 분기한다. */
@@ -48,6 +49,8 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // 가입 신청 폼 — 미로그인 상태에선 AuthGate 가 어느 경로든 이 화면을 그리므로 라우트가 아니라 화면 상태로 전환한다.
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
 
   const fid = useId();
   const f = (k: string) => `${fid}-${k}`;
@@ -56,6 +59,13 @@ function LoginForm() {
   const { data: sso } = useQuery({
     queryKey: ['auth', 'oidc-config'],
     queryFn: async () => (await authApi.oidcConfig()).data,
+    staleTime: 60_000,
+    retry: false,
+  });
+  // 가입 신청 창구 — 관리자가 켰을 때만 링크를 그린다(조회 실패 = 닫힘).
+  const { data: signupCfg } = useQuery({
+    queryKey: ['auth', 'signup-config'],
+    queryFn: async () => (await authApi.signupConfig()).data,
     staleTime: 60_000,
     retry: false,
   });
@@ -130,6 +140,13 @@ function LoginForm() {
           </div>
         )}
 
+        {mode === 'signup' && signupCfg?.enabled ? (
+          <SignupForm
+            config={signupCfg}
+            onBack={(u) => { setMode('login'); setError(null); if (u) { setUsername(u); setPassword(''); } }}
+          />
+        ) : (
+        <>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor={f('username')} className="block text-sm font-medium mb-1">{t('login.username')}</label>
@@ -190,6 +207,21 @@ function LoginForm() {
               {t('login.sso', { name: sso.displayName })}
             </a>
           </>
+        )}
+
+        {signupCfg?.enabled && (
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            {t('login.signup.cta')}{' '}
+            <button
+              type="button"
+              onClick={() => { setMode('signup'); setError(null); }}
+              className="font-medium text-primary hover:underline rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+            >
+              {t('login.signup.link')}
+            </button>
+          </p>
+        )}
+        </>
         )}
 
         {/* D-069 — 버전은 package.json 이 원천(vite define). 도움말·지원 진입점은 D-077 에서

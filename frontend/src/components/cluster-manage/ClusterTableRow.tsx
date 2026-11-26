@@ -11,7 +11,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { formatApiError, formatRelativeTime } from '@/lib/utils';
 import { useClusterIconSrc } from '@/hooks/useClusterIconSrc';
-import { STATUS_STYLE } from './constants';
+import { useClusterCheckSummaries } from '@/hooks/useOpsCheck';
+import { ClusterCheckIcon } from '@/components/common/ClusterCheckIcon';
 import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor } from '@/hooks/useOperationLevels';
 import { ClusterCustomCell } from './ClusterCustomCell';
 import { extractInterfaceIps, extractInternalIps, groupInternalIps, parseNodeIps } from './internalIp';
@@ -127,7 +128,9 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
   const resolvedIcon = useClusterIconSrc(cluster, { monogramFallback: true });
   const iconIsAuto = !cluster.icon && !cluster.iconConfig;
   const FallbackIcon = Server;
-  const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
+  // 상태는 K8s 허브 점검 탭 결과가 원천 — 글자 라벨 없이 아이콘, 누르면 점검 탭의 문제 항목.
+  const { byId: checkSummary } = useClusterCheckSummaries();
+  const summary = checkSummary.get(cluster.id);
   const { data: opsLevels } = useOperationLevels();
   const lv = cluster.operationLevel ? levelBadgeClass(levelColor(opsLevels, cluster.operationLevel)) : undefined;
   const lvStyle = cluster.operationLevel ? levelBadgeStyle(opsLevels, cluster.operationLevel) : undefined;
@@ -162,8 +165,8 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
               <GripVertical className="w-3.5 h-3.5" />
             </button>
           )}
-          {/* 상태 컬럼을 숨겨도 상태를 읽을 수 있게 점에 이름을 붙인다(색만으로 전달하지 않음) */}
-          <span role="img" aria-label={`상태: ${st.label}`} title={`상태: ${st.label}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+          {/* 상태 컬럼을 숨겨도 이름 옆 아이콘으로 읽힌다(모양·툴팁으로 전달 — 색만으로 전달하지 않음) */}
+          {!colVisible('status') && <ClusterCheckIcon clusterId={cluster.id} summary={summary} />}
           {/* 현재 아이콘 표시 (읽기 전용) — 변경은 시스템 → 설정 → 클러스터 탭에서 */}
           <span
             ref={iconAnchorRef}
@@ -195,7 +198,7 @@ export function ClusterTableRow({ cluster, onEdit, onDelete, deletingId, overlap
       </td>
       {colVisible('status') && (
       <td className="px-3 py-2.5 overflow-hidden">
-        <span className={`text-xs px-2 py-0.5 rounded-full border ${st.badge}`}>{st.label}</span>
+        <ClusterCheckIcon clusterId={cluster.id} summary={summary} />
       </td>
       )}
 
