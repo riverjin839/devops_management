@@ -47,6 +47,8 @@ export function useHomeWorkItems() {
 function invalidateWorkItemQueries(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: workItemKeys.all });
   queryClient.invalidateQueries({ queryKey: ['items', 'today'] });
+  // 업무 일정 알람(알림 종) — 완료·마감일 변경이 바로 반영되게.
+  queryClient.invalidateQueries({ queryKey: ['myWorkAlarms'] });
 }
 
 export function useCreateWorkItem() {
@@ -165,5 +167,17 @@ export function useDeleteTimeBlock() {
   return useMutation({
     mutationFn: (blockId: string) => workItemsApi.deleteTimeBlock(blockId),
     onSuccess: invalidate,
+  });
+}
+
+/** 업무 구독(watch) 켜기/끄기 — 담당자가 아니어도 댓글·상태 변경 알림을 받는다. */
+export function useToggleWatchWorkItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, watch }: { id: string; watch: boolean }) =>
+      (watch ? workItemsApi.watch(id) : workItemsApi.unwatch(id)).then((r) => r.data),
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: workItemKeys.detail(id) });
+    },
   });
 }

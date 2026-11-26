@@ -677,6 +677,8 @@ export interface WorkItem {
   jiraStatus?: string | null;
   jiraSyncedAt?: string | null;
   jiraWatchers?: string[] | null;
+  /** 구독자 username — 담당자가 아니어도 댓글·상태 변경 알림을 받는다. */
+  watchers?: string[] | null;
   /** Jira 원본 항목 — 게시판 표를 Jira 와 같은 축으로 보여주기 위한 읽기 전용 필드.
    *  task = Epic, sub task = Epic 아래 이슈 매핑 기준. */
   jiraIssueType?: string | null;
@@ -1156,15 +1158,109 @@ export interface WorkItemActivity {
   createdAt: string;
 }
 
+export type NotificationCategory = 'work' | 'ops';
+
 export interface UserNotification {
   id: string;
   type: string;
+  /** 알림 종류 표시명(예: '멘션', '알람') — 서버 EVENT_CATALOG. */
+  typeLabel?: string;
+  /** work = 업무 탭, ops = 운영 탭 */
+  category: NotificationCategory;
   title: string;
   body?: string | null;
   link?: string | null;
   workItemId?: string | null;
   isRead: boolean;
+  readAt?: string | null;
+  /** 외부 채널(메일·메신저) 발송 상태 — null 이면 외부 발송 대상 아님. */
+  externalStatus?: 'pending' | 'sent' | 'failed' | 'skipped' | null;
+  externalChannels?: Array<'email' | 'webhook'>;
+  externalError?: string | null;
   createdAt: string;
+}
+
+export interface UnreadCounts {
+  unread: number;
+  unreadWork: number;
+  unreadOps: number;
+}
+
+export interface MyNotificationsResponse extends UnreadCounts {
+  data: UserNotification[];
+}
+
+export interface NotificationHistoryResponse extends UnreadCounts {
+  data: UserNotification[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface NotificationEventChannels {
+  inapp: boolean;
+  email: boolean;
+  webhook: boolean;
+}
+
+export interface NotificationCatalogEntry {
+  type: string;
+  label: string;
+  category: NotificationCategory;
+  help: string;
+  defaults: NotificationEventChannels;
+}
+
+export interface NotificationEventPref extends NotificationEventChannels {
+  /** 알림 종류(snake_case 값 — 키가 아니라 값이라 인터셉터가 바꾸지 않는다). */
+  type: string;
+}
+
+export interface NotificationPrefs {
+  events: NotificationEventPref[];
+  digestMode: 'immediate' | 'daily';
+  digestHour: string;
+  quietStart?: string | null;
+  quietEnd?: string | null;
+  catalog: NotificationCatalogEntry[];
+  available: { email: boolean; webhook: boolean };
+  myEmail?: string | null;
+}
+
+export type NotificationPrefsInput = Pick<NotificationPrefs, 'events' | 'digestMode' | 'digestHour' | 'quietStart' | 'quietEnd'>;
+
+export interface NotificationDeliverySettings {
+  enabled: boolean;
+  emailChannelId: string | null;
+  webhookChannelId: string | null;
+  appBaseUrl: string;
+}
+
+export type WorkAlarmKind = 'overdue' | 'due_today' | 'due_tomorrow';
+
+export interface WorkAlarm {
+  id: string;
+  title?: string | null;
+  content?: string | null;
+  category: string;
+  type: string;
+  priority: string;
+  kanbanStatus: string;
+  kind: WorkAlarmKind;
+  /** 기준일(YYYY-MM-DD) — 마감일, 없으면 시작일. */
+  dueDate: string | null;
+  basis: 'due_date' | 'started_at';
+  overdueDays: number;
+}
+
+export interface MyWorkAlarms {
+  today: string;
+  overdue: WorkAlarm[];
+  dueToday: WorkAlarm[];
+  dueTomorrow: WorkAlarm[];
+  /** 오늘 숨긴(오늘 그만 보기) 라인 수 */
+  dismissed: number;
 }
 
 export interface WorkItemListResponse {

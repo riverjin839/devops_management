@@ -30,3 +30,4 @@ export {
   WORK_ITEM_TYPE_CONFIG,
   WORK_ITEM_TYPE_ORDER,
 } from './workItemKanbanUtils';
+export { WatchButton } from './WatchButton';

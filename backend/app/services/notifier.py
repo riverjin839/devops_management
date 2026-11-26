@@ -44,9 +44,10 @@ def _rank(status: StatusEnum | str | None) -> int:
 # ───────────────────────────────────────────────────────────────
 
 class _BaseChannel:
-    def __init__(self, channel: NotificationChannel):
+    def __init__(self, channel: NotificationChannel, override: dict[str, Any] | None = None):
         self.channel = channel
-        self.config: dict[str, Any] = channel.config or {}
+        # override — 개인 알림 발송처럼 채널 설정은 그대로 쓰고 받는 사람(`to`)·추가 필드만 바꿀 때.
+        self.config: dict[str, Any] = {**(channel.config or {}), **(override or {})}
 
     def send(self, subject: str, body: str) -> tuple[str, str | None]:
         """Return (status, error). status: sent | failed."""
@@ -107,6 +108,10 @@ class WebhookChannel(_BaseChannel):
             return "failed", "no url configured"
         headers = self.config.get("headers") or {}
         payload = self.config.get("template") or {"subject": subject, "body": body}
+        extra = self.config.get("extra_payload")
+        if isinstance(extra, dict) and isinstance(payload, dict):
+            # 개인 알림(메신저) — 받는 사람 식별자(username·사번·메일)를 함께 보내 수신 측이 1:1 로 전달한다.
+            payload = {**payload, **extra, "subject": payload.get("subject", subject), "body": payload.get("body", body)}
         try:
             with httpx.Client(timeout=10) as cli:
                 resp = cli.post(url, json=payload, headers=headers)
@@ -168,13 +173,14 @@ def send_via_channel(
     subject: str,
     body: str,
     daily_check_log_id: UUID | str | None = None,
+    config_override: dict[str, Any] | None = None,
 ) -> NotificationLog:
     cls = _CHANNEL_MAP.get(channel.channel_type)
     if cls is None:
         status, error = "failed", f"unknown channel type {channel.channel_type}"
     else:
         try:
-            status, error = cls(channel).send(subject, body)
+            status, error = cls(channel, config_override).send(subject, body)
         except Exception as e:
             status, error = "failed", str(e)[:300]
 
