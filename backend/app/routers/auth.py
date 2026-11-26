@@ -35,6 +35,7 @@ from app.services import command_trace
 from app.services import audit_logger
 from app.services import ldap_service
 from app.services import login_rate_limiter
+from app.services import signup_service
 from app.services.ldap_service import LdapError, LdapIdentity
 
 logger = logging.getLogger("k8s_monitor.auth")
@@ -260,6 +261,14 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
                 details["detail"] = ldap_detail[:300]
         else:
             details = {"reason": last["reason"]}
+        if user is None:
+            # 계정이 없는 아이디 — 그 아이디의 가입 신청과 비밀번호가 맞으면 승인 대기·거절·만료를 알려 준다.
+            # 비밀번호가 일치할 때만 답하므로 신청 여부를 캐는 경로가 되지 않고, 본인 확인이 된 시도라
+            # 레이트리밋 실패로 세지 않는다(승인을 기다리며 몇 번 시도해도 잠기지 않게).
+            hint = signup_service.login_status_hint(db, payload.username, payload.password)
+            if hint is not None:
+                _login_failure_audit(db, request, payload.username, None, {"reason": f"signup_{hint[0]}"})
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=hint[1])
         _login_failure_audit(db, request, payload.username, user, details)
         # 디렉터리 쪽 인프라 실패뿐이라면(자격증명은 확인조차 못 했다) 401 이 아니라 503 — 사용자가
         # 비밀번호를 틀렸다고 오해하지 않게 하고, 레이트리밋 실패 카운트에도 넣지 않는다.

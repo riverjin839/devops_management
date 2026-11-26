@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmProfile, LlmProfileModels, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult } from '@/types';
+import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmProfile, LlmProfileModels, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult, SignupPublicConfig, SignupSubmitPayload, SignupSettings, SignupRequestList, SignupRequestItem, SignupStatus, ClusterCheckSummary } from '@/types';
 import { currentRequestOwner, OWNER_FIELD, publishFromResponse } from '@/lib/commandTrace';
 import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
@@ -210,6 +210,22 @@ export const authApi = {
     api.put<AuthUser>(`/auth/users/${id}/role`, { role }),
   resetPassword: (id: string, newPassword: string) =>
     api.post<AuthUser>(`/auth/users/${id}/password`, { newPassword }),
+
+  // ── 가입 신청 + 관리자 승인 — 설정 원천은 AppSetting `auth.signup`(Settings ▸ 가입 신청). ──
+  /** 로그인 화면의 "가입 신청" 노출 여부·폼 정책(public). */
+  signupConfig: () => api.get<SignupPublicConfig>('/auth/signup/config'),
+  /** 신청 접수(public, 202) — 계정은 관리자 승인 때 만들어진다. */
+  submitSignup: (payload: SignupSubmitPayload) =>
+    api.post<{ ok: boolean; detail: string }>('/auth/signup', payload),
+  signupSettings: () => api.get<SignupSettings>('/auth/signup/settings'),
+  updateSignupSettings: (payload: Partial<Omit<SignupSettings, 'ldapEnabled' | 'oidcEnabled'>>) =>
+    api.put<SignupSettings>('/auth/signup/settings', payload),
+  listSignupRequests: (status: SignupStatus | 'all') =>
+    api.get<SignupRequestList>('/auth/signup/requests', { params: { status } }),
+  approveSignup: (id: string, role: 'viewer' | 'operator', note?: string) =>
+    api.post<SignupRequestItem>(`/auth/signup/requests/${id}/approve`, { role, note: note || null }),
+  rejectSignup: (id: string, note?: string) =>
+    api.post<SignupRequestItem>(`/auth/signup/requests/${id}/reject`, { note: note || null }),
 
   // ── 사내 IdP SSO(OIDC) — R-7. 설정 원천은 AppSetting `auth.oidc`(Settings ▸ 접근 제어). ──
   /** 로그인 화면 버튼 노출 여부(public) — enabled·displayName 만. */
@@ -2486,6 +2502,8 @@ export const observabilityApi = {
 export const opsCheckApi = {
   catalog: (clusterId: string) =>
     api.get<OpsCheckCatalogItem[]>(`/ops-checks/catalog/${clusterId}`),
+  /** 볼 수 있는 클러스터별 점검 탭 상태 요약 — 클러스터 상태 아이콘의 원천. */
+  summary: () => api.get<ClusterCheckSummary[]>('/ops-checks/summary'),
   run: (clusterId: string, items: OpsCheckRunRequestItem[]) =>
     api.post<OpsCheckRun>('/ops-checks/run', { clusterId, items }),
   getRun: (runId: string) => api.get<OpsCheckRun>(`/ops-checks/runs/${runId}`),

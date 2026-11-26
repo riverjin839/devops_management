@@ -44,6 +44,20 @@ _ADDON_CATEGORY = {
 }
 
 
+# 점검 결과 값 → 상태 아이콘 단계. 프론트 ``statusToVariant`` 와 같은 대응(소스마다 값 어휘가 다르다).
+_SUMMARY_LEVEL = {
+    "healthy": "healthy", "ok": "healthy", "success": "healthy",
+    "warning": "warning", "timeout": "warning",
+    "critical": "critical", "error": "critical", "failed": "critical",
+    "auth_error": "critical", "connect_error": "critical",
+}
+
+
+def summary_level(status: Any) -> str:
+    """마지막 판정 → ``healthy|warning|critical|none``(미실행·실행 중·알 수 없음은 ``none``)."""
+    return _SUMMARY_LEVEL.get(str(status or "").lower(), "none")
+
+
 def _deep_check_category(check_type: str) -> str:
     try:
         from app.services.registered_checks import REGISTRY
@@ -118,6 +132,38 @@ class OpsCheckService:
         items.extend(self._catalog_batch_jobs(cluster_id))
         items.extend(self._catalog_playbooks(cluster_id))
         return items
+
+    def summarize(self, cluster_id: str | UUID) -> dict[str, Any]:
+        """점검 탭(카탈로그)의 마지막 결과로 클러스터 상태를 낸다 — 허브·사이드바의 상태 아이콘이 쓴다.
+
+        탭에 보이는 항목 그대로(활성·비활성 모두) 마지막 판정을 정상/경고/위험으로 접고, 가장 나쁜 값을
+        클러스터 상태로 삼는다. 결과가 하나도 없으면 ``none``. 문제 항목은 심각한 것부터 돌려준다.
+        """
+        items = self.build_catalog(cluster_id)
+        counts = {"healthy": 0, "warning": 0, "critical": 0, "none": 0}
+        problems: list[dict[str, Any]] = []
+        for it in items:
+            level = summary_level(it.get("last_status"))
+            counts[level] += 1
+            if level in ("warning", "critical"):
+                problems.append({
+                    "source": it["source"],
+                    "item_ref_id": it["item_ref_id"],
+                    "name": it.get("name") or it.get("check_type") or it["item_ref_id"],
+                    "status": level,
+                    "last_run_at": it.get("last_run_at"),
+                })
+        problems.sort(key=lambda p: (0 if p["status"] == "critical" else 1, p["name"]))
+        if counts["critical"]:
+            status = "critical"
+        elif counts["warning"]:
+            status = "warning"
+        elif counts["healthy"]:
+            status = "healthy"
+        else:
+            status = "none"
+        return {"cluster_id": str(cluster_id), "status": status, "counts": counts, "total": len(items),
+                "problems": problems}
 
     def _catalog_deep_checks(self, cluster_id: str | UUID) -> list[dict[str, Any]]:
         try:

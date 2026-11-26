@@ -79,6 +79,7 @@ from app.routers import (
     auth_router,
     auth_oidc_router,
     auth_ldap_router,
+    auth_signup_router,
     audit_logs_router,
     system_errors_router,
     system_diagnostics_router,
@@ -2829,6 +2830,8 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(auth_oidc_router, prefix="/api/v1")
 # 사내 디렉터리(LDAP/AD) 설정 — 로그인은 /auth/login 이 처리하고, 이 라우터의 설정·연결 확인은 엔드포인트가 require_admin.
 app.include_router(auth_ldap_router, prefix="/api/v1")
+# 로그인 화면 가입 신청 — 신청 접수·공개 설정만 public, 설정·목록·승인·거절은 엔드포인트가 require_admin.
+app.include_router(auth_signup_router, prefix="/api/v1")
 app.include_router(health_router, prefix="/api/v1")
 # Super pod ingest 는 bearer 토큰만 자체 검증 — JWT 의존성 없음.
 app.include_router(check_ingest_router, prefix="/api/v1")

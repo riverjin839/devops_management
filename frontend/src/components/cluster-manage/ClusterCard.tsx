@@ -4,6 +4,8 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { MacCard } from '@/components/ui/MacCard';
 import type { Cluster } from '@/types';
 import { useCanOperate } from '@/hooks/useCanOperate';
+import { useClusterCheckSummaries } from '@/hooks/useOpsCheck';
+import { ClusterCheckIcon } from '@/components/common/ClusterCheckIcon';
 import { STATUS_STYLE, OVERLAP_COLORS } from './constants';
 import { useOperationLevels, levelBadgeClass, levelBadgeStyle, levelLabel, levelColor, levelIcon } from '@/hooks/useOperationLevels';
 import { CidrRow } from './CidrRow';
@@ -40,7 +42,10 @@ interface ClusterCardProps {
 export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGroupIdx, overlapPeers, onAutoUpdate, onVerify, verifying = false, autoUpdating, onCollectNics, onCilium, canEdit = true }: ClusterCardProps) {
   const [tab, setTab] = useState<CardTab>('node');
   const tabId = useId();
-  const st = STATUS_STYLE[cluster.status] ?? STATUS_STYLE.pending;
+  // 상태는 K8s 허브 점검 탭 결과가 원천(글자 라벨 없이 아이콘, 누르면 점검 탭의 문제 항목).
+  const { byId: checkSummary } = useClusterCheckSummaries();
+  const summary = checkSummary.get(cluster.id);
+  const st = STATUS_STYLE[summary?.status === 'warning' || summary?.status === 'critical' ? summary.status : 'healthy'];
   const { data: opsLevels } = useOperationLevels();
   // 테넌트 바인딩은 클러스터마다 다르다 — 역할은 있어도 이 클러스터에 operate 가 없으면 비활성 + 사유.
   const { canOperate, withHint, ariaWithHint } = useCanOperate(cluster.id);
@@ -83,11 +88,10 @@ export function ClusterCard({ cluster, onEdit, onDelete, deletingId, overlapGrou
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
-              <span role="img" aria-label={`상태: ${st.label}`} title={`상태: ${st.label}`} className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
+              <ClusterCheckIcon clusterId={cluster.id} summary={summary} className="-ml-1" />
               <h3 className="text-sm font-bold truncate">{cluster.name}</h3>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className={`text-xs px-1.5 py-0.5 rounded-full ${st.badge}`}>{st.label}</span>
               {cluster.operationLevel && (
                 <span
                   className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border ${levelBadgeClass(levelColor(opsLevels, cluster.operationLevel))}`}

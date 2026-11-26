@@ -64,6 +64,11 @@ def _incr_and_check(key: str, max_count: int, window_seconds: int) -> tuple[bool
         return True, 0
 
 
+def incr_window(key: str, max_count: int, window_seconds: int) -> tuple[bool, int]:
+    """다른 공개 엔드포인트(가입 신청 등)용 시간 창 카운터 — 같은 Redis·같은 fail-open 규칙."""
+    return _incr_and_check(key, max_count, window_seconds)
+
+
 def check_login_allowed(ip: str, username: str) -> tuple[bool, str | None]:
     """로그인 시도 전 호출. (허용여부, 거부 사유) 반환 — 카운터는 실패 시에만 증가하므로
     여기서는 현재 카운터 값만 조회(증가 없이)한다."""

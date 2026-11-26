@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, DatabaseZap, Boxes, Layers, Lock, Home, Palette, FileSearch, ServerCrash, Stethoscope, Wand2, Bot, Ticket, Users, KeyRound, CheckCircle2, XCircle, Check, X } from 'lucide-react';
+import { Settings as SettingsIcon, Server, Pencil, Trash2, Plus, Globe, ShieldCheck, AlertTriangle, Loader2, Eye, MonitorDot, Wifi, WifiOff, HelpCircle, UserCheck, Bug, HardDrive, DatabaseZap, Boxes, Layers, Lock, Home, Palette, FileSearch, ServerCrash, Stethoscope, Wand2, Bot, Ticket, Users, KeyRound, UserPlus, CheckCircle2, XCircle, Check, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MacCard } from '@/components/ui/MacCard';
 import { LogDisplaySetting } from '@/components/settings/LogDisplaySetting';
@@ -24,6 +24,7 @@ import { ThemeGallery } from '@/components/settings/ThemeGallery';
 import { DensitySettings } from '@/components/settings/DensitySettings';
 import { TerminalAppearanceSettings } from '@/components/settings/TerminalAppearanceSettings';
 import { AssigneeManager } from '@/components/settings/AssigneeManager';
+import { SignupRequestsPanel } from '@/components/settings/SignupRequestsPanel';
 import { AuditLogManager } from '@/components/settings/AuditLogManager';
 import { SystemErrorManager } from '@/components/settings/SystemErrorManager';
 import { SystemDiagnosticsPanel } from '@/components/settings/SystemDiagnosticsPanel';
@@ -399,7 +400,7 @@ function ClusterIconButton({ cluster, onClick }: { cluster: Cluster; onClick: (e
 // 탭 id 는 외부 딥링크(`/settings?tab=…` — App.tsx `/settings/users`→assignee,
 // ClusterManagePage → cluster)가 쓰므로 바꾸지 않는다. 그룹·순서·라벨만 여기서 정한다.
 
-type TabId = 'cluster' | 'server' | 'assignee' | 'operations' | 'mgmt-service' | 'access' | 'tenant' | 'cluster-access' | 'debug' | 'backup' | 'jira' | 'servicenow' | 'screen-ui' | 'audit-log' | 'server-errors' | 'diagnostics' | 'schema' | 'ai-llm';
+type TabId = 'cluster' | 'server' | 'assignee' | 'signup' | 'operations' | 'mgmt-service' | 'access' | 'tenant' | 'cluster-access' | 'debug' | 'backup' | 'jira' | 'servicenow' | 'screen-ui' | 'audit-log' | 'server-errors' | 'diagnostics' | 'schema' | 'ai-llm';
 
 const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; icon: LucideIcon }[] }[] = [
   {
@@ -415,6 +416,7 @@ const TAB_GROUPS: { label: string; tabs: { id: TabId; label: string; icon: Lucid
     label: '사용자·접근',
     tabs: [
       { id: 'assignee', label: '시스템 담당자', icon: UserCheck },
+      { id: 'signup', label: '가입 신청', icon: UserPlus },
       { id: 'access', label: '접근 제어', icon: Lock },
       { id: 'tenant', label: '테넌트', icon: Users },
       { id: 'cluster-access', label: '클러스터 권한', icon: KeyRound },
@@ -1334,6 +1336,7 @@ export function SettingsPage() {
             (모델 docstring 참고) 더 이상 서브탭으로 나눌 필요가 없다. 구 사이드바 독립
             "사용자 관리" 페이지도 여기로 통합됐다. */}
         {activeTab === 'assignee' && <AssigneeManager />}
+        {activeTab === 'signup' && <SignupRequestsPanel />}
 
         {/* 디버그 탭: 대시보드 별 상세 로그 토글 */}
         {activeTab === 'debug' && (

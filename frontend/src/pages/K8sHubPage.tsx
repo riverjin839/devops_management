@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Lock, ShipWheel } from 'lucide-react';
-import { PageHeader, PageShell, EmptyState, ErrorState, LoadingState, SelectClusterEmptyState, StatusBadge, statusToVariant } from '@/components/common';
+import { PageHeader, PageShell, EmptyState, ErrorState, LoadingState, SelectClusterEmptyState, ClusterCheckIcon } from '@/components/common';
 import { HubTabs, HubClusterSwitcher, HUB_VIEWS, DEFAULT_HUB_VIEW, RETIRED_HUB_VIEWS, findHubView, hubViewAllowed } from '@/components/k8s-hub';
 import { useClusters } from '@/hooks/useCluster';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
+import { useClusterCheckSummaries } from '@/hooks/useOpsCheck';
 import { K8sHubContext, type K8sHubEmbed } from '@/lib/k8sHub';
 
 /**
@@ -30,6 +31,8 @@ export function K8sHubPage() {
   const location = useLocation();
   const { data: clusters = [], isLoading, isError, error, refetch } = useClusters();
   const { featureAllowed, getLabel } = useNavCatalog();
+  // 클러스터 상태 아이콘 — 점검 탭 결과가 원천(글자 라벨 없음, 누르면 점검 탭의 문제 항목).
+  const { byId: checkSummary } = useClusterCheckSummaries();
 
   const viewId = viewParam ?? DEFAULT_HUB_VIEW;
   const allowedViews = useMemo(() => HUB_VIEWS.filter((v) => hubViewAllowed(v, featureAllowed)), [featureAllowed]);
@@ -72,7 +75,7 @@ export function K8sHubPage() {
             title={cluster ? cluster.name : getLabel('/k8s')}
             titleExtra={
               <span className="inline-flex items-center gap-2">
-                {cluster && <StatusBadge variant={statusToVariant(cluster.status)} size="sm" />}
+                {cluster && <ClusterCheckIcon clusterId={cluster.id} summary={checkSummary.get(cluster.id)} size="md" />}
                 {clusters.length > 0 && <HubClusterSwitcher />}
               </span>
             }

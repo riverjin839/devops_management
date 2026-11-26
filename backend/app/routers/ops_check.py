@@ -16,10 +16,10 @@ from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.auth.deps import require_operator
+from app.auth.deps import get_cluster_scope, require_operator
 from app.database import get_db
-from app.models import OpsCheckRun, OpsCheckRunItem, User
-from app.services.cluster_access import require_cluster_access
+from app.models import Cluster, OpsCheckRun, OpsCheckRunItem, User
+from app.services.cluster_access import ClusterScope, require_cluster_access
 from app.services.ops_check_service import OpsCheckService
 
 logger = logging.getLogger(__name__)
@@ -108,6 +108,44 @@ def _item_out(it: OpsCheckRunItem) -> RunItemOut:
 
 
 # ── endpoints ────────────────────────────────────────────────────────────────
+class SummaryProblem(BaseModel):
+    source: str
+    item_ref_id: str
+    name: str
+    status: str
+    last_run_at: Optional[str] = None
+
+
+class ClusterCheckSummary(BaseModel):
+    cluster_id: str
+    # healthy | warning | critical | none(점검 결과 없음)
+    status: str
+    counts: dict[str, int]
+    total: int
+    problems: list[SummaryProblem]
+
+
+@router.get("/summary", response_model=list[ClusterCheckSummary])
+def get_summary(db: Session = Depends(get_db), scope: ClusterScope = Depends(get_cluster_scope)):
+    """볼 수 있는 클러스터별 점검 탭 상태 요약 — 클러스터 상태 아이콘의 원천.
+
+    클러스터 하나가 실패해도 나머지는 돌려준다(그 클러스터는 ``none``).
+    """
+    out: list[dict[str, Any]] = []
+    svc = OpsCheckService(db)
+    for (cid,) in db.query(Cluster.id).all():
+        if not scope.visible(cid):
+            continue
+        try:
+            out.append(svc.summarize(cid))
+        except Exception as e:  # noqa: BLE001
+            db.rollback()
+            logger.warning("ops-check summary 실패 cluster=%s: %s", cid, e)
+            out.append({"cluster_id": str(cid), "status": "none",
+                        "counts": {"healthy": 0, "warning": 0, "critical": 0, "none": 0}, "total": 0, "problems": []})
+    return out
+
+
 @router.get("/catalog/{cluster_id}", response_model=list[CatalogItem])
 def get_catalog(cluster_id: UUID, db: Session = Depends(get_db)):
     try:
