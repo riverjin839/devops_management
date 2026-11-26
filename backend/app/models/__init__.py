@@ -26,6 +26,7 @@ from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
 from app.models.ops_note import OpsNote
 from app.models.voc_post import VocPost
+from app.models.alarm_request import AlarmCatalogItem, AlarmRequest
 from app.models.reaction import Reaction
 from app.models.management_server import ManagementServer
 from app.models.isilon_server import IsilonServer, IsilonCommand
@@ -150,6 +151,8 @@ __all__ = [
     "WorkGuide",
     "OpsNote",
     "VocPost",
+    "AlarmCatalogItem",
+    "AlarmRequest",
     "ManagementServer",
     "IsilonServer",
     "IsilonCommand",

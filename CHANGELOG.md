@@ -10,6 +10,9 @@
 
 1.110.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **알람 등록 요청**: 서비스 담당자가 `/alarm-requests`(사이드바 「관측」)에서 운영 알람 추가·임계치 변경을 요청한다 — 요청자(로그인 사용자 자동), 서비스 명(k8s·cilium·aistor·cnpg·keycloak·nexus·jenkins·argocd 등), metric 명(알람 항목), 알람 의미, 심각도별 **기본 임계치(expr·for)·수정 임계치(expr·for)** 표, 적용 클러스터(복수 선택), 비고. 관리자(operator 이상)는 검토 시작·승인·반려(사유 필수)·반영 완료로 처리하고 모든 처리가 이력·감사 로그에 남으며, 새 요청은 관리자에게·처리 결과는 요청자에게 알림이 간다. 알람 항목을 고르면 서비스별 **알람 카탈로그**의 의미·기본 임계치가 채워지고, 반영 완료된 수정 임계치는 카탈로그 기본 임계치로 저장된다(카탈로그는 화면에서 편집). 반영 완료는 처리 기록이며 클러스터에 명령을 보내지 않는다. Backend: `routers/alarm_requests.py`, `services/alarm_requests.py`, `alarm_requests`·`alarm_catalog_items` 테이블. Frontend: `pages/AlarmRequestsPage.tsx`, `components/alarm-requests/`.
+
 ## [1.110.1] - 2026-11-26
 
 ### Fixed

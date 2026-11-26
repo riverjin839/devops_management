@@ -17,6 +17,7 @@ from app.routers.workflows import router as workflows_router
 from app.routers.work_guide import router as work_guide_router
 from app.routers.ops_note import router as ops_note_router
 from app.routers.voc import router as voc_router
+from app.routers.alarm_requests import router as alarm_requests_router
 from app.routers.reactions import router as reactions_router
 from app.routers.mindmap import router as mindmap_router
 from app.routers.management_servers import router as management_server_router
@@ -150,6 +151,7 @@ __all__ = [
     "work_guide_router",
     "ops_note_router",
     "voc_router",
+    "alarm_requests_router",
     "reactions_router",
     "mindmap_router",
     "management_server_router",

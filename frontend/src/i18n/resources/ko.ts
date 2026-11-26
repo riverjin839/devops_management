@@ -56,6 +56,7 @@ export const ko = {
       k8sEvents: 'K8s 실시간 이벤트',
       observability: '관측 지표',
       alerts: '알람 인박스',
+      alarmRequests: '알람 등록 요청',
       incidentAnalysis: 'K8s 로그 (분석·실시간)',
       packetFlow: '패킷 흐름 분석',
       ciliumTrace: 'Cilium BPF 추적',

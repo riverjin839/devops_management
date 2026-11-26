@@ -609,6 +609,24 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
+### 알람 등록 요청 (`/alarm-requests`)
+
+- **파일**: `frontend/src/pages/AlarmRequestsPage.tsx` (+ `components/alarm-requests/{AlarmRequestForm,AlarmRequestDetail,ThresholdTable,AlarmCatalogDialog}`).
+- **목적 / UX**: 서비스 담당자(로그인 사용자 누구나)가 운영 알람 추가·임계치 변경을 양식으로 요청하고, 관리자(operator 이상)가 검토·승인·반려·반영 완료로 처리한다. 사이드바 「관측」 그룹.
+- **UI 구성**:
+  - `PageShell hub` + `PageHeader`(액션: 알람 카탈로그 · 새 요청). 본문 2열 — 좌 요청 목록 / 우 요청서(새 요청·수정) 또는 선택한 요청 상세. 선택은 `?id=` (알림 링크가 이 주소로 연다).
+  - 요청 목록 — 상태 `SegTabs`(전체/요청됨/검토 중/승인/반영 완료/반려) · 서비스 · 내 요청만 · 검색. 열: 번호(AR-0001) · 상태 · 서비스 · 알람 항목(+의미) · 임계치 변경(신규 알람 / N개 심각도 변경 / 기본값 유지) · 적용 클러스터 · 요청자 · 요청일.
+  - 요청서 — 요청자(로그인 사용자 고정) · 서비스 명 · metric 명(알람 항목 — 카탈로그 datalist, 고르면 의미·기본 임계치 채움, 새 이름이면 신규 알람) · 알람 의미 · **임계치 표**(심각도별 행, 열 `기본 임계치 [expr | for]` · `수정 임계치 [expr | for]`, 기본과 다른 수정 칸 강조, 기존 알람의 기본 칸은 읽기 전용) · 적용 클러스터(칩 다중 선택 + 검색·전체 선택·선택 해제) · 비고.
+  - 상세 — 요청서 읽기 보기 + 검토 의견 + 처리 이력. 요청자: requested 동안 수정·요청 취소(확인), 반려되면 「복사해서 다시 요청」. 관리자: 검토 시작·승인·반려(사유 필수)·반영 완료 처리(확인 — 클러스터에 명령을 보내지 않는다는 안내). viewer 에게는 처리 버튼을 숨기지 않고 비활성 + 사유(`useCanOperate`).
+  - 알람 카탈로그 다이얼로그 — 서비스별 알람 항목·의미·기본 임계치·사용 여부 편집(operator 이상, viewer 는 보기만).
+- **Frontend**: `hooks/useAlarmRequests.ts`(`useAlarmRequestMeta`·`useAlarmRequests`(60초 refetch, 필터는 화면에서)·`useAlarmCatalog`·`useSaveAlarmRequest`·`useCancelAlarmRequest`·`useActOnAlarmRequest`·`useSaveAlarmCatalogItem`·`useDeleteAlarmCatalogItem`), `services/api.ts` `alarmRequestsApi`, 클러스터 목록은 `useClusters`.
+- **Backend**: `routers/alarm_requests.py` — `GET /alarm-requests/meta`, `GET|POST /alarm-requests`, `GET|PUT|DELETE /alarm-requests/{id}`(수정·취소는 본인 또는 운영자, requested 에서만 — 그 외 409), `POST /alarm-requests/{id}/action`(`require_operator`, reviewing/approved/rejected/applied), `GET|POST /alarm-requests/catalog`, `PUT|DELETE /alarm-requests/catalog/{id}`(`require_operator`). 서비스 `services/alarm_requests.py`(상태 전이·카탈로그 시드·직렬화·알림), 모델 `models/alarm_request.py`(`alarm_requests`, `alarm_catalog_items`).
+- **핵심 기능**:
+  - 상태 전이 requested → reviewing → approved → applied, 반려는 applied 전 어느 단계에서나(사유 필수). 끝 상태는 더 처리할 수 없다.
+  - 「반영 완료」는 처리 기록이다 — 클러스터에 명령을 보내지 않는다. 반영 완료된 수정 임계치(비면 기본값)가 카탈로그 기본 임계치가 되고, 카탈로그에 없던 알람은 새 항목으로 추가된다.
+  - 적용 클러스터는 id + 이름 스냅샷으로 저장(클러스터가 지워져도 읽힘). 등록 때 볼 수 없는 클러스터가 섞이면 403, 목록에서는 볼 수 없는 클러스터 이름을 가린다.
+  - 알림 — 새 요청은 admin·operator 에게(`alarm_request`), 처리 결과는 요청자에게(`alarm_request_status`). 감사 로그 `alarm_request.*`·`alarm_catalog.*`.
+
 ### 파드 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
 
 > **2026-11-04 (NS 선택 기억)**: 딥링크(`?namespace=`)가 없으면 마지막으로 고른 NS(하나일 때)가 기본 선택되고, 여기서 고른 NS 도 기억된다. NS 선택 아래에 최근 선택 NS 칩(기본 3개)을 보인다 — `K8s 상세 관리` 섹션 참고.
