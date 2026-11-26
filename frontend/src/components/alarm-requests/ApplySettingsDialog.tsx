@@ -102,7 +102,7 @@ export function ApplySettingsDialog({ open, onClose }: { open: boolean; onClose:
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="accent-primary" checked={d.markAppliedOnSuccess} disabled={ro}
                 onChange={(e) => set({ markAppliedOnSuccess: e.target.checked })} />
-              모든 클러스터에 성공하면 요청을 「반영 완료」로 바꾸기
+              모든 클러스터에 성공하면 「진행」 요청을 「완료」로 바꾸기
             </label>
 
             <div className="grid gap-1.5">

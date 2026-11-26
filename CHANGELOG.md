@@ -11,7 +11,10 @@
 1.113.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
 ### Added
-- **알람 등록 요청 — PrometheusRule 자동 적용**: 승인된 요청을 「클러스터에 적용」으로 적용 클러스터마다 `PrometheusRule`(알람 항목당 1개, 심각도별 rule)로 만들거나, PEP 가 만든 같은 규칙을 새 임계치로 교체한다(다른 도구가 만든 같은 이름은 덮어쓰지 않음). 실행은 실시간 로그로 보이고(관리자에게는 실제로 보낸 K8S API 호출부터), 클러스터별 결과·로그가 요청에 남으며, 모두 성공하면 자동으로 「반영 완료」가 된다. 「규칙 미리보기」로 적용 전 YAML 을 보고, 「적용 설정」에서 네임스페이스·ruleSelector 라벨·이름 접두사·알람 라벨·클러스터별 재정의를 고친다. 기존 반영 완료 처리는 「수동 반영 완료」로 남는다. Backend: `services/alarm_rule_apply.py`, `/alarm-requests/{id}/apply-rules/stream`·`/rule-preview`·`/apply-settings`, `alarm_requests.apply_runs`. Frontend: `RuleApplyPanel`, `RulePreviewDialog`, `ApplySettingsDialog`.
+- **알람 등록 요청 — PrometheusRule 자동 적용**: 「클러스터에 적용」으로 요청의 임계치를 적용 클러스터마다 `PrometheusRule`(알람 항목당 1개, 심각도별 rule)로 만들거나, PEP 가 만든 같은 규칙을 새 임계치로 교체한다(다른 도구가 만든 같은 이름은 덮어쓰지 않음). 실행은 실시간 로그로 보이고(관리자에게는 실제로 보낸 K8S API 호출부터), 클러스터별 결과·로그가 요청에 남으며, 모두 성공하면 「진행」 요청이 자동으로 「완료」가 된다. 「규칙 미리보기」로 적용 전 YAML 을 보고, 「적용 설정」에서 네임스페이스·ruleSelector 라벨·이름 접두사·알람 라벨·클러스터별 재정의를 고친다. Backend: `services/alarm_rule_apply.py`, `/alarm-requests/{id}/apply-rules/stream`·`/rule-preview`·`/apply-settings`, `alarm_requests.apply_runs`. Frontend: `RuleApplyPanel`, `RulePreviewDialog`, `ApplySettingsDialog`.
+
+### Changed
+- **알람 등록 요청 — 승인 절차 대신 상태 항목 하나(진행·완료·반려)**: 등록하면 바로 「진행」이고, 처리 담당(operator 이상)이 상세의 상태 항목을 진행 / 완료 / 반려 로 바꾼다(반려는 사유 필수, 어느 상태로든 다시 변경 가능). 완료로 바꾸면 수정 임계치가 알람 카탈로그 기본값이 된다. 기존 요청은 부팅 때 요청됨·검토 중·승인 → 진행, 반영 완료 → 완료로 바뀐다. Backend: `POST /alarm-requests/{id}/status`(기존 `/action` 대체). Frontend: 상세의 상태 라디오 그룹 + 처리 메모.
 
 ## [1.113.0] - 2026-11-26
 

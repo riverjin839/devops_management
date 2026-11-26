@@ -4,10 +4,11 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { formatDateTime } from '@/lib/utils';
 import type { CanOperate } from '@/hooks/useCanOperate';
-import type { AlarmRequest, AlarmRequestActionKind } from '@/types';
+import { cn } from '@/lib/utils';
+import type { AlarmRequest, AlarmRequestStatus } from '@/types';
 import { RuleApplyPanel } from './RuleApplyPanel';
 import { ThresholdTable } from './ThresholdTable';
-import { ACTION_LABEL, BTN, BTN_DANGER, BTN_PRIMARY, INPUT, STATUS_LABEL, STATUS_VARIANT } from './styles';
+import { ACTION_LABEL, BTN, BTN_DANGER, BTN_PRIMARY, INPUT, STATUS_LABEL, STATUS_ORDER, STATUS_VARIANT } from './styles';
 
 interface Props {
   req: AlarmRequest;
@@ -17,7 +18,7 @@ interface Props {
   onEdit: () => void;
   onCopy: () => void;
   onCancel: () => void;
-  onAct: (action: AlarmRequestActionKind, comment?: string) => void;
+  onSetStatus: (status: AlarmRequestStatus, comment?: string) => void;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -29,24 +30,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const NEXT_ACTIONS: Record<string, AlarmRequestActionKind[]> = {
-  requested: ['reviewing', 'rejected', 'approved'],
-  reviewing: ['rejected', 'approved'],
-  approved: ['rejected', 'applied'],
-};
-
-export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, onCancel, onAct }: Props) {
+export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, onCancel, onSetStatus }: Props) {
+  const [next, setNext] = useState<AlarmRequestStatus>(req.status);
   const [comment, setComment] = useState('');
-  const [confirm, setConfirm] = useState<null | 'cancel' | 'applied'>(null);
+  const [confirm, setConfirm] = useState<null | 'cancel'>(null);
   const [commentErr, setCommentErr] = useState(false);
   const mine = req.requestedBy === username;
-  const editable = req.status === 'requested' && (mine || perm.canOperate);
-  const adminActions = NEXT_ACTIONS[req.status] ?? [];
+  const editable = req.status === 'in_progress' && (mine || perm.canOperate);
+  const changed = next !== req.status;
 
-  const act = (a: AlarmRequestActionKind) => {
-    if (a === 'rejected' && !comment.trim()) { setCommentErr(true); return; }
-    if (a === 'applied') { setConfirm('applied'); return; }
-    onAct(a, comment.trim() || undefined);
+  const saveStatus = () => {
+    if (next === 'rejected' && !comment.trim()) { setCommentErr(true); return; }
+    onSetStatus(next, comment.trim() || undefined);
     setComment('');
   };
 
@@ -82,7 +77,7 @@ export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, 
           {req.note ? <p className="whitespace-pre-wrap">{req.note}</p> : <span className="text-muted-foreground">없음</span>}
         </Field>
         {req.reviewComment && (
-          <Field label={`검토 의견 — ${req.reviewedBy ?? ''}`}>
+          <Field label={`처리 메모 — ${req.reviewedBy ?? ''}`}>
             <p className={`whitespace-pre-wrap ${req.status === 'rejected' ? 'text-status-critical' : ''}`}>{req.reviewComment}</p>
           </Field>
         )}
@@ -104,16 +99,35 @@ export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, 
 
         <RuleApplyPanel req={req} perm={perm} />
 
-        {adminActions.length > 0 && (
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold">검토 의견 <span className="font-normal text-muted-foreground">(반려 시 필수)</span></span>
-            <textarea id="ar-review-comment" className={INPUT} rows={2} value={comment} disabled={!perm.canOperate}
-              title={perm.withHint('검토 의견')} aria-invalid={commentErr || undefined}
-              placeholder="요청자에게 전달됩니다"
-              onChange={(e) => { setComment(e.target.value); setCommentErr(false); }} />
-            {commentErr && <span role="alert" className="text-xs text-status-critical">반려 사유를 입력하세요.</span>}
-          </label>
-        )}
+        <div className="grid gap-2 border-t border-border pt-3">
+          <span className="text-xs font-semibold text-muted-foreground">상태</span>
+          <div role="radiogroup" aria-label="상태" className="inline-flex w-fit rounded-xl border border-border bg-muted/20 p-0.5">
+            {STATUS_ORDER.map((s) => (
+              <button key={s} type="button" role="radio" aria-checked={next === s} disabled={!perm.canOperate || busy}
+                title={perm.withHint(STATUS_LABEL[s])}
+                className={cn('px-3 py-1 text-sm rounded-lg', next === s ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground hover:text-foreground')}
+                onClick={() => { setNext(s); setCommentErr(false); }}>
+                {STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
+          {changed && (
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold">
+                처리 메모 <span className="font-normal text-muted-foreground">{next === 'rejected' ? '(반려 사유 — 필수)' : '(선택)'}</span>
+              </span>
+              <textarea id="ar-status-comment" className={INPUT} rows={2} value={comment} disabled={!perm.canOperate}
+                aria-invalid={commentErr || undefined} placeholder="요청자에게 전달됩니다"
+                onChange={(e) => { setComment(e.target.value); setCommentErr(false); }} />
+              {commentErr && <span role="alert" className="text-xs text-status-critical">반려 사유를 입력하세요.</span>}
+              {next === 'done' && (
+                <span className="text-xs text-muted-foreground">
+                  완료로 바꾸면 수정 임계치가 이 알람의 기본 임계치(알람 카탈로그)로 저장됩니다. 클러스터에는 아무것도 보내지 않습니다 — 자동 적용은 「클러스터에 적용」.
+                </span>
+              )}
+            </label>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-border">
@@ -127,27 +141,23 @@ export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, 
           {mine && req.status === 'rejected' && (
             <button type="button" className={BTN} onClick={onCopy}>복사해서 다시 요청</button>
           )}
-          {!editable && !(mine && req.status === 'rejected') && adminActions.length === 0 && (
+          {!editable && !(mine && req.status === 'rejected') && (
             <span className="text-xs text-muted-foreground">
-              {req.status === 'applied' ? '클러스터 알람 규칙에 반영된 요청입니다.' : '처리가 끝난 요청입니다.'}
+              {req.status === 'done' ? '완료된 요청입니다.' : '「진행」 상태인 요청만 요청자가 수정·취소할 수 있습니다.'}
             </span>
           )}
         </div>
-        {adminActions.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {adminActions.map((a) => {
-              const label = a === 'applied' ? '수동 반영 완료' : ACTION_LABEL[a];
-              return (
-                <button key={a} type="button" disabled={busy || !perm.canOperate}
-                  title={perm.withHint(label)} aria-label={perm.ariaWithHint(label)}
-                  className={a === 'rejected' ? BTN_DANGER : a === 'approved' ? BTN_PRIMARY : BTN}
-                  onClick={() => act(a)}>
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {(() => {
+          const label = changed ? `「${STATUS_LABEL[next]}」(으)로 저장` : '상태 저장';
+          return (
+            <button type="button" disabled={busy || !perm.canOperate || !changed}
+              title={perm.withHint(label)} aria-label={perm.ariaWithHint(label)}
+              className={next === 'rejected' && changed ? BTN_DANGER : BTN_PRIMARY}
+              onClick={saveStatus}>
+              {label}
+            </button>
+          );
+        })()}
       </div>
 
       <ConfirmDialog
@@ -161,17 +171,6 @@ export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, 
         onCancel={() => setConfirm(null)}
         onConfirm={() => { setConfirm(null); onCancel(); }}
       />
-      <ConfirmDialog
-        open={confirm === 'applied'}
-        title={`${req.code} 수동으로 반영 완료 처리할까요?`}
-        description="GitOps 등 다른 경로로 알람 규칙 반영을 마쳤을 때 누르세요. 클러스터에는 아무것도 보내지 않습니다(자동 적용은 「클러스터에 적용」). 수정 임계치가 이 알람의 기본 임계치(카탈로그)로 저장됩니다."
-        confirmLabel="반영 완료 처리"
-        busy={busy}
-        onCancel={() => setConfirm(null)}
-        onConfirm={() => { setConfirm(null); onAct('applied', comment.trim() || undefined); setComment(''); }}
-      >
-        <p className="text-xs text-muted-foreground">대상 클러스터: {req.clusters.map((c) => c.name).join(', ')}</p>
-      </ConfirmDialog>
     </MacCard>
   );
 }

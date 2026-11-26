@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { alarmRequestsApi } from '@/services/api';
-import type { AlarmApplySettings, AlarmCatalogItemInput, AlarmRequestActionKind, AlarmRequestInput } from '@/types';
+import type { AlarmApplySettings, AlarmCatalogItemInput, AlarmRequestInput, AlarmRequestStatus } from '@/types';
 
 export const alarmRequestKeys = {
   all: ['alarm-requests'] as const,
@@ -56,11 +56,12 @@ export function useCancelAlarmRequest() {
   return useMutation({ mutationFn: (id: number) => alarmRequestsApi.cancel(id), onSuccess: invalidate });
 }
 
-export function useActOnAlarmRequest() {
+/** 상태 항목(진행·완료·반려) 변경 — operator 이상. */
+export function useSetAlarmRequestStatus() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async ({ id, action, comment }: { id: number; action: AlarmRequestActionKind; comment?: string }) =>
-      (await alarmRequestsApi.act(id, { action, comment })).data,
+    mutationFn: async ({ id, status, comment }: { id: number; status: AlarmRequestStatus; comment?: string }) =>
+      (await alarmRequestsApi.setStatus(id, { status, comment })).data,
     onSuccess: invalidate,
   });
 }

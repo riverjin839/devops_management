@@ -20,7 +20,7 @@ import { BTN, BTN_PRIMARY, BTN_SM } from './styles';
 const RESULT_LABEL = { created: '생성', updated: '갱신', failed: '실패' } as const;
 
 /**
- * 승인된 요청 → 적용 클러스터마다 PrometheusRule 을 만든다(SSE 실시간 로그).
+ * 진행·완료 요청 → 적용 클러스터마다 PrometheusRule 을 만든다(SSE 실시간 로그).
  * 관리자에게는 실제로 나간 K8S API 호출이 cmd 줄로 먼저 보인다. 지난 실행 기록(클러스터별 결과·로그)도 여기서 본다.
  */
 export function RuleApplyPanel({ req, perm }: { req: AlarmRequest; perm: CanOperate }) {
@@ -34,7 +34,7 @@ export function RuleApplyPanel({ req, perm }: { req: AlarmRequest; perm: CanOper
   const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
   const settings = useAlarmApplySettings();
 
-  const canApply = req.status === 'approved';
+  const canApply = req.status !== 'rejected';
   const last = req.applyRuns[0];
   const nsOf = (clusterId: string) =>
     settings.data?.clusterOverrides.find((o) => o.clusterId === clusterId)?.namespace || settings.data?.namespace || '—';
@@ -84,7 +84,7 @@ export function RuleApplyPanel({ req, perm }: { req: AlarmRequest; perm: CanOper
         <p className="text-xs text-muted-foreground">
           적용 클러스터마다 <span className="font-mono">{settings.data?.namespace ?? 'monitoring'}</span> 네임스페이스(클러스터별 재정의 가능)에
           PrometheusRule 을 만들거나 PEP 가 만든 규칙을 교체합니다.
-          {settings.data?.markAppliedOnSuccess !== false && ' 모든 클러스터에 성공하면 「반영 완료」로 바뀝니다.'}
+          {req.status === 'in_progress' && settings.data?.markAppliedOnSuccess !== false && ' 모든 클러스터에 성공하면 「완료」로 바뀝니다.'}
         </p>
       )}
 

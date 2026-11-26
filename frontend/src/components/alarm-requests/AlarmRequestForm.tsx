@@ -168,7 +168,7 @@ export function AlarmRequestForm({
       </form>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-border">
         <span className="text-xs text-muted-foreground">
-          {draft.editId ? '검토가 시작되기 전까지 수정할 수 있습니다.' : '제출하면 관리자에게 알림이 갑니다.'}
+          {draft.editId ? '「진행」 상태인 동안 수정할 수 있습니다.' : '등록하면 「진행」 상태가 되고 처리 담당자에게 알림이 갑니다.'}
         </span>
         <div className="flex gap-2">
           <button type="button" className={BTN} onClick={onClose} disabled={saving}>취소</button>

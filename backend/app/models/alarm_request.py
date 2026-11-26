@@ -33,8 +33,8 @@ class AlarmRequest(Base):
     __tablename__ = "alarm_requests"
 
     id = Column(Integer, primary_key=True, autoincrement=True)      # 화면 번호 AR-0001
-    # requested / reviewing / approved / applied / rejected
-    status = Column(String(20), nullable=False, default="requested", index=True)
+    # in_progress(진행) / done(완료) / rejected(반려) — 승인 절차 없이 처리 담당이 바꾸는 상태 항목 하나
+    status = Column(String(20), nullable=False, default="in_progress", index=True)
     service = Column(String(50), nullable=False, index=True)
     metric_name = Column(String(200), nullable=False)
     meaning = Column(Text, nullable=True)
@@ -51,7 +51,7 @@ class AlarmRequest(Base):
     reviewed_by = Column(String(100), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     applied_at = Column(DateTime, nullable=True)
-    # [{"at": iso, "by": "표시명", "action": "created|updated|reviewing|approved|rejected|applied", "comment": "..."}]
+    # [{"at": iso, "by": "표시명", "action": "created|updated|in_progress|done|rejected|rule_applied|rule_apply_failed", "comment": "..."}]
     history = Column(JSONB, nullable=False, default=list)
     # PrometheusRule 자동 적용 실행 기록(최근 N건, 최신이 앞) —
     # [{"at", "by", "ok", "results": [{cluster_id, cluster_name, namespace, name, status, message}], "log": [[ts, level, msg]]}]

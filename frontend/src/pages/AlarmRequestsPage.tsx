@@ -14,14 +14,14 @@ import {
 } from '@/components/alarm-requests';
 import { BTN, BTN_PRIMARY, INPUT } from '@/components/alarm-requests/styles';
 import {
-  useActOnAlarmRequest, useAlarmCatalog, useAlarmRequestMeta, useAlarmRequests,
+  useSetAlarmRequestStatus, useAlarmCatalog, useAlarmRequestMeta, useAlarmRequests,
   useCancelAlarmRequest, useSaveAlarmRequest,
 } from '@/hooks/useAlarmRequests';
 import { useClusters } from '@/hooks/useCluster';
 import { useCanOperate } from '@/hooks/useCanOperate';
 import { useAuthStore } from '@/stores/authStore';
 import { cn, formatApiError, parseUTC } from '@/lib/utils';
-import type { AlarmRequest, AlarmRequestActionKind, AlarmRequestStatus } from '@/types';
+import type { AlarmRequest, AlarmRequestStatus } from '@/types';
 
 type StatusFilter = 'all' | AlarmRequestStatus;
 const STATUS_OPTIONS: readonly (readonly [StatusFilter, string])[] = [
@@ -38,7 +38,7 @@ const changedCount = (r: AlarmRequest) =>
   r.thresholds.filter((t) => t.newExpr && (t.newExpr.trim() !== t.baseExpr.trim() || t.newFor.trim() !== t.baseFor.trim())).length;
 
 /**
- * 알람 등록 요청 — 서비스 담당자가 운영 알람 추가·임계치 변경을 요청하고 관리자가 검토·반영한다.
+ * 알람 등록 요청 — 서비스 담당자가 운영 알람 추가·임계치 변경을 등록하고, 처리 담당이 상태(진행·완료·반려)를 바꾼다.
  * 좌: 요청 목록(필터) / 우: 요청서(새 요청·수정) 또는 선택한 요청 상세. 선택은 `?id=` 로 공유된다.
  */
 export function AlarmRequestsPage() {
@@ -54,7 +54,7 @@ export function AlarmRequestsPage() {
   const { data: clusters = [] } = useClusters();
   const save = useSaveAlarmRequest();
   const cancel = useCancelAlarmRequest();
-  const act = useActOnAlarmRequest();
+  const act = useSetAlarmRequestStatus();
 
   const [draft, setDraft] = useState<AlarmRequestDraft | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -97,10 +97,10 @@ export function AlarmRequestsPage() {
       onError: (e) => toast.error('요청을 저장하지 못했습니다', formatApiError(e)),
     });
   };
-  const onAct = (r: AlarmRequest, action: AlarmRequestActionKind, comment?: string) =>
-    act.mutate({ id: r.id, action, comment }, {
-      onSuccess: (res) => toast.success(`${res.code} ${STATUS_LABEL[res.status]}`),
-      onError: (e) => toast.error('처리하지 못했습니다', formatApiError(e)),
+  const onSetStatus = (r: AlarmRequest, status: AlarmRequestStatus, comment?: string) =>
+    act.mutate({ id: r.id, status, comment }, {
+      onSuccess: (res) => toast.success(`${res.code} 상태를 「${STATUS_LABEL[res.status]}」(으)로 바꿨습니다`),
+      onError: (e) => toast.error('상태를 바꾸지 못했습니다', formatApiError(e)),
     });
   const onCancel = (r: AlarmRequest) =>
     cancel.mutate(r.id, {
@@ -116,7 +116,7 @@ export function AlarmRequestsPage() {
         <PageHeader
           title="알람 등록 요청"
           icon={BellPlus}
-          description="서비스 담당자가 운영 알람 추가·임계치 변경을 요청하고, 관리자가 검토한 뒤 클러스터에 PrometheusRule 로 적용합니다."
+          description="서비스 담당자가 운영 알람 추가·임계치 변경을 등록하면 「진행」이 되고, 처리 담당이 PrometheusRule 로 적용하거나 상태를 완료·반려로 바꿉니다."
           actions={
             <div className="flex flex-wrap gap-2">
               <button type="button" className={BTN} onClick={() => setApplySettingsOpen(true)}
@@ -187,7 +187,7 @@ export function AlarmRequestsPage() {
                             <div className="text-xs text-muted-foreground line-clamp-1">{r.meaning}</div>
                           </td>
                           <td className="px-3 py-2 text-xs whitespace-nowrap">
-                            {!r.catalogItemId && r.status !== 'applied' ? '신규 알람' : n ? `${n}개 심각도 변경` : <span className="text-muted-foreground">기본값 유지</span>}
+                            {!r.catalogItemId && r.status !== 'done' ? '신규 알람' : n ? `${n}개 심각도 변경` : <span className="text-muted-foreground">기본값 유지</span>}
                           </td>
                           <td className="px-3 py-2">
                             <div className="flex flex-wrap gap-1">
@@ -225,7 +225,7 @@ export function AlarmRequestsPage() {
               />
             ) : selected ? (
               <AlarmRequestDetail
-                key={selected.id}
+                key={`${selected.id}-${selected.status}`}
                 req={selected}
                 username={user?.username ?? ''}
                 perm={perm}
@@ -233,7 +233,7 @@ export function AlarmRequestsPage() {
                 onEdit={() => setDraft(fromRequest(selected, selected.id))}
                 onCopy={() => setDraft(fromRequest(selected, null))}
                 onCancel={() => onCancel(selected)}
-                onAct={(a, c) => onAct(selected, a, c)}
+                onSetStatus={(st, c) => onSetStatus(selected, st, c)}
               />
             ) : (
               <MacCard>

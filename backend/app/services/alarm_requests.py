@@ -1,11 +1,10 @@
 """알람 등록 요청 — 상태 전이·카탈로그 시드·응답 직렬화·알림.
 
-상태: requested(요청됨) → reviewing(검토 중) → approved(승인) → applied(반영 완료), 어느 단계에서든
-rejected(반려, 사유 필수). applied/rejected 는 끝 상태다. 요청자는 requested 인 동안만 수정·취소한다.
+승인 절차는 없다. 등록하면 「진행」이고, 처리 담당(operator 이상)이 상태 항목 하나를 진행 / 완료 / 반려 로
+바꾼다(반려는 사유 필수, 어느 상태로든 다시 바꿀 수 있다). 요청자는 「진행」인 동안 수정·취소한다.
 
-「반영 완료」는 관리자가 PrometheusRule 등 실제 알람 규칙에 반영한 뒤 표시하는 처리 기록이다 — 이 모듈은
-클러스터에 아무 명령도 보내지 않는다. 대신 반영 완료된 수정 임계치를 카탈로그 기본 임계치로 올려
-다음 요청의 「기본 임계치」가 현재 운영 값이 되게 한다.
+「완료」로 바꾸면(직접 또는 PrometheusRule 자동 적용 성공) 수정 임계치를 카탈로그 기본 임계치로 올려
+다음 요청의 「기본 임계치」가 현재 운영 값이 되게 한다. 상태 변경 자체는 클러스터에 명령을 보내지 않는다.
 """
 from __future__ import annotations
 
@@ -26,29 +25,23 @@ _log = logging.getLogger(__name__)
 DEFAULT_SERVICES = ["k8s", "cilium", "aistor", "cnpg", "keycloak", "nexus", "jenkins", "argocd"]
 
 STATUSES = [
-    {"key": "requested", "label": "요청됨"},
-    {"key": "reviewing", "label": "검토 중"},
-    {"key": "approved", "label": "승인"},
-    {"key": "applied", "label": "반영 완료"},
+    {"key": "in_progress", "label": "진행"},
+    {"key": "done", "label": "완료"},
     {"key": "rejected", "label": "반려"},
 ]
 STATUS_LABEL = {s["key"]: s["label"] for s in STATUSES}
+STATUS_KEYS = tuple(STATUS_LABEL)
 SEVERITIES = [
     {"key": "critical", "label": "Critical"},
     {"key": "warning", "label": "Warning"},
     {"key": "info", "label": "Info"},
 ]
+# 예전 승인 흐름 상태 → 지금 상태(마이그레이션·조회 보정)
+LEGACY_STATUS = {"requested": "in_progress", "reviewing": "in_progress", "approved": "in_progress", "applied": "done"}
 
-# 관리자 처리 → 허용되는 현재 상태
-TRANSITIONS: dict[str, set[str]] = {
-    "reviewing": {"requested"},
-    "approved": {"requested", "reviewing"},
-    "rejected": {"requested", "reviewing", "approved"},
-    "applied": {"approved"},
-}
 ACTION_LABEL = {
     "created": "요청 등록", "updated": "요청 수정",
-    "reviewing": "검토 시작", "approved": "승인", "rejected": "반려", "applied": "반영 완료",
+    "in_progress": "진행으로 변경", "done": "완료", "rejected": "반려",
     "rule_applied": "PrometheusRule 적용", "rule_apply_failed": "PrometheusRule 적용 실패",
 }
 
@@ -210,31 +203,30 @@ def _visible_runs(runs: Any, is_admin: bool) -> list[dict[str, Any]]:
     return out
 
 
-# ── 관리자 처리 ──────────────────────────────────────────────────────────────
-def apply_action(db: Session, req: AlarmRequest, actor: User, action: str, comment: str | None) -> None:
-    allowed = TRANSITIONS.get(action, set())
-    if req.status not in allowed:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail=f"'{STATUS_LABEL.get(req.status, req.status)}' 상태에서는 {ACTION_LABEL[action]} 할 수 없습니다.",
-        )
+# ── 상태 변경 ───────────────────────────────────────────────────────────────
+def set_status(db: Session, req: AlarmRequest, actor: User, new_status: str, comment: str | None) -> None:
+    """상태 항목 하나(진행·완료·반려)를 바꾼다. 같은 상태로는 바꾸지 않는다(409)."""
+    if new_status not in STATUS_KEYS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"알 수 없는 상태입니다: {new_status}")
+    if req.status == new_status:
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            detail=f"이미 '{STATUS_LABEL[new_status]}' 상태입니다.")
     comment = (comment or "").strip() or None
-    if action == "rejected" and not comment:
+    if new_status == "rejected" and not comment:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="반려 사유를 입력하세요.")
     now = datetime.utcnow()
-    req.status = action
+    req.status = new_status
     req.reviewed_by = display_name(actor)
     req.reviewed_at = now
-    if comment:
-        req.review_comment = comment
-    if action == "applied":
+    req.review_comment = comment
+    if new_status == "done":
         req.applied_at = now
         promote_to_catalog(db, req, actor)
-    add_history(req, actor, action, comment)
+    add_history(req, actor, new_status, comment)
 
 
 def promote_to_catalog(db: Session, req: AlarmRequest, actor: User) -> AlarmCatalogItem:
-    """반영 완료된 요청의 수정 임계치(비어 있으면 기본값)를 카탈로그 기본 임계치로 올린다."""
+    """완료된 요청의 수정 임계치(비어 있으면 기본값)를 카탈로그 기본 임계치로 올린다."""
     # 요청의 catalog_item_id 는 믿지 않는다 — 항상 (서비스, 알람 항목)으로 찾는다. 다른 항목 id 가 들어와도
     # 그 항목의 임계치를 덮어쓰지 않게.
     item = find_catalog_item(db, req.service, req.metric_name)

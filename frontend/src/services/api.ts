@@ -1497,8 +1497,8 @@ export const alarmRequestsApi = {
   update: (id: number, data: import('@/types').AlarmRequestInput) =>
     api.put<import('@/types').AlarmRequest>(`/alarm-requests/${id}`, data),
   cancel: (id: number) => api.delete(`/alarm-requests/${id}`),
-  act: (id: number, data: { action: import('@/types').AlarmRequestActionKind; comment?: string }) =>
-    api.post<import('@/types').AlarmRequest>(`/alarm-requests/${id}/action`, data),
+  setStatus: (id: number, data: { status: import('@/types').AlarmRequestStatus; comment?: string }) =>
+    api.post<import('@/types').AlarmRequest>(`/alarm-requests/${id}/status`, data),
   catalog: (params?: { service?: string; includeDisabled?: boolean }) =>
     api.get<import('@/types').AlarmCatalogItem[]>('/alarm-requests/catalog', {
       params: { service: params?.service, include_disabled: params?.includeDisabled || undefined },

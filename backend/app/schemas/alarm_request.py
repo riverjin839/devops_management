@@ -57,9 +57,9 @@ class AlarmRequestIn(BaseModel):
     note: Optional[str] = Field(None, max_length=4000)
 
 
-class AlarmRequestAction(BaseModel):
-    """관리자 처리 — reviewing(검토 시작) / approved / rejected / applied(반영 완료)."""
-    action: str = Field(..., pattern="^(reviewing|approved|rejected|applied)$")
+class AlarmRequestStatusIn(BaseModel):
+    """상태 항목 변경 — in_progress(진행) / done(완료) / rejected(반려, 사유 필수)."""
+    status: str = Field(..., pattern="^(in_progress|done|rejected)$")
     comment: Optional[str] = Field(None, max_length=2000)
 
 

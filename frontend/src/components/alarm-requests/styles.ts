@@ -13,22 +13,20 @@ export const BTN_PRIMARY =
 export const BTN_DANGER =
   'text-sm inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-status-critical/40 text-status-critical bg-card hover:bg-status-critical/10 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
 
-/** 상태색은 비정상·주의가 필요한 상태에만(§12.12-3) — 반영 완료·승인은 중립. */
+/** 상태색은 비정상·주의가 필요한 상태에만(§12.12-3) — 완료는 중립. */
 export const STATUS_VARIANT: Record<AlarmRequestStatus, StatusVariant> = {
-  requested: 'info',
-  reviewing: 'warning',
-  approved: 'neutral',
-  applied: 'healthy',
+  in_progress: 'info',
+  done: 'healthy',
   rejected: 'critical',
 };
 
 export const STATUS_LABEL: Record<AlarmRequestStatus, string> = {
-  requested: '요청됨',
-  reviewing: '검토 중',
-  approved: '승인',
-  applied: '반영 완료',
+  in_progress: '진행',
+  done: '완료',
   rejected: '반려',
 };
+
+export const STATUS_ORDER: AlarmRequestStatus[] = ['in_progress', 'done', 'rejected'];
 
 export const SEVERITY_LABEL: Record<AlarmSeverity, string> = { critical: 'Critical', warning: 'Warning', info: 'Info' };
 export const SEVERITY_CLS: Record<AlarmSeverity, string> = {
@@ -41,10 +39,14 @@ export const SEVERITY_ORDER: AlarmSeverity[] = ['critical', 'warning', 'info'];
 export const ACTION_LABEL: Record<string, string> = {
   created: '요청 등록',
   updated: '요청 수정',
-  reviewing: '검토 시작',
-  approved: '승인',
+  in_progress: '진행으로 변경',
+  done: '완료',
   rejected: '반려',
-  applied: '반영 완료',
+  // 예전 승인 절차 시절 이력(상태 항목 하나로 바뀌기 전 기록)
+  requested: '요청 등록',
+  reviewing: '검토 시작(이전 절차)',
+  approved: '승인(이전 절차)',
+  applied: '반영 완료(이전 절차)',
   rule_applied: 'PrometheusRule 적용',
   rule_apply_failed: 'PrometheusRule 적용 실패',
 };

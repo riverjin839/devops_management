@@ -44,7 +44,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "name_prefix": "pep-alarm",
     # 모든 alert rule 에 붙일 추가 라벨(알림 라우팅용 team 등)
     "alert_labels": {},
-    # 모든 클러스터에 성공하면 요청을 「반영 완료」로 바꾼다
+    # 모든 클러스터에 성공하면 「진행」 요청을 「완료」로 바꾼다
     "mark_applied_on_success": True,
     # 클러스터별 재정의 [{cluster_id, namespace?, rule_labels?}]
     "cluster_overrides": [],
@@ -405,8 +405,11 @@ def run_apply(db: Session, req: AlarmRequest, actor: User, emit: Callable[[dict]
     run = {"at": applied_at, "by": svc.display_name(actor), "ok": ok, "results": results, "log": lines}
     req.apply_runs = [run, *(req.apply_runs or [])][:KEEP_RUNS]
     svc.add_history(req, actor, "rule_applied" if ok else "rule_apply_failed", summary)
-    if ok and settings.get("mark_applied_on_success") and req.status == "approved":
-        svc.apply_action(db, req, actor, "applied", "PrometheusRule 자동 적용")
-        log("info", "요청을 「반영 완료」로 바꾸고 수정 임계치를 알람 카탈로그 기본값으로 저장했습니다")
+    if ok and req.status == "done":
+        # 완료 뒤 다시 적용(임계치 재반영) — 상태는 그대로, 카탈로그 기본값만 지금 값으로 맞춘다.
+        svc.promote_to_catalog(db, req, actor)
+    elif ok and settings.get("mark_applied_on_success") and req.status == "in_progress":
+        svc.set_status(db, req, actor, "done", "PrometheusRule 자동 적용")
+        log("info", "요청을 「완료」로 바꾸고 수정 임계치를 알람 카탈로그 기본값으로 저장했습니다")
     db.commit()
     return {"ok": ok, "summary": summary, "results": results, "status": req.status}

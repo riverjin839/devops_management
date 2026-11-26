@@ -17,7 +17,7 @@ from app.models.user import User
 from app.schemas.alarm_request import (
     AlarmCatalogItemIn,
     AlarmCatalogItemOut,
-    AlarmRequestAction,
+    AlarmRequestStatusIn,
     AlarmRequestIn,
     AlarmRequestListOut,
     AlarmRequestMeta,
@@ -192,7 +192,7 @@ def create_request(
     clusters = svc.resolve_clusters(db, user, payload.cluster_ids)
     thresholds = svc.normalize_thresholds(payload.thresholds)
     req = AlarmRequest(
-        status="requested", service=payload.service.strip(), metric_name=payload.metric_name.strip(),
+        status="in_progress", service=payload.service.strip(), metric_name=payload.metric_name.strip(),
         meaning=payload.meaning.strip(),
         catalog_item_id=svc.catalog_id_for(db, payload.service, payload.metric_name),
         thresholds=thresholds, clusters=clusters, note=(payload.note or "").strip() or None,
@@ -211,8 +211,8 @@ def create_request(
 def _require_editable(req: AlarmRequest, user: User) -> None:
     if req.requested_by != user.username and not svc.is_staff(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="본인 요청만 수정·취소할 수 있습니다.")
-    if req.status != "requested":
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="검토가 시작된 요청은 수정·취소할 수 없습니다.")
+    if req.status != "in_progress":
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="「진행」 상태인 요청만 수정·취소할 수 있습니다.")
 
 
 @router.put("/{req_id}", response_model=AlarmRequestOut)
@@ -252,16 +252,17 @@ def cancel_request(
     return None
 
 
-@router.post("/{req_id}/action", response_model=AlarmRequestOut)
-def act_on_request(
-    req_id: int, payload: AlarmRequestAction, request: Request,
+@router.post("/{req_id}/status", response_model=AlarmRequestOut)
+def change_status(
+    req_id: int, payload: AlarmRequestStatusIn, request: Request,
     db: Session = Depends(get_db), actor: User = Depends(require_operator),
 ):
+    """상태 항목(진행·완료·반려) 변경 — 완료로 바꾸면 수정 임계치가 카탈로그 기본값이 된다. 반려는 사유 필수."""
     req = _get_or_404(db, req_id)
-    svc.apply_action(db, req, actor, payload.action, payload.comment)
+    svc.set_status(db, req, actor, payload.status, payload.comment)
     db.commit()
     db.refresh(req)
-    audit_logger.record(db, action=f"alarm_request.{payload.action}", actor=actor, target_type="alarm_request",
+    audit_logger.record(db, action=f"alarm_request.status.{payload.status}", actor=actor, target_type="alarm_request",
                         target_id=req.id, details={"comment": payload.comment} if payload.comment else None,
                         request=request)
     svc.notify_status(db, req, actor)
@@ -283,12 +284,12 @@ async def apply_rules_stream(
     req_id: int, request: Request,
     db: Session = Depends(get_db), actor: User = Depends(require_operator),
 ):
-    """승인된 요청을 적용 클러스터마다 PrometheusRule 로 만든다 — SSE 실시간 로그(실제 K8S API 호출은 관리자에게 cmd 줄)."""
+    """진행·완료 요청을 적용 클러스터마다 PrometheusRule 로 만든다 — SSE 실시간 로그(실제 K8S API 호출은 관리자에게 cmd 줄)."""
     from app.services.sse import stream_async_job
 
     req = _get_or_404(db, req_id)
-    if req.status != "approved":
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="승인된 요청만 클러스터에 적용할 수 있습니다.")
+    if req.status == "rejected":
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="반려된 요청은 클러스터에 적용할 수 없습니다.")
     if not rule_apply.effective_rules(req):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="적용할 expr 이 없습니다.")
     cluster_ids = [_uuid.UUID(str(c.get("id"))) for c in req.clusters or []]
@@ -303,10 +304,11 @@ async def apply_rules_stream(
         def work() -> dict:
             r = sdb.query(AlarmRequest).filter(AlarmRequest.id == req_id).one()
             a = sdb.query(User).filter(User.id == actor_id).one()
-            if r.status != "approved":
-                raise HTTPException(status.HTTP_409_CONFLICT, detail="다른 사용자가 먼저 처리했습니다 — 승인 상태가 아닙니다.")
+            if r.status == "rejected":
+                raise HTTPException(status.HTTP_409_CONFLICT, detail="다른 사용자가 먼저 반려했습니다.")
+            before = r.status
             out = rule_apply.run_apply(sdb, r, a, emit)
-            if r.status == "applied":
+            if r.status != before:
                 svc.notify_status(sdb, r, a)
             return out
 

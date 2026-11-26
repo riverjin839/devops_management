@@ -7538,9 +7538,9 @@ export interface CiliumDatapathManifest {
 }
 
 // ── 알람 등록 요청 (/alarm-requests) ─────────────────────────────────────────
-export type AlarmRequestStatus = 'requested' | 'reviewing' | 'approved' | 'applied' | 'rejected';
+/** 승인 절차 없이 처리 담당이 바꾸는 상태 항목 하나 — 진행 / 완료 / 반려. */
+export type AlarmRequestStatus = 'in_progress' | 'done' | 'rejected';
 export type AlarmSeverity = 'critical' | 'warning' | 'info';
-export type AlarmRequestActionKind = 'reviewing' | 'approved' | 'rejected' | 'applied';
 
 /** 카탈로그 기본 임계치 한 행 — JSON 키 `for` 는 그대로 쓴다. */
 export interface AlarmCatalogThreshold {
@@ -7580,7 +7580,7 @@ export interface AlarmRequestThreshold {
 export interface AlarmRequestHistoryEntry {
   at: string;
   by: string;
-  action: 'created' | 'updated' | 'rule_applied' | 'rule_apply_failed' | AlarmRequestActionKind;
+  action: 'created' | 'updated' | 'rule_applied' | 'rule_apply_failed' | AlarmRequestStatus;
   comment?: string | null;
 }
 
