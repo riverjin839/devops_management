@@ -166,7 +166,8 @@ def create_request(
     thresholds = svc.normalize_thresholds(payload.thresholds)
     req = AlarmRequest(
         status="requested", service=payload.service.strip(), metric_name=payload.metric_name.strip(),
-        meaning=payload.meaning.strip(), catalog_item_id=payload.catalog_item_id,
+        meaning=payload.meaning.strip(),
+        catalog_item_id=svc.catalog_id_for(db, payload.service, payload.metric_name),
         thresholds=thresholds, clusters=clusters, note=(payload.note or "").strip() or None,
         requested_by=user.username, requester_name=svc.display_name(user), history=[],
     )
@@ -199,7 +200,7 @@ def update_request(
     req.service = payload.service.strip()
     req.metric_name = payload.metric_name.strip()
     req.meaning = payload.meaning.strip()
-    req.catalog_item_id = payload.catalog_item_id
+    req.catalog_item_id = svc.catalog_id_for(db, req.service, req.metric_name)
     req.note = (payload.note or "").strip() or None
     svc.add_history(req, user, "updated")
     db.commit()

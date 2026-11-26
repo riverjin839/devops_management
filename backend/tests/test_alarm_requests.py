@@ -210,3 +210,26 @@ def test_catalog_crud_operator_only(client, db):
     listed = client.get("/api/v1/alarm-requests/catalog?service=nexus", headers=_h(viewer)).json()
     assert iid not in [i["id"] for i in listed]
     assert client.delete(f"/api/v1/alarm-requests/catalog/{iid}", headers=_h(op)).status_code == 204
+
+
+def test_foreign_catalog_id_is_ignored_and_not_overwritten(client, db):
+    """다른 서비스·항목의 catalog_item_id 를 보내도 그 항목의 임계치를 덮어쓰지 않는다."""
+    viewer = _user(db, "viewer", "요청자")
+    op = _user(db, "operator", "운영자")
+    c1 = _cluster(db, "f")
+    victim = AlarmCatalogItem(service="nexus", metric_name=f"{PREFIX}Victim", meaning="m", enabled=True,
+                              thresholds=[{"severity": "warning", "expr": "orig > 1", "for": "5m"}])
+    db.add(victim)
+    db.commit()
+    metric = f"{PREFIX}Other"
+    body = _payload([c1], metric=metric, catalog_item_id=victim.id)
+    r = client.post("/api/v1/alarm-requests", json=body, headers=_h(viewer))
+    assert r.status_code == 201 and r.json()["catalog_item_id"] is None
+    rid = r.json()["id"]
+    url = f"/api/v1/alarm-requests/{rid}/action"
+    assert client.post(url, json={"action": "approved"}, headers=_h(op)).status_code == 200
+    assert client.post(url, json={"action": "applied"}, headers=_h(op)).status_code == 200
+    db.expire_all()
+    assert db.get(AlarmCatalogItem, victim.id).thresholds == [{"severity": "warning", "expr": "orig > 1", "for": "5m"}]
+    created = db.query(AlarmCatalogItem).filter(AlarmCatalogItem.metric_name == metric).one()
+    assert created.service == "cnpg" and created.id != victim.id

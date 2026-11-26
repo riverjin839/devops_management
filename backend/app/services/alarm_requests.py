@@ -127,6 +127,17 @@ def service_list(db: Session) -> list[str]:
     return seen
 
 
+def find_catalog_item(db: Session, service: str, metric_name: str) -> AlarmCatalogItem | None:
+    return db.query(AlarmCatalogItem).filter(
+        AlarmCatalogItem.service == service.strip(), AlarmCatalogItem.metric_name == metric_name.strip()).first()
+
+
+def catalog_id_for(db: Session, service: str, metric_name: str) -> int | None:
+    """요청이 가리키는 카탈로그 항목 id — 클라이언트가 보낸 id 대신 서버가 (서비스, 알람 항목)으로 정한다."""
+    item = find_catalog_item(db, service, metric_name)
+    return item.id if item else None
+
+
 # ── 요청 검증·직렬화 ─────────────────────────────────────────────────────────
 def resolve_clusters(db: Session, user: User, cluster_ids: list[str]) -> list[dict[str, str]]:
     """요청한 클러스터 id 를 실제 클러스터로 풀고(없으면 422) 사용자가 볼 수 있는지 확인한다(못 보면 403)."""
@@ -211,12 +222,9 @@ def apply_action(db: Session, req: AlarmRequest, actor: User, action: str, comme
 
 def promote_to_catalog(db: Session, req: AlarmRequest, actor: User) -> AlarmCatalogItem:
     """반영 완료된 요청의 수정 임계치(비어 있으면 기본값)를 카탈로그 기본 임계치로 올린다."""
-    item = None
-    if req.catalog_item_id:
-        item = db.query(AlarmCatalogItem).filter(AlarmCatalogItem.id == req.catalog_item_id).first()
-    if item is None:
-        item = db.query(AlarmCatalogItem).filter(
-            AlarmCatalogItem.service == req.service, AlarmCatalogItem.metric_name == req.metric_name).first()
+    # 요청의 catalog_item_id 는 믿지 않는다 — 항상 (서비스, 알람 항목)으로 찾는다. 다른 항목 id 가 들어와도
+    # 그 항목의 임계치를 덮어쓰지 않게.
+    item = find_catalog_item(db, req.service, req.metric_name)
     thresholds = []
     for t in req.thresholds or []:
         expr = t.get("new_expr") or t.get("base_expr")

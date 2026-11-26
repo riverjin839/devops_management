@@ -50,6 +50,7 @@ class AlarmRequestIn(BaseModel):
     service: str = Field(..., min_length=1, max_length=50)
     metric_name: str = Field(..., min_length=1, max_length=200)
     meaning: str = Field(..., min_length=1, max_length=4000)
+    # 무시된다 — 서버가 (service, metric_name)으로 카탈로그 항목을 정한다(하위 호환으로만 받음).
     catalog_item_id: Optional[int] = None
     thresholds: list[RequestThreshold] = Field(..., min_length=1, max_length=10)
     cluster_ids: list[str] = Field(..., min_length=1, max_length=200)
