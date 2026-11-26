@@ -2323,6 +2323,43 @@ export interface KernelParamsCollectResponse {
   errors: string[];
 }
 
+// ── NIC 수집 (SSH, 서비스 구성 ▸ NIC 현재 값) ──────────────────────────────
+
+export interface NicCollectRequest {
+  hosts: string[];
+  /** host(IP) → 쿠버네티스 노드 이름. NIC 상태·스냅샷은 노드 이름으로 저장된다. */
+  hostNames?: Record<string, string>;
+  port?: number;
+  username?: string;
+  password?: string;
+  privateKey?: string;
+  useSudo?: boolean;
+  connectTimeout?: number;
+  parallelism?: number;
+  chunkSize?: number;
+  chunkPauseMs?: number;
+}
+
+export interface NicCollectPerHost {
+  host: string;
+  node?: string;
+  status: string;
+  interfaceCount?: number;
+  warnings?: string[];
+  stored?: boolean;
+  error?: string;
+  rawStdout?: string;
+  rawStderr?: string;
+  exitCode?: number | null;
+}
+
+export interface NicCollectResponse {
+  clusterId: string;
+  changed: number;
+  hosts: NicCollectPerHost[];
+  errors: string[];
+}
+
 // ── kubelet config 수집 (SSH) ────────────────────────────────────────────
 
 export interface KubeletConfigCollectRequest {
@@ -2624,49 +2661,6 @@ export interface ScriptTestRunResponse {
   exitCode?: number | null;
   durationMs: number;
   error?: string | null;
-}
-
-// ── MinIO / AIStor 수집 응답 ──────────────────────────────────────────
-export interface MinioCollectTenantSummary {
-  namespace: string | null;
-  name: string | null;
-  image: string | null;
-  version: string | null;
-  totalServers: number;
-  totalDrives: number;
-  drivesPerSet: number;
-  ecParity: number;
-  ecDataShards: number;
-  currentState: string | null;
-  healthStatus: string | null;
-  drivesOnline: number | null;
-  drivesOffline: number | null;
-}
-
-export interface MinioCollectDirectPVSummary {
-  totalDrives: number;
-  readyDrives: number;
-  totalCapacity: number;
-  nodeCount: number;
-}
-
-export interface MinioCollectOperatorSummary {
-  namespace: string | null;
-  name: string | null;
-  image: string | null;
-  version: string | null;
-}
-
-export interface MinioCollectResponse {
-  clusterId: string;
-  changed: number;
-  warnings: string[];
-  summary: {
-    operator: MinioCollectOperatorSummary | null;
-    tenants: MinioCollectTenantSummary[];
-    directpv: MinioCollectDirectPVSummary | null;
-  };
-  collectedAt: string;
 }
 
 // ── 노드 서버스펙 관리 대장 ────────────────────────────────────────────
@@ -6653,9 +6647,9 @@ export interface ContainerdConfigCollectResponse {
 
 // ── 서비스 구성 (`/k8s/:clusterId/services`) ─────────────────────────────────
 /** 현재 값을 다시 읽는 수집 종류 — 화면의 '현재 값 수집' 이 여는 모달. */
-export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config';
+export type ServiceConfigCollectKind = 'versions' | 'etcd-systemd' | 'containerd-config' | 'kernel-params' | 'static-pods' | 'kubelet-config' | 'nic';
 export type ServiceConfigRestartScope = 'immediate' | 'restart_member' | 'restart_service' | 'rolling_restart_ds' | 'reboot'
-  | 'restart_static_pod' | 'restart_kubelet';
+  | 'restart_static_pod' | 'restart_kubelet' | 'nic_queue_reset';
 export type ServiceConfigItemStatus = 'same' | 'differs' | 'mixed' | 'unknown';
 
 export interface ServiceConfigServiceDef {
@@ -6816,6 +6810,8 @@ export interface ServiceConfigApplyNodeResult {
   after: Record<string, string | null>;
   error: string | null;
   durationMs: number;
+  /** NIC — 적용은 됐지만 알아 둘 것(lacp_rate 재기동 후 반영·NM 미관리 런타임만 등). */
+  notes?: string[];
 }
 export interface ServiceConfigApplyRun {
   id: string;
@@ -6926,6 +6922,10 @@ export interface ServiceConfigApplySettings {
   kubeletConfig: string;
   kubeletService: string;
   kubeletRestartCmd: string;
+  nicEthtool: string;
+  nicRollbackTimerSec: number;
+  nicMemberWaitSec: number;
+  nicRejoinTimeoutSec: number;
 }
 
 // ── NIC 상태(서비스 구성 ▸ NIC, `/nic-watch`) ──
@@ -6972,6 +6972,7 @@ export interface NicRates {
   flaps: number;
   bondLinkFailures: number;
 }
+/** 목록 행(가벼운 형태) — 카운터·offload 전체·본딩 하위·경고는 `NicInterfaceDetail`(펼칠 때 따로 조회). */
 export interface NicInterfaceRow {
   node: string;
   name: string;
@@ -6987,28 +6988,32 @@ export interface NicInterfaceRow {
   vlanId: number | null;
   driver: { driver: string | null; version: string | null; firmware: string | null; bus: string | null } | null;
   ring: { rx: number | null; rxMax: number | null; tx: number | null; txMax: number | null } | null;
-  bond: NicBond | null;
+  bond: Omit<NicBond, 'slaveState'> | null;
   lacp: NicSlaveState | null;
   offload: { name: string; label: string; on: boolean }[];
+  rates: NicRates | null;
+  level: NicLevel;
+  /** 위험·확인 필요 경고 수. */
+  findingCount: number;
+}
+export interface NicInterfaceDetail extends Omit<NicInterfaceRow, 'bond' | 'findingCount'> {
+  bond: NicBond | null;
   features: { name: string; label: string; on: boolean; fixed: boolean }[];
   counters: { name: string; value: number }[];
-  rates: NicRates | null;
   findings: NicFinding[];
-  level: NicLevel;
 }
-export interface NicNodeInfo {
-  node: string;
-  hostIp: string | null;
-  agentVersion: string | null;
-  collectedAt: string | null;
-  receivedAt: string | null;
-  stale: boolean;
-  interfaceCount: number;
-  rateReady: boolean;
-  level: NicLevel;
+export interface NicViewQuery {
+  q?: string;
+  kind?: string;
+  onlyFlagged?: boolean;
+  offset?: number;
+  limit?: number;
 }
 export interface NicWatchSettings {
   enabled: boolean;
+  /** 서비스 구성 nic 설정 값을 읽을 대상 — 본딩과 그 하위(기본) | glob. */
+  targetMode: 'bond_members' | 'glob';
+  targetGlob: string[];
   includeKinds: string[];
   includeNames: string[];
   excludeNames: string[];
@@ -7044,10 +7049,14 @@ export interface NicObserved {
 }
 export interface NicOverrideSummary { clusterId: string; clusterName: string; fields: string[] }
 export interface NicClusterView {
-  nodes: NicNodeInfo[];
   interfaces: NicInterfaceRow[];
+  interfacesTotal: number;
+  offset: number;
+  limit: number;
+  /** 앞 300건(요약만 요청하면 5건). 전체 수는 `findingsTotal`. */
   findings: NicFinding[];
-  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel };
+  findingsTotal: number;
+  summary: { critical: number; warning: number; info: number; nodes: number; stale: number; level: NicLevel; latestReceivedAt: string | null };
   pendingAgents: { node: string; agentVersion: string | null; reason: string }[];
   agentCount: number;
   settings: NicWatchSettings;
@@ -7271,4 +7280,134 @@ export interface ClusterCheckSummary {
   total: number;
   /** 경고·위험 항목 — 심각한 것부터. */
   problems: ClusterCheckProblem[];
+}
+
+// ── Cilium 데이터패스 (`/k8s/:clusterId/cilium-datapath`) — Rust 노드 에이전트(pep-bpf-agent) 보고 ──────
+export type CiliumMapLevel = 'critical' | 'warning' | 'ok' | 'unknown';
+
+export interface CiliumBpfMap {
+  name: string;
+  group: string;
+  mapType: string;
+  maxEntries: number;
+  /** 센 항목 수 — 시간 예산이 남지 않아 세지 못했으면 null. */
+  entries: number | null;
+  /** 끝까지 세지 못함 — entries 는 하한. */
+  partial: boolean;
+  /** 같은 그룹(엔드포인트별 맵) 개수 — 이 맵은 그 중 가장 찬 맵. */
+  members: number;
+  elapsedMs: number;
+  pinned: boolean;
+  keySize: number;
+  valueSize: number;
+  error: string | null;
+  pct: number | null;
+  level: CiliumMapLevel;
+  label: string;
+  configKey: string | null;
+  note: string;
+  recommendation: string | null;
+}
+
+export interface CiliumBpfProgram {
+  name: string;
+  progType: string;
+  count: number;
+  tags: string[];
+  loadedAt: string | null;
+  runTimeNs: number | null;
+  runCnt: number | null;
+  diff: 'same' | 'changed' | 'new' | 'removed';
+}
+
+export interface CiliumBpfFeatures {
+  kernel?: string;
+  capBpf?: boolean;
+  capSysAdmin?: boolean;
+  capPerfmon?: boolean;
+  kernelCapBpf?: boolean;
+  kernelBatchOps?: boolean;
+  kernelDropReason?: boolean;
+  btf?: boolean;
+  bpfStatsEnabled?: boolean;
+  pinDirsFound?: string[];
+}
+
+export interface CiliumBpfAgent {
+  id: string;
+  node: string;
+  hostIp: string | null;
+  agentVersion: string | null;
+  state: 'reporting' | 'offline' | 'never';
+  lastSeenAt: string | null;
+  collectedAt: string | null;
+  collectMs: number | null;
+  features: CiliumBpfFeatures;
+  maps: CiliumBpfMap[];
+  mapsSkipped: number;
+  programs: CiliumBpfProgram[];
+  programsOther: number;
+  programsError: string | null;
+  baselineAt: string | null;
+  errors: string[];
+}
+
+export interface CiliumDatapathRun {
+  id: string;
+  clusterId: string;
+  kind: string;
+  status: 'running' | 'succeeded' | 'partial' | 'failed';
+  targetNodes: string[];
+  doneNodes: string[];
+  summary: { critical?: number; warning?: number; missing?: string[] };
+  requestedBy: string | null;
+  createdAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface CiliumDatapathView {
+  clusterId: string;
+  settings: {
+    warnPct: number;
+    critPct: number;
+    intervalSec: number;
+    sysAdmin: boolean;
+    alertsEnabled: boolean;
+    mapBudgetMs: number;
+    totalBudgetMs: number;
+    offlineMinutes: number;
+  };
+  columns: { group: string; label: string; configKey: string | null; known: boolean }[];
+  agents: CiliumBpfAgent[];
+  summary: { agents: number; reporting: number; critical: number; warning: number };
+  lastRun: CiliumDatapathRun | null;
+  tokenConfigured: boolean;
+}
+
+export interface CiliumDatapathSettings {
+  intervalSec: number;
+  mapBudgetMs: number;
+  totalBudgetMs: number;
+  warnPct: number;
+  critPct: number;
+  alertsEnabled: boolean;
+  pinDirs: string[];
+  mapPrefixes: string[];
+  programPrefixes: string[];
+  sysAdmin: boolean;
+  runTimeoutSec: number;
+  offlineMinutes: number;
+  agentImage: string;
+  agentNamespace: string;
+  ingestBaseUrl: string;
+  tlsVerify: boolean;
+  tokenConfigured: boolean;
+}
+
+export interface CiliumDatapathManifest {
+  yaml: string;
+  apiBaseUrl: string;
+  apiBaseUrlFromSettings: boolean;
+  tokenConfigured: boolean;
+  sysAdmin: boolean;
 }

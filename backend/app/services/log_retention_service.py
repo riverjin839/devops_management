@@ -28,6 +28,7 @@ from app.models.k8s_event import K8sEvent
 from app.models.user_notification import UserNotification
 from app.models.k8s_efficiency import K8sEfficiencyRun, K8sNamespaceSample, K8sWorkloadSample
 from app.models.ns_migration import NsMigrationRun
+from app.models.cilium_datapath import CiliumDatapathRun
 from app.models.service_config import ServiceConfigApplyRun, ServiceConfigChange
 from app.models.common_service import CommonServiceChange, CommonServiceRun, CommonServiceSnapshot
 from app.models.system_error_log import SystemErrorLog
@@ -60,6 +61,8 @@ RETENTION_DAYS: dict[str, int] = {
     "service_config_apply_runs": 365,
     # 서비스 구성 노드 설정 값 변경 이력 — OS 파라미터 변경 이력과 같은 400일.
     "service_config_changes": 400,
+    # Cilium 데이터패스 「지금 수집」 실행 이력 — 진단용이라 90일.
+    "cilium_datapath_runs": 90,
     # 공통 서비스 — 변경 이력은 서비스 구성과 같은 400일, 실행 로그 1년, 수집 스냅샷은 변경 이력과 같은 400일.
     "common_service_changes": 400,
     "common_service_runs": 365,
@@ -174,6 +177,7 @@ def purge_all(db: Session) -> dict[str, Any]:
         ("common_service_runs", CommonServiceRun, CommonServiceRun.started_at),
         ("common_service_snapshots", CommonServiceSnapshot, CommonServiceSnapshot.collected_at),
         ("system_error_logs", SystemErrorLog, SystemErrorLog.created_at),
+        ("cilium_datapath_runs", CiliumDatapathRun, CiliumDatapathRun.created_at),
     ]
     for name, model, ts_column in simple_targets:
         try:

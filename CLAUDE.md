@@ -5,6 +5,8 @@ This file provides essential context for AI assistants (Claude and others) worki
 ---
 ## riverjin839  custom 요청 
 모든 "실행"버튼 이벤트에는 항상 상세,실시간 로그 출력이 함께 구현되어야 하고, 사용자  "로그 보기" 옵션을 결정할수있어야한다.
+모든 로그 보기에서 ADMIN 은 실제로 노드에 날린 명령부터 볼 수 있어야 한다 — 노드·클러스터에 명령을 보내는 새 길목은
+`services/command_trace.py` `record()` 로 기록한다(SSH·subprocess·파드 exec 은 이미 기록됨, 상세 `DESIGN_SYSTEM.md` §12.9.1).
 
 
 ## Project Overview
@@ -57,6 +59,9 @@ PEP 의 문서·에디터·블록·협업/지식관리 기능을 발전시킬 �
   - **마이그레이션은 `main.py` 의 `_run_migrations()` 인라인 방식 — Alembic CLI 없음.**
   - K8s 점검은 `subprocess` 의 `kubectl` + `kubernetes` SDK 두 경로를 함께 쓴다.
   - Ollama(로컬 LLM)와 Ansible(`ansible-core` 의 `ansible-playbook` CLI) 은 **optional 의존** — 없어도 앱이 떠야 한다.
+- **Node agent(Rust)**: `agents/pep-bpf-agent` — Cilium BPF 맵을 읽기 전용으로 세어 보고하는 DaemonSet 바이너리.
+  libbpf/aya 없이 `bpf(2)` 직접 호출(쓰기 명령 없음), HTTP 는 `ureq`+rustls(scratch 이미지). **판정·알람·설정은 백엔드**
+  (`services/cilium_datapath/`)에 두고 에이전트는 읽기·요약·전송만 한다 — 운영 중 바꿔야 할 규칙을 바이너리에 넣지 않는다(UI-First).
 - **Frontend**: React + TypeScript · Vite · Tailwind + shadcn/ui(Base UI 기본, Radix 호환) ·
   axios · Recharts · React Router v6 · lucide-react.
   - **상태는 Zustand(client) / TanStack Query(server) 로 엄격히 분리** — §Frontend Architecture.
@@ -101,6 +106,7 @@ devops_management/
 │                        #   release/{version-tag.sh,bump_version,decide_bump,changelog_sections,check_changelog_sections,check_versions}.py,
 │                        #   docs/check_docs_sync.py, report/(AI 개발 리포트 집계·HTML 빌드),
 │                        #   a11y/(axe 접근성 스캔), ui/check_dialogs.py(모달 어댑터 검사 — CI)
+├── agents/pep-bpf-agent/ # Rust 노드 에이전트(Cilium BPF 맵 수집) — Cargo crate + Dockerfile
 ├── ansible/playbooks/  docker/
 ├── labs/                # 로컬 테스트 클러스터 — vagrant/(Mac VirtualBox·AlmaLinux)·windows-docker/ (운영 배포물 아님, labs/README.md)
 ├── docs/                # 인덱스는 docs/README.md (01-plan/ 02-design/ 03-analysis/
@@ -300,7 +306,7 @@ offline/error dict 를 반환**하고 HTTP 500 을 올리지 않는다 (`agent_s
   (좌측 공백 0) — 행 전체에 좌측 패딩이나 `mx-auto` 를 주지 않는다.
 - **SSH/exec 콘솔은 콘솔 패턴 필수.** 좌(컨트롤)/우(결과) 한 로우, stdout/stderr 는
   `ExecOutputTabs`, 로그는 `LogViewer`(plain `<pre>` 금지), 최상단에서 `useTerminalEnvSync` 호출.
-  적용 화면: `/bulk-exec` `/mc` `/etcdctl` `/cilium-trace` `/kernel-params` `/isilon-nfs`
+  적용 화면: `/bulk-exec` `/mc` `/etcdctl` `/cilium-trace` `/isilon-nfs`
   (+ 신규 콘솔 전부). 세부 예외(`/isilon-nfs` 의 `ExecOutputTabs` 미적용 등)는 `DESIGN_SYSTEM.md` §12.6.
 - **실행 → 결과 화면은 로그 중심 패턴(`DESIGN_SYSTEM.md` §12.6.1).** 좌 제어(≤320px, 하단 고정 실행 바) / 우 상단
   실행 로그(`RunLogPanel fill`, 중심) / 우 하단 결과. 조회 명령은 확인 없이 실행·변경 명령만 danger 확인, 입력 중
@@ -359,7 +365,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 
 대부분의 라우터는 JWT 인증(`_auth` dependency)이 걸려 있고, **비인증 마운트 예외는
 `auth`, `auth_oidc`, `auth_ldap`, `auth_signup`, `health`, `check_ingest`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `k8s_events_ingest`,
-`observability_ingest`, `node_param_ingest`, `daily_report_public`, `external_services_public`** 다
+`observability_ingest`, `node_param_ingest`, `cilium_datapath_ingest`, `daily_report_public`, `external_services_public`** 다
 (`*_public` 은 로그인 없는 공개 화면 `/daily-report`·`/external-services` 용 읽기 전용 `/public/...` — 테넌트 바인딩 없는 클러스터만 노출, 화면 설정 공개 방식이 `link` 면 만료 기한 있는 공유 링크 토큰 `?t=` 필요(거절은 403), 판정 `services/public_pages.py`)
 (`auth_oidc` 는 SSO 진입·콜백·교환과 공개 설정만 비인증이고 `/auth/oidc/settings*` 는 엔드포인트에 `require_admin` 을 직접 건다. `auth_ldap` 은 설정 엔드포인트뿐이며 전부 `require_admin` 을 직접 건다. `auth_signup` 은 신청 접수·공개 설정만 비인증이고 설정·목록·승인·거절은 `require_admin` 을 직접 건다)
 (`k8s_exec`/`k9s_ssh`/`node_ssh` 는 WebSocket 이라 핸들러가 query token 을 직접 검증하고,
@@ -372,7 +378,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 |---|---|
 | 인증/사용자 | `auth`, `auth_oidc`, `auth_ldap`, `auth_signup`(로그인 화면 가입 신청 + 관리자 승인), `cluster_access_grants`(사용자별 클러스터 숨김/읽기/편집 — admin), `audit_logs`, `system_errors`, `system_diagnostics`, `notifications`, `ui_settings`, `terminal_appearance`, `release_notes`, `backup`, `schema_health`, `island`, `home_prefs`, `tenants` |
 | 모니터링/점검 | `clusters`, `core_bundle_router`, `check_matrix`, `check_results_router`(+ingest), `check_definitions_router`, `ops_check`, `history`, `metric_trend`, `cluster_trends`, `cluster_items`, `k8s_events`(+ingest), `observability`(+ingest), `promql`, `health` |
-| K8s 운영 | `k8s_resources`, `k8s_allocation`, `service_config`(서비스 구성 — etcd·containerd·cilium·OS·컨트롤 플레인 정적 파드(apiserver·controller-manager·scheduler)·kubelet 설정 목록·현재 값·편집·의존 규칙·설정 버전·노드 그룹·적용), `node_param_watch`(+ingest — 노드 OS 파라미터 감시·에이전트 보고 수신), `nic_watch`(NIC 상태 — 에이전트 보고의 `nic` 판정, 읽기 전용), `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `daily_report`(+public — 일일 리포트), `external_services`(+public — 외부 도메인·IP:Port), `public_share`(공개 화면 공유 링크 — admin), `k8s_rbac`(SA·Role·ClusterRole·Binding + kubeconfig 발급), `ns_migration`(개발 → 운영 NS 리소스 이전), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
+| K8s 운영 | `k8s_resources`, `k8s_allocation`, `service_config`(서비스 구성 — etcd·containerd·cilium·OS·컨트롤 플레인 정적 파드(apiserver·controller-manager·scheduler)·kubelet·NIC 설정 목록·현재 값·편집·의존 규칙·설정 버전·노드 그룹·적용), `node_param_watch`(+ingest — 노드 OS 파라미터 감시·에이전트 보고 수신), `nic_watch`(NIC 상태 — 에이전트 보고·SSH 수집(`versions.collect-nic`)의 판정, 읽기 전용), `cilium_datapath`(+ingest — Rust 에이전트 BPF 맵 사용률·프로그램·지금 수집 SSE), `k8s_efficiency`(히스토리·추천·NS 정책·적용/롤백 run), `daily_report`(+public — 일일 리포트), `external_services`(+public — 외부 도메인·IP:Port), `public_share`(공개 화면 공유 링크 — admin), `k8s_rbac`(SA·Role·ClusterRole·Binding + kubeconfig 발급), `ns_migration`(개발 → 운영 NS 리소스 이전), `k8s_helm`, `k8s_exec`, `k9s_ssh`, `node_ssh`, `bulk_exec`, `saved_scripts`, `etcdctl`, `commands`, `mc_client`, `bottleneck`, `node_labels`, `node_images` |
 | 네트워크/토폴로지 | `cilium_trace`, `topology_trace`, `service_topology`, `architecture_docs` |
 | 업무 관리 | `work_items`, `work_item_custom_fields`, `jira`, `servicenow`, `projects`, `sprint`, `workflows` |
 | 지식 | `work_guide`, `confluence`, `ops_note`, `mindmap`, `ontology`, `voc`, `reactions`, `analyze`, `trends`, `agent` |
@@ -398,7 +404,7 @@ All shared interfaces live in `src/types/index.ts`. Keep backend response shapes
 이외 모델은 도메인별로 아래처럼 묶인다:
 
 - **관측/알람**: `observability`(`ObservabilityModule`/`ObservabilityMetric`/`ObservabilitySnapshot` — 지표 카탈로그는 DB 행이라 UI 편집 대상), `alert_event`(수신 알람, fingerprint 기준 upsert), `alert_notify_rule`(알림 라우팅·중복 억제 규칙)
-- **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `check_definitions`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`, `node_param_watch`(`NodeParamWatchRule` 감시 규칙 — 화면 편집, `cluster_id` NULL=공통 · `NodeParamAgent` 노드 에이전트 마지막 보고 상태 — 로그성. 값 이력은 `config_snapshot`(component `node_params:{node}`)+`os_param_change`), `node_nic`(`NodeNicState` 노드당 1행 — 에이전트가 보고한 인터페이스 상태 + 증가율용 카운터 표본, 판정은 조회 때 `services/nic_watch/analyze.py`), `service_config`(`ServiceConfigItem` 서비스별 관리 대상 설정 · `ServiceConfigRule` 의존 규칙(recommend/require/impact, rule_type 고정 집합) — 둘 다 시드지만 DB 행 · `ServiceConfigGroup` 노드 그룹(glob, 처음 일치 그룹 하나) · `ServiceConfigVersion` 클러스터·서비스·그룹별 설정 버전(imported/saved/superseded/applied, 그룹 버전은 재정의 값만, `group_id` NULL=기본) · `ServiceConfigApplyRun` 적용 실행 이력(8개 서비스, 노드별 결과·로그, SSH 자격증명 미저장, 로그성 365일) · `ServiceConfigChange` 비 LINUX 서비스 노드 설정 값 변경 1건=1행(source agent·k8s_api·ssh·apply, 로그성 400일 — 변경 감지는 `services/service_config/watch.py`). 현재 노드 값은 `config_snapshot` 에서 읽는다)
+- **점검/이벤트**: `check_matrix`(Item/Schedule/Result/ResultLog/**Run**=수행 로그 — 스키마 상세·운영 특성은 `docs/CHECK_MATRIX_GUIDE.md` §DB 구조), `check_definitions`, `ops_check`, `check_log`, `k8s_event`, `resource_count`, `config_snapshot`, `os_param_change`, `node_param_watch`(`NodeParamWatchRule` 감시 규칙 — 화면 편집, `cluster_id` NULL=공통 · `NodeParamAgent` 노드 에이전트 마지막 보고 상태 — 로그성. 값 이력은 `config_snapshot`(component `node_params:{node}`)+`os_param_change`), `cilium_datapath`(`CiliumBpfAgent` 노드당 1행 — Rust 에이전트가 보고한 맵·프로그램 요약·커널 기능(파생) · `CiliumDatapathRun` 「지금 수집」 1회=1행, 노드별 로그(로그성 90일)), `node_nic`(`NodeNicState` 노드당 1행 — 에이전트 보고·SSH 수집(`source`)한 인터페이스 상태 + 증가율용 카운터 표본, 판정은 조회 때 `services/nic_watch/analyze.py`. 설정 값은 서비스 구성 `nic:{node}` 스냅샷으로 평탄화 — `services/nic_watch/snapshot.py`), `service_config`(`ServiceConfigItem` 서비스별 관리 대상 설정 · `ServiceConfigRule` 의존 규칙(recommend/require/impact, rule_type 고정 집합) — 둘 다 시드지만 DB 행 · `ServiceConfigGroup` 노드 그룹(glob, 처음 일치 그룹 하나) · `ServiceConfigVersion` 클러스터·서비스·그룹별 설정 버전(imported/saved/superseded/applied, 그룹 버전은 재정의 값만, `group_id` NULL=기본) · `ServiceConfigApplyRun` 적용 실행 이력(9개 서비스(NIC 포함), 노드별 결과·로그, SSH 자격증명 미저장, 로그성 365일) · `ServiceConfigChange` 비 LINUX 서비스 노드 설정 값 변경 1건=1행(source agent·k8s_api·ssh·apply, 로그성 400일 — 변경 감지는 `services/service_config/watch.py`). 현재 노드 값은 `config_snapshot` 에서 읽는다)
 - **업무 관리**: `work_item`(+`work_item_comment`/`work_item_time_block`/`work_item_custom_field`), `sprint`, `project`, `workflow` — `work_items.embedding` 은 pgvector
 - **지식**: `ontology`, `mindmap`, `work_guide`(pgvector `embedding`), `ops_note`, `voc_post`, `command_entry`, `reaction`, `trend`
 - **DC 인벤토리**: `dc_inventory`(`DcSite`→`DcHall`→`DcRackRow`→`DcRack`, `DcDeviceType`/`DcDevice`, `DcInterface`, `DcCable`, `DcVrf`/`DcPrefix`/`DcIpAddress`/`DcAsn`, 토폴로지용 `DcZoneCluster`(구간 ↔ K8s 클러스터)·`DcLink`(패브릭 계층 논리 연결)·`DcCanvasPosition`(캔버스 좌표), `DcChangeLog` — 변경 1건=1행 append-only(`LOG_TABLES`, 무기한 보존)). **`dc_devices` 가 서버·스위치 신원·물리 위치의 단일 원본**이고 `node_server_specs.device_id`·`infra_nodes.device_id` 가 가리킨다. 쓰기는 반드시 `services/dc_inventory/crud.py` 경유(제약 검증 + 변경 이력이 같은 트랜잭션), 기존 화면과의 값 일치는 `services/dc_inventory/device_registry.py`. 설계·결정은 `docs/dc-inventory/DESIGN.md`
@@ -532,7 +538,7 @@ Makefile 타깃(`make k8s-dev`, `make docker-rebuild` 등)은 `make help` 로 �
 3. **자격증명은 params 에 저장하지 않는다.** params 는 JSONB 이고 런북·실행 로그에 노출된다.
    SSH 등 인증이 필요한 수집은 기존 UI 흐름(요청 시에만 자격증명 사용, 미저장)으로
    스냅샷을 남기고, 체커는 그 스냅샷을 읽는다 (예: `etcd_defrag` 의 snapshot 경로가
-   `/versions` 화면이 수집한 `etcdctl_config:{host}` 를 읽는 구조).
+   점검 런북 패널·서비스 구성의 SSH 수집 모달이 남긴 `etcdctl_config:{host}` 를 읽는 구조).
 4. **가시화가 편집보다 먼저다.** 무슨 명령이 나가는지 화면에서 볼 수 없으면 편집은 무의미하다
    — 새 체커/실행 경로를 추가하면 `services/check_matrix_runbook.py` 의 명령 목록도 같은
    커밋에서 갱신한다(테스트가 전 타입 커버리지를 검사한다).

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -19,6 +20,8 @@ from app.services.request_context import (
     HEADER as REQUEST_ID_HEADER, get_request_id, install_logging, new_request_id,
 )
 from app.services.request_id_middleware import RequestIdMiddleware
+from app.services import command_trace
+from app.services.command_trace import CommandTraceMiddleware
 from app.services.memory_watch import MemoryWatchMiddleware
 from app.services.dc_inventory.errors import DcError
 from app.services.dc_inventory.importer import FileError as DcFileError
@@ -95,6 +98,8 @@ from app.routers import (
     node_param_watch_router,
     nic_watch_router,
     node_param_ingest_router,
+    cilium_datapath_router,
+    cilium_datapath_ingest_router,
     service_config_router,
     ns_migration_router,
     daily_report_router,
@@ -1495,9 +1500,15 @@ def _run_migrations():
     if "os_param_changes" in inspector.get_table_names():
         _safe_create_index("ix_os_param_changes_to_snap", "os_param_changes", "(node, to_snapshot_id)")
         _safe_create_index("ix_os_param_changes_cluster_detected", "os_param_changes", "(cluster_id, detected_at DESC)")
+    # node_nic_states: NIC 상태 — 수집 출처(agent|ssh). 테이블은 create_all, 1.103 이전 DB 는 컬럼 보강.
+    if "node_nic_states" in inspector.get_table_names():
+        _safe_add_column("node_nic_states", "source", "VARCHAR(16)")
     # node_param_agents: 노드 파라미터 에이전트 상태 — 테이블은 create_all, 워치독 조회 인덱스 보강.
     if "node_param_agents" in inspector.get_table_names():
         _safe_create_index("ix_node_param_agents_last_seen", "node_param_agents", "(last_seen_at)")
+    # cilium_datapath_runs: 「지금 수집」 실행 — 에이전트 작업 수신(long-poll)이 진행 중 실행을 자주 찾는다.
+    if "cilium_datapath_runs" in inspector.get_table_names():
+        _safe_create_index("ix_cilium_datapath_runs_cluster_status", "cilium_datapath_runs", "(cluster_id, status, created_at)")
     # service_config_versions: 서비스 구성 설정 버전 — 테이블은 create_all, 화면 조회 인덱스 보강.
     if "service_config_versions" in inspector.get_table_names():
         _safe_create_index("ix_service_config_versions_lookup", "service_config_versions",
@@ -2576,6 +2587,15 @@ async def lifespan(app: FastAPI):
     # §config.py sync_threadpool_size 주석 참고.
     current_default_thread_limiter().total_tokens = settings.sync_threadpool_size
 
+    # 실행 명령 추적(관리자 "로그 보기") — subprocess 감사 훅 + run_in_executor(None) 가 contextvars 를 넘기게.
+    command_trace.install()
+    try:
+        asyncio.get_running_loop().set_default_executor(
+            command_trace.ContextThreadPoolExecutor(thread_name_prefix="pep-exec"),
+        )
+    except Exception:  # noqa: BLE001
+        _startup_log.warning("command_trace: default executor 교체 실패 — 스레드 안 명령은 실행 로그에 안 남을 수 있음")
+
     boot_state.begin()
     boot_state.pending_ddl_provider = lambda: list(_pending_ddl)
     _t = _time_mod.monotonic()
@@ -2697,7 +2717,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.106.0",
+    version="1.108.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2719,6 +2739,8 @@ if extra_origins:
 
 # 요청 ID — 가장 안쪽(gzip·CORS 보다 먼저 add)이라 5xx 응답 본문을 압축 전에 읽어 사유로 남긴다.
 app.add_middleware(RequestIdMiddleware)
+# 실행 명령 추적 — 관리자 요청에서 노드·클러스터에 나간 명령을 X-PEP-Commands 헤더로 돌려준다(services/command_trace.py).
+app.add_middleware(CommandTraceMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2726,7 +2748,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=[REQUEST_ID_HEADER],
+    expose_headers=[REQUEST_ID_HEADER, command_trace.HEADER],
 )
 
 
@@ -2872,6 +2894,10 @@ app.include_router(node_param_ingest_router, prefix="/api/v1")
 app.include_router(node_param_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NIC 상태(본딩/LACP·링크·MTU·ring buffer·드롭·offload) — 에이전트 보고의 nic 필드를 저장, 서비스 구성 ▸ NIC 화면(읽기 전용).
 app.include_router(nic_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# Cilium 데이터패스(eBPF) — Rust 노드 에이전트 보고·작업 수신·로그(Bearer CILIUM_BPF_AGENT_TOKEN 자체 검증, fail-closed)를
+# 먼저 include 하고, 화면 API(맵 사용률·프로그램·지금 수집 SSE·설정·매니페스트)는 JWT.
+app.include_router(cilium_datapath_ingest_router, prefix="/api/v1")
+app.include_router(cilium_datapath_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # 서비스 구성(etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전) — K8S 허브 ▸ 구성.
 app.include_router(service_config_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NS 마이그레이션(개발 → 운영) — 소스 read·타깃 operate 는 body 의 클러스터라 라우터가 직접 검사한다.
@@ -2926,7 +2952,7 @@ app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.106.0",
+        "version": "1.108.0",
         "status": "running"
     }
 

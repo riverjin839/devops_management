@@ -85,6 +85,10 @@ LOG_TABLES: frozenset[str] = frozenset({
     # 노드 OS 파라미터 에이전트 상태(마지막 보고 시각 등) — 다음 보고로 다시 생기는 파생 데이터.
     # 감시 규칙(node_param_watch_rules)은 설정이라 제외하지 않는다.
     "node_param_agents",
+    # Cilium 데이터패스 에이전트 상태(맵·프로그램 요약) — 다음 보고로 다시 생기는 파생 데이터.
+    "cilium_bpf_agents",
+    # Cilium 데이터패스 「지금 수집」 실행 이력 — 에이전트 로그 포함(로그성, 90일).
+    "cilium_datapath_runs",
     # 서비스 구성 적용 실행 이력 — 노드별 결과·로그(로그성, 365일).
     "service_config_apply_runs",
     # 서비스 구성 노드 설정 값 변경 이력(로그성, 400일).

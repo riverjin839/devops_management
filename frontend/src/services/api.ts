@@ -1,5 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { Cluster, Addon, CheckLog, SummaryStats, ApiResponse, PaginatedResponse, Playbook, PlaybookSshCreds, AgentChatRequest, AgentChatResponse, AgentHealthResponse, MetricCard, MetricQueryResult, MetricSparklineResult, ClusterItem, WorkItem, WorkItemType, WorkItemListResponse, WorkItemCreate, WorkItemUpdate, WorkItemStatusResponse, KanbanStatus, UiSettings, ClusterLinksPayload, WorkGuide, WorkGuideCreate, WorkGuideUpdate, WorkGuideListResponse, OpsNote, OpsNoteCreate, OpsNoteUpdate, OpsNoteListResponse, MindMap, MindMapListItem, MindMapCreate, MindMapUpdate, MindMapNode, MindMapNodeCreate, MindMapNodeUpdate, ManagementServer, ManagementServerCreate, ManagementServerUpdate, ManagementServerListResponse, TopologyTraceRequest, TopologyTraceResponse, TrendDigest, TrendItem, TrendSource, ClusterTrendsResponse, ReleaseNotesResponse, CheckMatrixItem, CheckMatrixItemInput, CheckMatrixGrid, CheckMatrixHistory, CheckMatrixSettings, CheckMatrixRunbook, CheckMatrixRun, CheckMatrixRunDetail, CheckMatrixRunList, CheckMatrixBatchResult, SystemErrorListResponse, SystemDiagnostics, CheckMatrixCancelResult, CheckMatrixSourceConfigEntry, CheckMatrixCatalog, CheckMatrixItemPreviewInput, CheckMatrixItemPreviewResult, CheckMatrixItemSourceConfig, CheckMatrixItemDetail, ClusterStatusBreakdown, SchemaHealthReport, SchemaRepairResult, LlmSettings, LlmProfile, LlmProfileModels, LlmHealthEntry, LlmTestResult, LlmCredentialSummary, LlmUsageBucket, Tenant, TenantBrief, ClusterAccessLevel, HealthCheckRunResult, AddonCheckRunResult, SignupPublicConfig, SignupSubmitPayload, SignupSettings, SignupRequestList, SignupRequestItem, SignupStatus, ClusterCheckSummary } from '@/types';
+import { currentRequestOwner, OWNER_FIELD, publishFromResponse } from '@/lib/commandTrace';
 import { newRequestId, REQUEST_ID_HEADER } from '@/lib/requestId';
 import { isDebugEnabled, useDebugStore } from '@/stores/debugStore';
 import { getAuthToken, expireAuthSession, type AuthUser } from '@/stores/authStore';
@@ -81,6 +82,12 @@ api.interceptors.request.use(
     }
     // 요청 추적 ID — 재시도는 같은 ID 를 유지한다(lib/requestId.ts).
     if (!config.headers.has(REQUEST_ID_HEADER)) config.headers.set(REQUEST_ID_HEADER, newRequestId());
+    // 이 요청을 보낸 실행 로그(lib/commandTrace) — 응답의 실행 명령을 그 실행에만 붙인다. 재시도는 같은 config 라 유지된다.
+    const cfgExt = config as unknown as Record<string, unknown>;
+    if (cfgExt[OWNER_FIELD] === undefined) {
+      const owner = currentRequestOwner();
+      if (owner) cfgExt[OWNER_FIELD] = owner;
+    }
     // FormData/Blob/File 은 own-enumerable 프로퍼티가 없어 convertKeysToSnake 가
     // 빈 객체({})로 뭉개버린다 — multipart 업로드(backup import 등)가 깨지므로 건너뛴다.
     if (config.data && typeof config.data === 'object'
@@ -125,6 +132,8 @@ function retryDelay(error: unknown): number | null {
 // Response interceptor - snake_case → camelCase 자동 변환 + debug 로깅
 api.interceptors.response.use(
   (response) => {
+    // 관리자 요청이면 서버가 실제로 날린 명령을 헤더로 돌려준다 — 그 요청을 보낸 실행 로그에 CMD 줄로(lib/commandTrace).
+    publishFromResponse(response);
     if (response.data && typeof response.data === 'object' && !(response.data instanceof Blob)) {
       response.data = convertKeys(response.data);
     }
@@ -141,6 +150,7 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    publishFromResponse(error?.response);
     const delay = retryDelay(error);
     if (delay != null) {
       await new Promise((r) => setTimeout(r, delay));
@@ -457,34 +467,8 @@ export const workItemCustomFieldsApi = {
     api.get<{ data: import('@/types').WorkItemCustomField[] }>('/work-item-custom-fields'),
 };
 
-// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집 & 히스토리
-export interface ComponentSnapshot {
-  id: string;
-  component: string;
-  category: string | null;
-  version: string | null;
-  data: Record<string, unknown>;
-  contentHash?: string;
-  collectedAt: string;
-}
-
-export interface VersionGraphNode {
-  id: string;
-  label: string;
-  type: 'cluster' | 'category' | 'component' | 'flag';
-  category?: string;
-  version?: string | null;
-  value?: string;
-  collectedAt?: string;
-  /** component 노드만 — 수집된 플래그 전체 개수(그래프는 앞 6개만 leaf 로 그린다). */
-  flagTotal?: number;
-}
-
-export interface VersionGraphEdge {
-  source: string;
-  target: string;
-  type: 'contains' | 'param' | 'configures' | 'replaces';
-}
+// Versions API — 클러스터 컴포넌트 버전/설정 스냅샷 수집(서비스 구성 "현재 값 수집" 이 쓴다).
+// SSH 수집(etcd systemd·kubelet·커널 파라미터·containerd·kubeadm 인증서·노드 NIC)은 components/versions 모달이 스트림으로 부른다.
 
 /** `POST /collect-versions` 응답의 컴포넌트별 결과 — 실행 로그가 대상마다 한 줄씩 남긴다. */
 export interface VersionCollectComponent {
@@ -502,51 +486,6 @@ export const versionsApi = {
     }>(
       `/clusters/${clusterId}/collect-versions`, undefined, { signal, timeout: SYNC_RUN_TIMEOUT },
     ),
-  collectMinio: (clusterId: string, signal?: AbortSignal) =>
-    api.post<import('@/types').MinioCollectResponse>(
-      `/clusters/${clusterId}/collect-minio`, undefined, { signal, timeout: 120_000 },
-    ),
-  /** 현재 스냅샷 CSV 내보내기. detail 로 컬럼 풍부도 조절. */
-  exportCsv: (
-    clusterId: string,
-    opts: { detail?: 'summary' | 'full' | 'none'; categories?: string[]; components?: string[] } = {},
-    signal?: AbortSignal,
-  ) => {
-    const q = new URLSearchParams();
-    if (opts.detail) q.set('detail', opts.detail);
-    if (opts.categories?.length) q.set('categories', opts.categories.join(','));
-    if (opts.components?.length) q.set('components', opts.components.join(','));
-    return api.get<Blob>(
-      `/clusters/${clusterId}/versions/export.csv?${q.toString()}`,
-      { signal, responseType: 'blob' },
-    );
-  },
-  current: (clusterId: string) =>
-    api.get<{ clusterId: string; components: ComponentSnapshot[] }>(
-      `/clusters/${clusterId}/versions/current`,
-    ),
-  history: (clusterId: string, component?: string, limit = 200) => {
-    const q = new URLSearchParams();
-    if (component) q.set('component', component);
-    q.set('limit', String(limit));
-    return api.get<{ clusterId: string; component: string | null; snapshots: ComponentSnapshot[] }>(
-      `/clusters/${clusterId}/versions/history?${q.toString()}`,
-    );
-  },
-  diff: (clusterId: string, fromId: string, toId: string) =>
-    api.get<{
-      from: { id: string; component: string; version: string | null; collectedAt: string };
-      to: { id: string; component: string; version: string | null; collectedAt: string };
-      versionChanged: boolean;
-      changes: { key: string; from: unknown; to: unknown }[];
-    }>(`/clusters/${clusterId}/versions/diff?from=${fromId}&to=${toId}`),
-  graph: (clusterId: string) =>
-    api.get<{
-      clusterId: string;
-      clusterName: string;
-      nodes: VersionGraphNode[];
-      edges: VersionGraphEdge[];
-    }>(`/clusters/${clusterId}/versions/graph`),
 };
 
 // Bulk SSH/SCP API
@@ -2020,7 +1959,7 @@ import type {
 /** 병목 진단 실행(SSE) — fetch+reader 로 소비(`lib/sse.ts` postSse). 본문은 snake_case. */
 export const podBottleneckStreamUrl = '/api/v1/pod-bottleneck/run/stream';
 /** versions SSH 수집의 SSE 버전(D-135) — 호스트가 끝날 때마다 log·step, 마지막에 동기 응답과 같은 result. */
-export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config';
+export type VersionsCollectKind = 'etcd-systemd' | 'kernel-params' | 'kubelet-config' | 'kubeadm-certs' | 'node-nics' | 'containerd-config' | 'nic';
 export const versionsCollectStreamUrl = (clusterId: string, kind: VersionsCollectKind) =>
   `/api/v1/clusters/${clusterId}/collect-${kind}/stream`;
 
@@ -2740,7 +2679,14 @@ const toEntries = (values: Record<string, string | null>) =>
   Object.entries(values).map(([key, value]) => ({ key, value }));
 /** NIC 상태(서비스 구성 ▸ NIC) — 노드 파라미터 에이전트 보고의 읽기 전용 판정. 설정 저장은 admin. */
 export const nicWatchApi = {
-  cluster: (clusterId: string) => api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`),
+  // GET 쿼리는 요청 인터셉터가 snake_case 로 바꾸지 않으므로 직접 쓴다.
+  cluster: (clusterId: string, p: import('@/types').NicViewQuery = {}) =>
+    api.get<import('@/types').NicClusterView>(`/nic-watch/clusters/${clusterId}`, {
+      params: { q: p.q || undefined, kind: p.kind || undefined, only_flagged: p.onlyFlagged || undefined, offset: p.offset ?? 0, limit: p.limit ?? 100 },
+    }),
+  interfaceDetail: (clusterId: string, node: string, iface: string) =>
+    api.get<import('@/types').NicInterfaceDetail>(
+      `/nic-watch/clusters/${clusterId}/nodes/${encodeURIComponent(node)}/interfaces/${encodeURIComponent(iface)}`),
   settings: () => api.get<import('@/types').NicWatchSettingsOut>('/nic-watch/settings'),
   updateSettings: (body: Partial<import('@/types').NicWatchSettings>) =>
     api.put<import('@/types').NicWatchSettingsOut>('/nic-watch/settings', body),
@@ -2857,6 +2803,24 @@ export const nodeParamWatchApi = {
   settings: () => api.get<import('@/types').NodeParamSettings>('/node-params/settings'),
   updateSettings: (body: Partial<Omit<import('@/types').NodeParamSettings, 'tokenConfigured'>>) =>
     api.put<import('@/types').NodeParamSettings>('/node-params/settings', body),
+};
+
+// ── Cilium 데이터패스 — Rust 노드 에이전트(pep-bpf-agent) 보고 기반. 맵 사용률·프로그램·지금 수집(SSE)·설정(JWT) ──
+export const ciliumDatapathApi = {
+  view: (clusterId: string) => api.get<import('@/types').CiliumDatapathView>(`/cilium-datapath/clusters/${clusterId}`),
+  runs: (clusterId: string, limit = 20) =>
+    api.get<{ items: import('@/types').CiliumDatapathRun[] }>(`/cilium-datapath/clusters/${clusterId}/runs`, { params: { limit } }),
+  /** SSE 엔드포인트 경로 — `streamLogged` 로 호출(본문은 camelCase → snake_case 자동 변환). */
+  collectStreamUrl: (clusterId: string) => `/api/v1/cilium-datapath/clusters/${clusterId}/collect`,
+  setBaseline: (clusterId: string, agentId: string) =>
+    api.post<{ ok: boolean; node: string; baselineAt: string }>(`/cilium-datapath/clusters/${clusterId}/agents/${agentId}/baseline`),
+  deleteAgent: (clusterId: string, agentId: string) =>
+    api.delete(`/cilium-datapath/clusters/${clusterId}/agents/${agentId}`),
+  manifest: (clusterId: string) =>
+    api.get<import('@/types').CiliumDatapathManifest>(`/cilium-datapath/clusters/${clusterId}/manifest`),
+  settings: () => api.get<import('@/types').CiliumDatapathSettings>('/cilium-datapath/settings'),
+  updateSettings: (body: Partial<Omit<import('@/types').CiliumDatapathSettings, 'tokenConfigured'>>) =>
+    api.put<import('@/types').CiliumDatapathSettings>('/cilium-datapath/settings', body),
 };
 
 // ── 외부 서비스 — 조회는 비인증 공개 API(저장 스냅샷), 수집(SSE)·설정은 JWT ──────────────────

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Lock, ShipWheel } from 'lucide-react';
 import { PageHeader, PageShell, EmptyState, ErrorState, LoadingState, SelectClusterEmptyState, ClusterCheckIcon } from '@/components/common';
-import { HubTabs, HubClusterSwitcher, HUB_VIEWS, DEFAULT_HUB_VIEW, findHubView, hubViewAllowed } from '@/components/k8s-hub';
+import { HubTabs, HubClusterSwitcher, HUB_VIEWS, DEFAULT_HUB_VIEW, RETIRED_HUB_VIEWS, findHubView, hubViewAllowed } from '@/components/k8s-hub';
 import { useClusters } from '@/hooks/useCluster';
 import { useNavCatalog } from '@/hooks/useNavCatalog';
 import { useClusterCheckSummaries } from '@/hooks/useOpsCheck';
@@ -53,9 +53,9 @@ export function K8sHubPage() {
 
   const embed = useMemo<K8sHubEmbed>(() => ({ clusterId, selectCluster }), [clusterId, selectCluster]);
 
-  // 옛 "터미널" 실행 카드 뷰(D-243 에서 k9s·노드 SSH 뷰로 대체) → k9s.
-  if (clusterId && viewId === 'terminals') {
-    return <Navigate to={`/k8s/${clusterId}/k9s${location.search}`} replace />;
+  // 지운 뷰 → 대체 뷰로(쿼리 보존) — 터미널 → k9s(D-243), 버전 / 설정 → 서비스 구성.
+  if (clusterId && !view && RETIRED_HUB_VIEWS[viewId]) {
+    return <Navigate to={`/k8s/${clusterId}/${RETIRED_HUB_VIEWS[viewId]}${location.search}`} replace />;
   }
   // 모르는 뷰 → 개요로.
   if (clusterId && !view) {

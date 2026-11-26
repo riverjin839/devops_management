@@ -1,11 +1,11 @@
 import type { ComponentType } from 'react';
 import {
-  Activity, Archive, ArrowRightLeft, BarChart3, BellRing, Blocks, BookMarked, BookOpen, Boxes, Calculator,
-  CalendarCheck2, ClipboardCheck, ClipboardList, Cog, Command, Container, Cpu, Database, Dog, Droplets,
+  Activity, Archive, ArrowRightLeft, BarChart3, Binary, BellRing, Blocks, BookMarked, BookOpen, Boxes, Calculator,
+  CalendarCheck2, ClipboardCheck, ClipboardList, Cog, Command, Container, Database, Dog, Droplets,
   Eye, FileCode2, FileSpreadsheet, FileText, Files, Gauge, GitBranch, GitFork, HardDrive, Home, Hourglass,
   KeyRound, Layers, LayoutGrid, Library, Link2, ListChecks, ListTodo, ListTree, Map, Network,
   NotebookText, Palmtree, Radar, Rocket, Route, Rss, ScrollText, Server, Settings, Share2, ShieldCheck,
-  ShipWheel, Siren, Tag, Tags, Terminal, TerminalSquare, TrendingUp, Users, UsersRound, Warehouse, Waves, Waypoints,
+  ShipWheel, Siren, Tags, Terminal, TerminalSquare, TrendingUp, Users, UsersRound, Warehouse, Waves, Waypoints,
   Workflow,
 } from 'lucide-react';
 import type { NavGroupDescKey, NavGroupKey, NavPageKey } from '@/i18n/resources/ko';
@@ -53,14 +53,12 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/sprints':            { labelKey: 'sprints', defaultLabel: '스프린트',        icon: Rocket },
   '/members':            { labelKey: 'members', defaultLabel: '멤버별 업무',    icon: UsersRound },
   '/cluster-manage':     { labelKey: 'clusterManage', defaultLabel: '클러스터 관리',  icon: Server },
-  '/versions':           { labelKey: 'versions', defaultLabel: '버전 / 설정',     icon: Tag },
   '/bulk-exec':          { labelKey: 'bulkExec', defaultLabel: '노드 일괄 실행', icon: Terminal },
   '/node-ssh':           { labelKey: 'nodeSsh', defaultLabel: '노드 SSH 터미널', icon: TerminalSquare },
   '/etcdctl':            { labelKey: 'etcdctl', defaultLabel: 'etcdctl 콘솔',   icon: Database },
   '/batch-jobs':         { labelKey: 'batchJobs', defaultLabel: '배치잡',          icon: ListTree },
   '/mc':                 { labelKey: 'mc', defaultLabel: 'mc 클라이언트',  icon: Archive },
   '/isilon-nfs':         { labelKey: 'isilonNfs', defaultLabel: 'NFS 모니터링',   icon: HardDrive },
-  '/kernel-params':      { labelKey: 'kernelParams', defaultLabel: '커널 파라미터',  icon: Cpu },
   // OS 파라미터 감시 — 노드 에이전트가 보고한 sysctl 값의 변경·기준값 위반·영구 설정 불일치(K8s 허브 점검 탭).
   '/os-param-watch':     { labelKey: 'osParamWatch', defaultLabel: 'OS 파라미터 감시', icon: ShieldCheck },
   // 서비스 구성 — etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전(K8S 허브 구성 탭).
@@ -81,6 +79,8 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/incident-analysis':  { labelKey: 'incidentAnalysis', defaultLabel: 'K8s 로그 (분석·실시간)', icon: Siren },
   '/packet-flow':        { labelKey: 'packetFlow', defaultLabel: '패킷 흐름 분석', icon: Route },
   '/cilium-trace':       { labelKey: 'ciliumTrace', defaultLabel: 'Cilium BPF 추적', icon: Waves },
+  // Cilium 데이터패스 — Rust 노드 에이전트(pep-bpf-agent)가 보고한 BPF 맵 사용률·프로그램 목록(K8S 허브 진단 탭).
+  '/cilium-datapath':    { labelKey: 'ciliumDatapath', defaultLabel: 'Cilium 데이터패스', icon: Binary },
   '/service-topology':   { labelKey: 'serviceTopology', defaultLabel: '서비스 토폴로지', icon: Workflow },
   '/service-architecture': { labelKey: 'serviceArchitecture', defaultLabel: '서비스 아키텍처', icon: Blocks },
   '/architecture':       { labelKey: 'architecture', defaultLabel: '서비스 모듈 관계도', icon: GitBranch },
@@ -111,7 +111,7 @@ export const HUB_ABSORBED_PATHS: ReadonlySet<string> = new Set([
   '/clusters', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/observability', '/k8s-events',
   '/k8s-logs', '/incident-analysis', '/daily-check/review', '/k8s-rbac', '/node-images', '/versions',
   '/etcdctl', '/kernel-params', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/ops-checks',
-  '/os-param-watch', '/k8s-services',
+  '/os-param-watch', '/k8s-services', '/cilium-datapath',
   // D-243 — 노드 라벨(전체 클러스터 모드 포함)·k9s·노드 SSH 도 허브 뷰가 됐다.
   '/node-labels', '/k9s', '/node-ssh',
 ]);

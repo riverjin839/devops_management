@@ -6,7 +6,7 @@
   실패한다** — kube-apiserver 공식 이미지는 distroless(쉘/kubeadm 바이너리 없음)라
   exec 자체가 안 되는 경우가 많다. 파드가 없거나 실행이 실패하면 그 이유를
   단계(steps)에 남긴다.
-- **snapshot** : "버전 / 설정 관리(/versions)" 화면(kubeadm 인증서 만료 수집)에서
+- **snapshot** : 점검 매트릭스 셀 ▸ 실행 방식 탭의 "SSH 로 지금 수집"(kubeadm 인증서 만료 수집)에서
   SSH 로 호스트에서 직접 실행해 수집해 둔 ``kubeadm_certs:{host}`` 스냅샷을 읽는다
   — 체커가 직접 SSH 하지 않으므로 자격증명을 params 에 저장할 필요가 없다
   (etcd_defrag 의 ``etcdctl_config:{host}`` 스냅샷 폴백과 동일 패턴).
@@ -211,7 +211,7 @@ class CertExpiryChecker(DeepCheckerBase):
         critical_days: int,
         max_age_hours: int,
     ) -> DeepCheckOutcome:
-        """"버전 / 설정 관리(/versions)" 화면의 "K8s 인증서(kubeadm)" 수집 버튼이 SSH 로
+        """점검 매트릭스 셀 ▸ 실행 방식 탭의 "SSH 로 지금 수집"(K8s 인증서 kubeadm)이 SSH 로
         호스트에서 직접 실행해 저장해 둔 ``kubeadm_certs:{host}`` 스냅샷을 읽는다.
 
         체커가 직접 SSH 하지 않는 이유: 자격증명을 정의 params(JSONB, 런북/로그에
@@ -219,7 +219,7 @@ class CertExpiryChecker(DeepCheckerBase):
         미저장)을 그대로 쓴다.
         """
         collect_hint = (
-            "'버전 / 설정 관리(/versions)' 화면의 'K8s 인증서(kubeadm)' 버튼으로 컨트롤 "
+            "점검 매트릭스 셀 ▸ 실행 방식 탭의 'SSH 로 지금 수집'(K8s 인증서 kubeadm)으로 컨트롤 "
             "플레인 노드에서 SSH 로 kubeadm certs check-expiration 을 먼저 수집하세요."
         )
         with self._step("snapshot", "수집된 kubeadm_certs 스냅샷 조회") as st:

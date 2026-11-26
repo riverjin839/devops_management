@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CDP 호스트 준비도 목업</title>
+<style>
+:root{
+  --background:210 40% 98%;--foreground:222 47% 11%;--card:0 0% 100%;
+  --primary:200 98% 32%;--primary-fg:0 0% 100%;
+  --secondary:210 33% 95%;--muted-foreground:215 16% 43%;--border:214 32% 91%;
+  --sidebar:214 30% 14%;--sidebar-fg:210 40% 96%;--sidebar-muted:215 20% 65%;--sidebar-accent:217 33% 22%;--sidebar-border:217 30% 24%;--sidebar-primary:200 98% 60%;
+  --ok-text:142 71% 28%;--warn:38 92% 50%;--warn-bg:38 92% 92%;--warn-text:38 92% 30%;
+  --crit:0 84% 50%;--crit-bg:0 84% 94%;--crit-text:0 84% 44%;
+  --unk-bg:220 9% 92%;--unk-text:220 9% 42%;
+  --log-bg:222 47% 11%;--log-fg:210 40% 96%;--log-muted:215 20% 65%;
+  --radius:.5rem;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --background:220 18% 7%;--foreground:220 10% 96%;--card:220 17% 10%;
+  --primary:212 100% 63%;--primary-fg:220 18% 7%;
+  --secondary:220 14% 16%;--muted-foreground:220 8% 68%;--border:220 14% 20%;
+  --sidebar:220 18% 5%;--sidebar-fg:220 10% 96%;--sidebar-muted:220 8% 68%;--sidebar-accent:220 14% 18%;--sidebar-border:220 14% 14%;--sidebar-primary:212 100% 63%;
+  --ok-text:142 71% 45%;--warn-bg:38 60% 14%;--warn-text:38 92% 50%;
+  --crit:0 84% 60%;--crit-bg:0 60% 16%;--crit-text:0 84% 66%;
+  --unk-bg:220 12% 18%;--unk-text:220 9% 60%;
+  --log-bg:220 18% 4%;--log-fg:220 10% 92%;--log-muted:220 8% 60%;
+}}
+:root[data-theme="dark"]{
+  --background:220 18% 7%;--foreground:220 10% 96%;--card:220 17% 10%;
+  --primary:212 100% 63%;--primary-fg:220 18% 7%;
+  --secondary:220 14% 16%;--muted-foreground:220 8% 68%;--border:220 14% 20%;
+  --sidebar:220 18% 5%;--sidebar-fg:220 10% 96%;--sidebar-muted:220 8% 68%;--sidebar-accent:220 14% 18%;--sidebar-border:220 14% 14%;--sidebar-primary:212 100% 63%;
+  --ok-text:142 71% 45%;--warn-bg:38 60% 14%;--warn-text:38 92% 50%;
+  --crit:0 84% 60%;--crit-bg:0 60% 16%;--crit-text:0 84% 66%;
+  --unk-bg:220 12% 18%;--unk-text:220 9% 60%;
+  --log-bg:220 18% 4%;--log-fg:220 10% 92%;--log-muted:220 8% 60%;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:hsl(var(--background));color:hsl(var(--foreground));font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+button,select,input{font:inherit;color:inherit}
+.c{color:hsl(var(--muted-foreground))}
+.app{display:flex;min-height:100vh}
+/* 메인 사이드바 */
+.nav{width:56px;flex:none;background:hsl(var(--sidebar));border-right:1px solid hsl(var(--sidebar-border));display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:6px}
+.nav i{display:block;width:32px;height:32px;border-radius:var(--radius);background:hsl(var(--sidebar-accent))}
+.nav i.on{outline:2px solid hsl(var(--sidebar-primary))}
+/* 클러스터 사이드바 iconOnly (메인에 flush) */
+.cs{width:52px;flex:none;background:hsl(var(--card));border-right:1px solid hsl(var(--border));display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:8px}
+.cs button{width:36px;height:36px;border-radius:var(--radius);border:1px solid hsl(var(--border));background:hsl(var(--secondary));font-size:11px;font-weight:600;cursor:pointer}
+.cs button.on{border-color:hsl(var(--primary));color:hsl(var(--primary));background:hsl(var(--card))}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:12px;padding:16px 24px 0;flex-wrap:wrap}
+h1{font-size:20px;margin:0;font-weight:650}
+.sub{font-size:13px}
+.spacer{flex:1}
+.tabs{display:flex;gap:4px;padding:12px 24px 0;border-bottom:1px solid hsl(var(--border))}
+.tab{border:0;background:none;padding:8px 12px;border-bottom:2px solid transparent;cursor:pointer;color:hsl(var(--muted-foreground))}
+.tab[aria-selected="true"]{color:hsl(var(--foreground));border-bottom-color:hsl(var(--primary));font-weight:600}
+.page{padding:16px 24px 24px;display:none}
+.page.on{display:block}
+.card{background:hsl(var(--card));border:1px solid hsl(var(--border));border-radius:var(--radius);margin-bottom:16px}
+.card>header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid hsl(var(--border))}
+.card>header b{font-size:14px}
+.card>.body{padding:12px 14px}
+.btn{border:1px solid hsl(var(--border));background:hsl(var(--card));border-radius:.75rem;padding:5px 12px;cursor:pointer;font-size:13px}
+.btn.pri{background:hsl(var(--primary));color:hsl(var(--primary-fg));border-color:hsl(var(--primary))}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:10px 32px}
+.kv div{display:flex;gap:12px}
+.kv dt{width:130px;flex:none;color:hsl(var(--muted-foreground))}
+.kv dd{min-width:0;overflow-wrap:anywhere}
+.kv dd{margin:0}
+dl{margin:0}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid hsl(var(--border));white-space:nowrap}
+th{font-weight:600;color:hsl(var(--muted-foreground));background:hsl(var(--secondary))}
+tr:last-child td{border-bottom:0}
+.note{font-size:12px;color:hsl(var(--muted-foreground));padding:8px 14px;border-top:1px solid hsl(var(--border))}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;background:hsl(var(--secondary));font-size:12px}
+/* 판정 배지: 정상은 중립, 비정상만 상태색 */
+.v{display:inline-block;min-width:52px;text-align:center;padding:2px 8px;border-radius:.375rem;font-size:12px;cursor:pointer;border:1px solid transparent}
+.v.pass{color:hsl(var(--ok-text));background:transparent;border-color:hsl(var(--border))}
+.v.warn{color:hsl(var(--warn-text));background:hsl(var(--warn-bg))}
+.v.fail{color:hsl(var(--crit-text));background:hsl(var(--crit-bg))}
+.v.unk{color:hsl(var(--unk-text));background:hsl(var(--unk-bg))}
+.v.na{color:hsl(var(--muted-foreground));cursor:default}
+.v:focus-visible,.btn:focus-visible,.tab:focus-visible{outline:2px solid hsl(var(--primary));outline-offset:2px}
+/* 준비도: 좌 제어 / 우 로그+결과 */
+.run{display:flex;gap:16px;align-items:stretch}
+.ctl{width:300px;flex:none;display:flex;flex-direction:column;min-height:560px}
+.ctl .body{flex:1}
+.ctl fieldset{border:0;padding:0;margin:0 0 14px}
+.ctl legend{font-weight:600;font-size:13px;margin-bottom:6px}
+.ctl label{display:flex;gap:8px;align-items:center;padding:3px 0;font-size:13px}
+.runbar{border-top:1px solid hsl(var(--border));padding:10px 14px;position:sticky;bottom:0;background:hsl(var(--card));border-radius:0 0 var(--radius) var(--radius)}
+.runbar .btn{width:100%;padding:8px}
+.right{flex:1;min-width:0;display:flex;flex-direction:column}
+.log{background:hsl(var(--log-bg));color:hsl(var(--log-fg));font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;height:220px;overflow:auto;padding:10px 12px;border-radius:0 0 var(--radius) var(--radius)}
+.log .t{color:hsl(var(--log-muted))}
+.log .fail{color:hsl(var(--crit) / 1)}
+.log .warn{color:hsl(var(--warn))}
+.log.collapsed{height:0;padding:0 12px}
+.detail{display:none;border-top:1px solid hsl(var(--border));padding:12px 14px;font-size:13px}
+.detail.on{display:block}
+.detail h3{margin:0 0 6px;font-size:14px}
+.grid2{display:grid;grid-template-columns:120px 1fr;gap:4px 12px}
+a{color:hsl(var(--primary))}
+input.f{width:72px;border:1px solid hsl(var(--border));background:hsl(var(--card));border-radius:.75rem;padding:3px 8px}
+input.w{width:180px}
+input.wide{width:100%;min-width:260px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px}
+select.s{border:1px solid hsl(var(--border));background:hsl(var(--card));border-radius:.75rem;padding:3px 8px;font-size:13px}
+.ico{width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.ico svg{width:14px;height:14px}
+.banner{font-size:12px;padding:8px 24px;background:hsl(var(--secondary));color:hsl(var(--muted-foreground));border-bottom:1px solid hsl(var(--border))}
+@media (max-width:900px){
+  .nav,.cs{display:none}
+  .run{flex-direction:column}.ctl{width:auto;min-height:0}
+  .top,.tabs,.page{padding-left:16px;padding-right:16px}
+}
+</style>
+</head>
+<body>
+<div class="banner">설계 목업 — <code>docs/02-design/cdp-ds-hosts/cdp-ds-hosts-architecture.md</code> §8-5. 데이터는 예시 값이며 실제 API 와 연결되지 않는다. 테마
+  <select class="s" id="theme" aria-label="테마"><option value="">시스템</option><option value="light">라이트</option><option value="dark">다크</option></select>
+</div>
+<div class="app">
+  <nav class="nav" aria-label="메인 메뉴"><i></i><i></i><i class="on"></i><i></i><i></i></nav>
+  <aside class="cs" aria-label="클러스터 선택">
+    <button class="on" title="ecs-prod (DS)" aria-label="ecs-prod (DS)">EP</button>
+    <button title="ecs-dev (DS)" aria-label="ecs-dev (DS)">ED</button>
+    <button title="ecs-poc (DS)" aria-label="ecs-poc (DS)">PC</button>
+  </aside>
+  <div class="main">
+    <div class="top">
+      <h1>CDP 호스트 준비도</h1>
+      <span class="sub c">ecs-prod · Cloudera Data Services 1.5.4 · ECS</span>
+      <span class="spacer"></span>
+      <label class="sub c"><input type="checkbox" id="viewer"> viewer 로 보기</label>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-p="p1">구성</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="p2">준비도</button>
+      <button class="tab" role="tab" aria-selected="false" data-p="p3">요구사항 프로필</button>
+    </div>
+
+    <!-- 목업 1: 구성 -->
+    <section class="page on" id="p1" role="tabpanel">
+      <div class="card">
+        <header><b>배포 정보</b><span class="spacer"></span><button class="btn op">편집</button></header>
+        <div class="body"><dl class="kv">
+          <div><dt>Base 클러스터</dt><dd>cdp-base-prod</dd></div>
+          <div><dt>플랫폼</dt><dd>ECS (RKE2) · 1.5.4</dd></div>
+          <div><dt>앱 도메인</dt><dd><code>*.apps.ecs.corp.local</code></dd></div>
+          <div><dt>Docker 저장소</dt><dd>Custom (TLS)</dd></div>
+          <div><dt>cluster-cidr</dt><dd>10.42.0.0/16 <span class="tag">배포 후 변경 불가</span></dd></div>
+          <div><dt>service-cidr</dt><dd>10.43.0.0/16 <span class="tag">배포 후 변경 불가</span></dd></div>
+          <div><dt>Longhorn 복제</dt><dd>2 <span class="tag">설치 시에만 지정</span></dd></div>
+          <div><dt>ECS HA</dt><dd>켜짐 · Server 3대 (1대 장애 허용)</dd></div>
+        </dl></div>
+      </div>
+      <div class="card">
+        <header><b>역할 할당</b><span class="c sub">호스트 신원은 DC 인벤토리 장비를 따른다</span><span class="spacer"></span>
+          <button class="btn op">DC 인벤토리에서 가져오기</button><button class="btn op">호스트 추가</button></header>
+        <div class="tw"><table>
+          <thead><tr><th>호스트</th><th>역할</th><th>서비스</th><th>랙 / U</th><th>CPU</th><th>메모리</th><th>로컬 디스크</th><th>OS</th></tr></thead>
+          <tbody>
+            <tr><td>ecs-master1</td><td>ECS Server</td><td>Control Plane</td><td>R01 / 20</td><td>32</td><td>64GB</td><td>1TB</td><td>RHEL 9.2</td></tr>
+            <tr><td>ecs-master2</td><td>ECS Server</td><td>Control Plane</td><td>R02 / 20</td><td>32</td><td>64GB</td><td>1TB</td><td>RHEL 9.2</td></tr>
+            <tr><td>ecs-master3</td><td>ECS Server</td><td>Control Plane</td><td>R03 / 20</td><td>32</td><td>64GB</td><td>1TB</td><td>RHEL 9.2</td></tr>
+            <tr><td>ecs-agent01</td><td>ECS Agent</td><td>Data Warehouse</td><td>R01 / 18</td><td>32</td><td>384GB</td><td>1.8TB NVMe</td><td>RHEL 9.2</td></tr>
+            <tr><td>ecs-agent05</td><td>ECS Agent · GPU</td><td>Cloudera AI</td><td>R04 / 10</td><td>48</td><td>256GB</td><td>2.6TB SSD</td><td>RHEL 9.2</td></tr>
+            <tr><td>lb01</td><td>Load Balancer</td><td>—</td><td>R01 / 40</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table></div>
+        <div class="note">ECS Server 2대 구성은 1대 → 3대 전환 중에만 허용된다. Agent 는 한 번에 50대 미만으로 추가한다.</div>
+      </div>
+    </section>
+
+    <!-- 목업 2: 준비도 (로그 중심 패턴) -->
+    <section class="page" id="p2" role="tabpanel">
+      <div class="run">
+        <div class="card ctl">
+          <header><b>점검 대상</b></header>
+          <div class="body">
+            <fieldset><legend>호스트</legend>
+              <label><input type="radio" name="tg" checked> 전체 호스트 (6)</label>
+              <label><input type="radio" name="tg"> 역할별 선택</label>
+            </fieldset>
+            <fieldset><legend>점검 항목</legend>
+              <label><input type="checkbox" checked> 용량 (CPU · 메모리 · 디스크)</label>
+              <label><input type="checkbox" checked> 스토리지 경로</label>
+              <label><input type="checkbox" checked> OS · 패키지</label>
+              <label><input type="checkbox" checked> 네트워크 · DNS</label>
+              <label><input type="checkbox" checked> 포트</label>
+              <label><input type="checkbox" checked> GPU</label>
+            </fieldset>
+            <fieldset><legend>프로필</legend>
+              <select class="s" aria-label="요구사항 프로필"><option>CDP DS 1.5.4 (기본)</option></select>
+            </fieldset>
+            <p class="c sub">조회만 하므로 확인 없이 실행한다. SSH 자격증명은 저장하지 않는다.</p>
+          </div>
+          <div class="runbar"><button class="btn pri op" id="runBtn">준비도 점검 실행</button></div>
+        </div>
+        <div class="right">
+          <div class="card">
+            <header><b>실행 로그</b><span class="c sub" id="runState">대기</span><span class="spacer"></span>
+              <label class="sub c" for="logMode">로그 보기</label>
+              <select class="s" id="logMode"><option value="all">전체</option><option value="bad">실패 · 경고만</option><option value="off">접기</option></select>
+            </header>
+            <div class="log" id="log" aria-live="polite"><span class="t">「준비도 점검 실행」을 누르면 호스트별 실시간 로그가 여기에 표시된다.</span></div>
+          </div>
+          <div class="card">
+            <header><b>결과</b><span class="c sub">호스트 × 항목 · 셀을 누르면 근거가 열린다</span><span class="spacer"></span>
+              <label class="sub c"><input type="checkbox" id="onlyBad"> 실패만</label>
+              <button class="btn">CSV</button></header>
+            <div class="tw"><table id="res">
+              <thead><tr><th>호스트</th><th>용량</th><th>스토리지</th><th>OS</th><th>네트워크</th><th>포트</th><th>GPU</th></tr></thead>
+              <tbody></tbody>
+            </table></div>
+            <div class="detail" id="detail"></div>
+            <div class="note legend">
+              <span class="v pass">통과</span> 기준 충족(중립색)
+              <span class="v warn">경고</span> 최소만 충족 · 권장 설정 위반
+              <span class="v fail">실패</span> 최소 미달
+              <span class="v unk">미확인</span> 수집 실패 — 통과로 보지 않음
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 목업 3: 요구사항 프로필 -->
+    <section class="page" id="p3" role="tabpanel">
+      <div class="card">
+        <header><b>프로필</b>
+          <select class="s" aria-label="프로필 선택"><option>CDP DS 1.5.4 (기본)</option></select>
+          <span class="spacer"></span><button class="btn op">복제</button><button class="btn pri op">저장</button></header>
+        <div class="tw"><table>
+          <thead><tr><th>역할</th><th>서비스</th><th>CPU 최소 / 권장</th><th>메모리 최소 / 권장</th><th>디스크 최소 / 권장</th><th>원문</th></tr></thead>
+          <tbody>
+            <tr><td>Control Plane</td><td>—</td><td><input class="f" value="16"> / <input class="f" value="32"></td><td><input class="f" value="32"> / <input class="f" value="64"> GB</td><td>300 GB / 1 TB</td><td><a class="btn ico" title="원문: Control Plane 요구사항" aria-label="원문: Control Plane 요구사항" href="https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-standalone-hanha-requirements.html" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 3h4v4M13 3 7 9M11 9v4H3V5h4"/></svg></a></td></tr>
+            <tr><td>Worker</td><td>Data Warehouse</td><td><input class="f" value="16"> / <input class="f" value="32"></td><td><input class="f" value="128"> / <input class="f" value="384"> GB</td><td>로컬 SSD 1.2 TB</td><td><a class="btn ico" title="원문: Data Warehouse 요구사항" aria-label="원문: Data Warehouse 요구사항" href="https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-standalone-cdw-requirements.html" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 3h4v4M13 3 7 9M11 9v4H3V5h4"/></svg></a></td></tr>
+            <tr><td>Worker</td><td>Data Engineering</td><td><input class="f" value="24"> / <input class="f" value="48"></td><td><input class="f" value="96"> / <input class="f" value="128"> GB</td><td>블록 200 GB + NFS 500 GB</td><td><a class="btn ico" title="원문: Data Engineering 요구사항" aria-label="원문: Data Engineering 요구사항" href="https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-standalone-cde-requirements.html" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 3h4v4M13 3 7 9M11 9v4H3V5h4"/></svg></a></td></tr>
+            <tr><td>Worker</td><td>Cloudera AI</td><td><input class="f" value="32"> / <input class="f" value="48"></td><td><input class="f" value="128"> / <input class="f" value="256"> GB</td><td>블록 누적 2600 GB</td><td><a class="btn ico" title="원문: Cloudera AI 요구사항" aria-label="원문: Cloudera AI 요구사항" href="https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-standalone-cml-requirements.html" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 3h4v4M13 3 7 9M11 9v4H3V5h4"/></svg></a></td></tr>
+          </tbody>
+        </table></div>
+        <div class="note">Data Engineering 의 CPU · 메모리는 워크스페이스와 워크로드 값을 합친 것이다(16 + 8 코어, 64 + 32 GB).</div>
+      </div>
+      <div class="card">
+        <header><b>공통 기준</b></header>
+        <div class="body"><dl class="kv">
+          <div><dt>/var/lib 여유</dt><dd>≥ <input class="f" value="300"> GiB</dd></div>
+          <div><dt>docker 경로</dt><dd><input class="f w" value="/docker"> 여유 ≥ <input class="f" value="300"> GiB</dd></div>
+          <div><dt>허용 OS</dt><dd class="chips"><span class="tag">RHEL 8.7–8.10</span><span class="tag">RHEL 9.1–9.4</span><span class="tag">OEL(RHCK) 8.7–8.9</span><span class="tag">OEL(RHCK) 9.1–9.3</span><button class="btn op">추가</button></dd></div>
+          <div><dt>네트워크 인터페이스</dt><dd><input class="f" value="1"> 개 (멀티호밍 미지원)</dd></div>
+          <div><dt>docker 대역</dt><dd><input class="f w" value="172.17.0.0/16"></dd></div>
+          <div><dt>NTP 오차</dt><dd>≤ <input class="f" value="500"> ms <span class="tag">PEP 제안값</span></dd></div>
+        </dl></div>
+      </div>
+      <div class="card">
+        <header><b>포트</b></header>
+        <div class="tw"><table>
+          <thead><tr><th>대상</th><th>TCP</th><th>UDP</th></tr></thead>
+          <tbody>
+            <tr><td>ECS Server</td><td><input class="f wide" value="9345, 6443, 10250, 2379–2381, 30000–32767" aria-label="ECS Server TCP 포트"></td><td><input class="f" value="8472"></td></tr>
+            <tr><td>ECS Agent</td><td>—</td><td><input class="f" value="4789"></td></tr>
+            <tr><td>Docker 저장소 · Agent</td><td><input class="f wide" value="7180–7192, 19001, 5000, 9000" aria-label="Docker 저장소 TCP 포트"></td><td>—</td></tr>
+            <tr><td>모든 ECS 호스트</td><td><input class="f wide" value="80, 443" aria-label="모든 ECS 호스트 TCP 포트"></td><td>—</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+(function(){
+  var root=document.documentElement;
+  var themeSel=document.getElementById('theme');
+  try{var saved=localStorage.getItem('cdp-mock-theme');if(saved){root.setAttribute('data-theme',saved);themeSel.value=saved;}}catch(e){}
+  themeSel.addEventListener('change',function(){
+    if(themeSel.value)root.setAttribute('data-theme',themeSel.value);else root.removeAttribute('data-theme');
+    try{localStorage.setItem('cdp-mock-theme',themeSel.value);}catch(e){}
+  });
+
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.addEventListener('click',function(){
+      document.querySelectorAll('.tab').forEach(function(x){x.setAttribute('aria-selected',x===t?'true':'false');});
+      document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('on',p.id===t.dataset.p);});
+    });
+  });
+
+  var viewer=document.getElementById('viewer');
+  viewer.addEventListener('change',function(){
+    document.querySelectorAll('.op').forEach(function(b){
+      b.disabled=viewer.checked;
+      b.title=viewer.checked?'operator 이상 권한이 필요합니다':'';
+    });
+  });
+
+  var L={pass:'통과',warn:'경고',fail:'실패',unk:'미확인',na:'—'};
+  var cols=['용량','스토리지','OS','네트워크','포트','GPU'];
+  var rows=[
+    {h:'ecs-master1',r:['pass','pass','pass','pass','pass','na']},
+    {h:'ecs-master2',r:['pass','pass','pass','pass','pass','na']},
+    {h:'ecs-master3',r:['pass','pass','pass','pass','pass','na']},
+    {h:'ecs-agent01',r:['warn','fail','pass','pass','pass','na']},
+    {h:'ecs-agent05',r:['pass','pass','pass','warn','pass','pass']},
+    {h:'lb01',r:['unk','unk','unk','pass','pass','na']}
+  ];
+  var why={
+    'ecs-agent01|용량':['메모리 384GB · CPU 32코어','Data Warehouse 권장 384GB 충족, 로컬 NVMe 1.8TB 는 executor 3개 분량(600GB 단위)','node_server_specs','https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-standalone-cdw-requirements.html','권장 10노드 중 이 역할 4노드 — 노드 수가 권장에 못 미친다'],
+    'ecs-agent01|스토리지':['/ecs/docker 여유 188GiB','docker 데이터 디렉터리 여유 300GiB 이상','cdp_host_storage_paths (SSH 수집)','https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-ecs-software-requirements.html','설치 전 디스크를 늘리거나 docker 경로를 다른 디스크로 지정한다'],
+    'ecs-agent05|네트워크':['/etc/resolv.conf nameserver 3개','nameserver 3개 미만 (EcsHostDnsInspection)','cdp_host_network (SSH 수집)','https://docs.cloudera.com/cdp-private-cloud-data-services/1.5.4/installation-ecs/topics/cdppvc-installation-ecs-steps.html','nameserver 를 2개 이하로 줄인다'],
+    'lb01|용량':['수집 실패 — SSH 연결 시간 초과','—','cdp_host_capacity','','LB 호스트는 ECS 노드가 아니면 대상에서 빼거나 자격증명을 다시 입력한다']
+  };
+  var tbody=document.querySelector('#res tbody');
+  var detail=document.getElementById('detail');
+  function render(){
+    var only=document.getElementById('onlyBad').checked;
+    tbody.innerHTML='';
+    rows.forEach(function(row){
+      var bad=row.r.some(function(v){return v==='fail'||v==='warn'||v==='unk';});
+      if(only&&!bad)return;
+      var tr=document.createElement('tr');
+      var td=document.createElement('td');td.textContent=row.h;tr.appendChild(td);
+      row.r.forEach(function(v,i){
+        var c=document.createElement('td');
+        var b=document.createElement(v==='na'?'span':'button');
+        b.className='v '+v;b.textContent=L[v];
+        if(v!=='na'){b.type='button';b.setAttribute('aria-label',row.h+' '+cols[i]+' '+L[v]);b.addEventListener('click',function(){show(row.h,cols[i],v);});}
+        c.appendChild(b);tr.appendChild(c);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+  function esc(s){return String(s).replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});}
+  function show(h,col,v){
+    var d=why[h+'|'+col]||['수집 값이 기준을 충족','프로필 기준값','점검 매트릭스 deep check','',''];
+    detail.innerHTML='<h3>'+esc(h)+' · '+esc(col)+' — <span class="v '+v+'">'+L[v]+'</span></h3><div class="grid2">'+
+      '<span class="c">수집 값</span><span>'+esc(d[0])+'</span>'+
+      '<span class="c">요구값</span><span>'+esc(d[1])+'</span>'+
+      '<span class="c">수집 경로</span><span>'+esc(d[2])+'</span>'+
+      (d[4]?'<span class="c">조치 안내</span><span>'+esc(d[4])+' (PEP 는 자동 조치하지 않는다)</span>':'')+
+      (d[3]?'<span class="c">원문</span><span><a href="'+d[3]+'" target="_blank" rel="noopener">Cloudera 1.5.4 문서</a></span>':'')+
+      '</div>';
+    detail.classList.add('on');
+  }
+  document.getElementById('onlyBad').addEventListener('change',render);
+  render();
+
+  var logEl=document.getElementById('log'),mode=document.getElementById('logMode'),state=document.getElementById('runState');
+  var lines=[
+    ['','실행 시작 — 대상 6대, 항목 6종, 프로필 CDP DS 1.5.4'],
+    ['','ecs-master1 CPUInspection 가상 코어 64 ≥ 16 … 통과'],
+    ['','ecs-master1 StorageInspection /var/lib 여유 412GiB ≥ 300GiB … 통과'],
+    ['','ecs-master1 /var/lib/longhorn 심볼릭 링크 아님 … 통과'],
+    ['','ecs-master2 OS RHEL 9.2 (허용 목록) · Python 3.8 · nm-cloud-setup 비활성 … 통과'],
+    ['','ecs-master3 포트 9345·6443·2379–2381 사용 가능 … 통과'],
+    ['warn','ecs-agent01 Data Warehouse 노드 4대 — 권장 10대 미만 … 권장 미달'],
+    ['fail','ecs-agent01 docker_dir=/ecs/docker 여유 188GiB < 300GiB … 실패'],
+    ['','ecs-agent05 nvidia-smi 정상 · nvidia-container-toolkit 설치됨 … 통과'],
+    ['warn','ecs-agent05 /etc/resolv.conf nameserver 3개 (3개 미만 필요) … 경고'],
+    ['','ecs-agent05 *.apps.ecs.corp.local → 10.20.0.10 (LB) 조회 … 통과'],
+    ['fail','lb01 SSH 연결 시간 초과 (10s) … 미확인 3건'],
+    ['','완료 — 통과 27 · 권장 미달 1 · 실패 1 · 경고 1 · 미확인 3']
+  ];
+  var shown=[];
+  function paint(){
+    logEl.classList.toggle('collapsed',mode.value==='off');
+    var f=mode.value==='bad'?shown.filter(function(l){return l[0];}):shown;
+    logEl.innerHTML=f.map(function(l){return '<div class="'+l[0]+'"><span class="t">'+l[2]+'</span> '+esc(l[1])+'</div>';}).join('')||'<span class="t">표시할 로그가 없다.</span>';
+    logEl.scrollTop=logEl.scrollHeight;
+  }
+  mode.addEventListener('change',paint);
+  document.getElementById('runBtn').addEventListener('click',function(){
+    var btn=this;btn.disabled=true;shown=[];state.textContent='실행 중';var i=0;
+    (function tick(){
+      if(i>=lines.length){state.textContent='완료';btn.disabled=viewer.checked;return;}
+      var d=new Date(),ts=d.toTimeString().slice(0,8);
+      shown.push([lines[i][0],lines[i][1],ts]);i++;paint();setTimeout(tick,350);
+    })();
+  });
+})();
+</script>
+</body>
+</html>

@@ -331,7 +331,8 @@ def analyze(states: list[dict[str, Any]], cfg: dict[str, Any], now: datetime) ->
         by_node[node] = by_name
         collected = _parse_ts(st.get("collected_at")) or _parse_ts(st.get("received_at")) or now
         received = _parse_ts(st.get("received_at"))
-        stale = bool(received and now - received > stale_after)
+        # SSH 수집은 사람이 누를 때만 갱신되므로 '보고 끊김' 대상이 아니다
+        stale = bool(st.get("source", "agent") == "agent" and received and now - received > stale_after)
         base = pick_baseline(st.get("history") or [], collected, window)
         nf: list[dict[str, Any]] = []
         if stale:
@@ -354,6 +355,7 @@ def analyze(states: list[dict[str, Any]], cfg: dict[str, Any], now: datetime) ->
                 if rel in node_rows and rel != f["iface"]:
                     node_rows[rel]["findings"].append(f)
         nodes_out.append({"node": node, "host_ip": st.get("host_ip"), "agent_version": st.get("agent_version"),
+                          "source": st.get("source", "agent"),
                           "collected_at": collected.isoformat() if st.get("collected_at") else None,
                           "received_at": received.isoformat() if received else None,
                           "stale": stale, "interface_count": len(ifaces), "rate_ready": base is not None})

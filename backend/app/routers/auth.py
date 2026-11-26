@@ -31,6 +31,7 @@ from app.schemas.auth import (
     SelfPasswordChangeRequest,
     PasswordChangeResponse,
 )
+from app.services import command_trace
 from app.services import audit_logger
 from app.services import ldap_service
 from app.services import login_rate_limiter
@@ -501,6 +502,7 @@ def delete_user(
     )
     db.delete(user)
     db.commit()
+    command_trace.forget_user(snapshot["username"])  # 실행 명령 표시용 관리자 캐시도 바로 지운다
     audit_logger.record(
         db,
         action="user.delete",
@@ -534,6 +536,8 @@ def update_user_role(
     user.role = payload.role
     db.commit()
     db.refresh(user)
+    # 강등 즉시 실행 명령(cmd 줄)이 보이지 않게 관리자 판정 캐시를 지운다(services/command_trace.py).
+    command_trace.forget_user(user.username)
     audit_logger.record(
         db,
         action="user.role.update",

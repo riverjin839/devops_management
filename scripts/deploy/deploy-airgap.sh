@@ -21,6 +21,15 @@ OLLAMA_IMAGE="${OLLAMA_IMAGE:-ghcr.io/riverjin839/devops_management/ollama-qwen2
 OLLAMA_TAG="${OLLAMA_TAG:-7b}"
 SKIP_OLLAMA="${SKIP_OLLAMA:-}"
 
+# 노드 에이전트(DaemonSet, 정적 Rust 바이너리) 이미지 — ${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG} 로 반입한다.
+# 폐쇄망에는 crates.io 가 없어 agent-rs/Dockerfile 로 직접 빌드할 수 없다 → 인터넷이 되는 PC 에서
+#   NODE_AGENT_SOURCE_IMAGE=ghcr.io/riverjin839/devops_management/node-agent:<릴리스 버전>
+# 처럼 공개 이미지를 지정해 pull+retag 하는 것이 기본 경로다(릴리스 1.106.0 이상에서 제공).
+# 지정하지 않으면 agent-rs/ 를 직접 빌드한다(인터넷 필요). SKIP_NODE_AGENT=1 이면 건너뛴다(예전 Python 에이전트만 쓰는 경우).
+# 반입 후 PEP 화면(OS 파라미터 감시 ▸ 에이전트 설치)의 에이전트 이미지를 ${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG} 로 바꾼다.
+NODE_AGENT_SOURCE_IMAGE="${NODE_AGENT_SOURCE_IMAGE:-}"
+SKIP_NODE_AGENT="${SKIP_NODE_AGENT:-}"
+
 # 폐쇄망 Nexus 프록시 설정 (선택, backend+frontend 모두 Alpine 기반)
 # ALPINE_MIRROR_URL - Alpine apk 미러 (예: http://nexus:8081/repository/alpine-proxy)
 # PIP_INDEX_URL     - PyPI 프록시 (예: http://nexus:8081/repository/pypi-proxy/simple)
@@ -187,7 +196,40 @@ print_config() {
     else
         echo -e "  Ollama 이미지 : ${YELLOW}${OLLAMA_IMAGE}:${OLLAMA_TAG}${NC}"
     fi
+    if [ -n "${SKIP_NODE_AGENT}" ]; then
+        echo -e "  노드 에이전트 : ${YELLOW}건너뜀 (SKIP_NODE_AGENT=1)${NC}"
+    elif [ -n "${NODE_AGENT_SOURCE_IMAGE}" ]; then
+        echo -e "  노드 에이전트 : ${YELLOW}${NODE_AGENT_SOURCE_IMAGE} → ${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG}${NC}"
+    else
+        echo -e "  노드 에이전트 : ${YELLOW}agent-rs/ 직접 빌드 (인터넷 필요)${NC}"
+    fi
     echo ""
+}
+
+# ============================================
+# 노드 에이전트 이미지 — 공개 이미지를 pull+retag(권장) 하거나 agent-rs/ 를 빌드한다.
+# 실패해도 전체 흐름을 막지 않는다: 노드 에이전트는 선택 구성(Python 에이전트로도 동작)이라 경고만 남긴다.
+# ============================================
+prepare_node_agent_image() {
+    local target="${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG}"
+    if [ -n "${SKIP_NODE_AGENT}" ]; then
+        return 0
+    fi
+    if [ -n "${NODE_AGENT_SOURCE_IMAGE}" ]; then
+        echo -e "  → 노드 에이전트 이미지 미러링 중 (${NODE_AGENT_SOURCE_IMAGE})..."
+        if ${CTR_CLI} pull "${NODE_AGENT_SOURCE_IMAGE}" && ${CTR_CLI} tag "${NODE_AGENT_SOURCE_IMAGE}" "${target}"; then
+            echo -e "  ${GREEN}✓ 노드 에이전트 이미지 준비 완료${NC}"
+        else
+            echo -e "  ${YELLOW}⚠ 노드 에이전트 이미지 pull 실패 — 건너뜁니다(PEP 설치 화면에서 backend 이미지를 지정하면 Python 에이전트로 설치 가능)${NC}"
+        fi
+        return 0
+    fi
+    echo -e "  → 노드 에이전트 이미지 빌드 중 (agent-rs/, crates.io 접근 필요)..."
+    if ${CTR_CLI} build -t "${target}" -f "${PROJECT_ROOT}/agent-rs/Dockerfile" "${PROJECT_ROOT}/agent-rs"; then
+        echo -e "  ${GREEN}✓ 노드 에이전트 이미지 빌드 완료${NC}"
+    else
+        echo -e "  ${YELLOW}⚠ 노드 에이전트 이미지 빌드 실패 — 건너뜁니다. 폐쇄망이면 NODE_AGENT_SOURCE_IMAGE 로 미리 받은 이미지를 지정하세요.${NC}"
+    fi
 }
 
 # ============================================
@@ -255,6 +297,9 @@ build_images() {
         "${PROJECT_ROOT}/frontend"
 
     echo ""
+    prepare_node_agent_image
+
+    echo ""
     echo -e "  → Ollama(자체 LLM) 이미지 미러링 중..."
     pull_ollama_image
 
@@ -271,6 +316,12 @@ push_images() {
 
     ${CTR_CLI} push "${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}"
     ${CTR_CLI} push "${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}"
+
+    # 노드 에이전트 — 로컬에 태그가 있을 때만(SKIP_NODE_AGENT·pull/빌드 실패면 조용히 건너뜀)
+    if [ -z "${SKIP_NODE_AGENT}" ] && ${CTR_CLI} image inspect "${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG}" &>/dev/null; then
+        ${CTR_CLI} push "${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG}"
+        echo -e "  ${GREEN}✓ 노드 에이전트 이미지 푸시 완료${NC}"
+    fi
 
     # Monitoring stack images
     for img in prom/prometheus:v2.51.0 grafana/grafana:10.4.0 kube-state-metrics/kube-state-metrics:v2.12.0 prom/node-exporter:v1.7.0; do
@@ -303,6 +354,15 @@ save_images() {
 
     ${CTR_CLI} save "${REGISTRY}/k8s-monitor/backend:${IMAGE_TAG}" | gzip > "${img_dir}/backend.tar.gz"
     ${CTR_CLI} save "${REGISTRY}/k8s-monitor/frontend:${IMAGE_TAG}" | gzip > "${img_dir}/frontend.tar.gz"
+
+    # 노드 에이전트(수 MB) — 로컬에 있을 때만 저장
+    if [ -z "${SKIP_NODE_AGENT}" ]; then
+        if ${CTR_CLI} image inspect "${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG}" &>/dev/null; then
+            ${CTR_CLI} save "${REGISTRY}/k8s-monitor/node-agent:${IMAGE_TAG}" | gzip > "${img_dir}/node-agent.tar.gz"
+        else
+            echo -e "  ${YELLOW}⚠ 노드 에이전트 이미지가 로컬에 없어 저장을 건너뜁니다 ('build' 를 먼저 실행했는지 확인).${NC}"
+        fi
+    fi
 
     # 기반 이미지도 저장
     ${CTR_CLI} pull postgres:15-alpine 2>/dev/null || true

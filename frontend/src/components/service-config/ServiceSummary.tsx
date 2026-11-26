@@ -21,6 +21,7 @@ const WATCH_SOURCE_HINT: Record<string, string> = {
   'kube-controller-manager': '정적 파드를 K8S API 로 주기 수집한다.',
   'kube-scheduler': '정적 파드를 K8S API 로 주기 수집한다.',
   kubelet: '노드 파라미터 에이전트가 kubelet 설정 파일을 읽어 보고한다.',
+  nic: '노드 파라미터 에이전트(1분마다) 또는 「SSH 로 수집」(누를 때)으로 읽은 값의 변경을 감지한다.',
 };
 
 interface Props {

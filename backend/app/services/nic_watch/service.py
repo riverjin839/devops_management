@@ -2,9 +2,18 @@
 
 보고는 노드 파라미터 에이전트(1.2.0+)의 ``POST /node-params/agent/report`` 본문 ``nic`` 으로 들어온다.
 NIC 저장이 실패해도 커널 파라미터 보고는 성공으로 둔다(라우터가 격리).
+
+대형 클러스터(노드 수백 대) 대응:
+- 수신: 인터페이스 상태(카운터 제외)가 그대로이고 마지막 전체 저장 뒤 5분이 안 지났으면 받은 시각만 갱신한다
+  (노드마다 매분 JSONB 를 다시 쓰지 않게). 카운터는 최대 5분 늦을 수 있다 — 증가율은 5분 표본으로 계산하므로 영향 없음.
+- 조회: 판정 결과를 클러스터별로 잠시(``VIEW_CACHE_SEC``) 캐시하고, 화면에는 필터·페이지를 적용한 가벼운 행만 보낸다.
+  행 상세(카운터·offload 전체·본딩 하위·경고)는 펼칠 때 ``interface_detail`` 로 따로 읽는다.
 """
 from __future__ import annotations
 
+import fnmatch
+import threading
+import time
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -21,6 +30,10 @@ HISTORY_SPACING = timedelta(minutes=5)
 HISTORY_KEEP = timedelta(minutes=75)   # 창 최대 60분 + 여유
 MAX_IFACES = 64
 MAX_COUNTERS = 80
+VIEW_CACHE_SEC = 20.0
+MAX_FINDINGS_OUT = 300
+_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_cache_lock = threading.Lock()
 _STR_FIELDS = ("name", "kind", "operstate", "duplex", "master")
 
 
@@ -57,6 +70,10 @@ def _clean_iface(raw: dict[str, Any]) -> Optional[dict[str, Any]]:
     it["lowers"] = [str(x)[:32] for x in (raw.get("lowers") or [])[:16]] if isinstance(raw.get("lowers"), list) else []
     ring = raw.get("ring")
     it["ring"] = {k: _i(ring.get(k)) for k in ("rx", "rx_max", "tx", "tx_max")} if isinstance(ring, dict) else None
+    if "channels" in raw:  # 채널 수를 보고하지 않는 출처(에이전트 1.2.x)는 키 자체가 없다 — 스냅샷이 이전 값을 유지하게
+        ch = raw.get("channels")
+        it["channels"] = ({k: _i(ch.get(k)) for k in ("combined", "combined_max", "rx", "rx_max", "tx", "tx_max")}
+                          if isinstance(ch, dict) else None)
     drv = raw.get("driver")
     it["driver"] = {k: _s(drv.get(k), 64) for k in ("driver", "version", "firmware", "bus")} if isinstance(drv, dict) else None
     feats = raw.get("features")
@@ -93,8 +110,12 @@ def _parse_dt(v: Any) -> Optional[datetime]:
 
 
 def ingest(db: Session, cluster: Cluster, node: str, host_ip: Optional[str], agent_version: Optional[str],
-           collected_at: Any, report: Any, now: Optional[datetime] = None) -> int:
-    """NIC 보고 1건 저장 — 저장한 인터페이스 수. ``report`` 가 없거나 형식이 틀리면 0(아무것도 바꾸지 않음)."""
+           collected_at: Any, report: Any, now: Optional[datetime] = None, source: str = "agent",
+           snapshot_source: Optional[str] = None) -> int:
+    """NIC 보고 1건 저장 — 저장한 인터페이스 수. ``report`` 가 없거나 형식이 틀리면 0(아무것도 바꾸지 않음).
+
+    ``source`` = agent(에이전트 보고) | ssh(서비스 구성 ▸ NIC 현재 값 수집). 전체 저장 때마다 서비스 구성
+    ``nic:{node}`` 스냅샷도 맞춘다(설정 값이 같으면 저장 안 함)."""
     if not isinstance(report, dict):
         return 0
     now = now or datetime.utcnow()
@@ -108,6 +129,17 @@ def ingest(db: Session, cluster: Cluster, node: str, host_ip: Optional[str], age
     if row is None:
         row = NodeNicState(cluster_id=cluster.id, node=node, history=[])
         db.add(row)
+    elif (source == "agent" and row.source in (None, "agent") and row.collected_at is not None
+          and row.collected_at <= collected < row.collected_at + HISTORY_SPACING
+          and _state_of(row.interfaces) == _state_of(ifaces)):
+        # 상태가 그대로면 받은 시각·오류만 — 카운터는 다음 전체 저장(5분) 때
+        row.host_ip = (host_ip or row.host_ip or None)
+        row.agent_version = agent_version
+        row.received_at = now
+        if (row.errors or []) != errors:
+            row.errors = errors
+        db.commit()
+        return len(ifaces)
     history = [h for h in (row.history or []) if isinstance(h, dict)]
     last_t = _parse_dt(history[-1].get("t")) if history else None
     if last_t is None or collected - last_t >= HISTORY_SPACING or collected < last_t:
@@ -117,13 +149,22 @@ def ingest(db: Session, cluster: Cluster, node: str, host_ip: Optional[str], age
         history = [h for h in history if (t := _parse_dt(h.get("t"))) and collected - t <= HISTORY_KEEP]
     row.host_ip = (host_ip or row.host_ip or None)
     row.agent_version = agent_version
+    row.source = source
     row.collected_at = collected
     row.received_at = now
     row.interfaces = ifaces
     row.errors = errors
     row.history = history
     db.commit()
+    from app.services.nic_watch import snapshot as SN
+
+    SN.store(db, cluster, node, ifaces, snapshot_source or source, now)  # apply = PEP 적용 — 변경 알람 없음
     return len(ifaces)
+
+
+def _state_of(ifaces: Any) -> list[Any]:
+    """카운터를 뺀 인터페이스 상태 — 전체 저장이 필요한지 비교용."""
+    return [{k: v for k, v in i.items() if k != "counters"} for i in (ifaces or []) if isinstance(i, dict)]
 
 
 def _ver_tuple(v: Optional[str]) -> tuple[int, ...]:
@@ -133,16 +174,51 @@ def _ver_tuple(v: Optional[str]) -> tuple[int, ...]:
         return (0,)
 
 
-def cluster_view(db: Session, cluster: Cluster, now: Optional[datetime] = None) -> dict[str, Any]:
-    """화면용 — 노드·인터페이스·경고·요약 + NIC 를 아직 보고하지 않는 에이전트(구버전·수집 꺼짐)."""
-    now = now or datetime.utcnow()
+def _with_version(db: Session, cluster: Cluster, cfg: dict[str, Any]) -> dict[str, Any]:
+    """서비스 구성 nic 의 기본 그룹 최신 버전이 있으면 그 값(해시 정책·LACP rate·offload)이 판정 기준에 우선한다 —
+    두 곳이 어긋나 같은 노드에 반대 경고가 뜨지 않게. 노드 그룹 재정의는 드리프트(서비스 구성)가 본다."""
+    try:
+        from app.services.service_config import view as V
+
+        vals = V._default_latest_values(db, cluster.id, "nic")  # noqa: SLF001 — 같은 앱의 조회 함수
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        vals = {}
+    if not vals:
+        return cfg
+    out = {**cfg, "offload_expect": dict(cfg["offload_expect"]), "version_driven": True}
+    if vals.get("bond.xmit_hash_policy"):
+        out["expected_hash_policy"] = str(vals["bond.xmit_hash_policy"])
+    if vals.get("bond.lacp_rate"):
+        out["expected_lacp_rate"] = str(vals["bond.lacp_rate"])
+    for k, v in vals.items():
+        if str(k).startswith("offload.") and str(v) in ("on", "off"):
+            out["offload_expect"][str(k)[len("offload."):]] = str(v) == "on"
+    return out
+
+
+def effective_settings(db: Session, cluster: Cluster) -> dict[str, Any]:
+    """판정 기준 = 공통 기준 → 이 클러스터 재정의 → NIC 설정 버전 값(있으면) 순으로 덮는다."""
+    return _with_version(db, cluster, get_cluster_settings(db, cluster.id)["effective"])
+
+
+def _analysis(db: Session, cluster: Cluster, now: Optional[datetime] = None) -> dict[str, Any]:
+    """판정 전체(모든 노드·인터페이스). ``now`` 를 주지 않으면 클러스터별로 잠시 캐시한다(설정이 바뀌면 무효)."""
     cs = get_cluster_settings(db, cluster.id)  # 공통 기준 + 이 클러스터 재정의
-    cfg = cs["effective"]
+    cfg = _with_version(db, cluster, cs["effective"])
+    key = str(cluster.id)
+    if now is None:
+        with _cache_lock:
+            hit = _cache.get(key)
+        if hit and hit[0] > time.monotonic() and hit[1]["settings"] == cfg and hit[1].get("overridden") == cs["overridden"]:
+            return hit[1]
+    at = now or datetime.utcnow()
     rows = db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster.id).all()
-    states = [{"node": r.node, "host_ip": r.host_ip, "agent_version": r.agent_version, "collected_at": r.collected_at,
+    states = [{"node": r.node, "host_ip": r.host_ip, "agent_version": r.agent_version, "source": r.source or "agent",
+               "collected_at": r.collected_at,
                "received_at": r.received_at, "interfaces": r.interfaces or [], "errors": r.errors or [],
                "history": r.history or []} for r in rows]
-    out = A.analyze(states, cfg, now)
+    out = A.analyze(states, cfg, at)
     reported = {r.node for r in rows}
     agents = db.query(NodeParamAgent).filter(NodeParamAgent.cluster_id == cluster.id).all()
     out["pending_agents"] = sorted(
@@ -154,9 +230,78 @@ def cluster_view(db: Session, cluster: Cluster, now: Optional[datetime] = None) 
     out["agent_count"] = len(agents)
     out["settings"] = cfg
     out["overridden"] = cs["overridden"]  # 이 클러스터가 공통과 다르게 정한 항목
+    if now is None:
+        with _cache_lock:
+            _cache[key] = (time.monotonic() + VIEW_CACHE_SEC, out)
     return out
+
+
+def invalidate(cluster_id: Any = None) -> None:
+    with _cache_lock:
+        if cluster_id is None:
+            _cache.clear()
+        else:
+            _cache.pop(str(cluster_id), None)
+
+
+_DETAIL_ONLY = ("counters", "features", "findings")
+
+
+def _slim(row: dict[str, Any]) -> dict[str, Any]:
+    out = {k: v for k, v in row.items() if k not in _DETAIL_ONLY}
+    if isinstance(out.get("bond"), dict):
+        out["bond"] = {k: v for k, v in out["bond"].items() if k != "slave_state"}
+    out["finding_count"] = sum(1 for f in row.get("findings") or [] if f.get("level") in ("critical", "warning"))
+    return out
+
+
+def cluster_view(db: Session, cluster: Cluster, now: Optional[datetime] = None, *, q: str = "", kind: str = "",
+                 only_flagged: bool = False, offset: int = 0, limit: int = 100) -> dict[str, Any]:
+    """화면용 — 요약·노드·경고(앞 ``MAX_FINDINGS_OUT`` 건) + 필터·페이지를 적용한 가벼운 인터페이스 행.
+
+    ``q`` 는 노드·인터페이스 이름 부분 일치 또는 glob(``*``·``?`` 가 있으면). ``limit`` 0 = 요약만(레일 상태 점용)."""
+    full = _analysis(db, cluster, now)
+    rows = full["interfaces"]
+    needle = (q or "").strip().lower()
+    if needle:
+        if any(ch in needle for ch in "*?["):
+            rows = [r for r in rows if fnmatch.fnmatchcase(r["node"].lower(), needle) or fnmatch.fnmatchcase(r["name"].lower(), needle)]
+        else:
+            rows = [r for r in rows if needle in r["node"].lower() or needle in r["name"].lower()]
+    if kind:
+        rows = [r for r in rows if r.get("kind") == kind]
+    if only_flagged:
+        rows = [r for r in rows if r.get("level") in ("critical", "warning")]
+    offset = max(0, int(offset))
+    limit = max(0, min(int(limit), 500))
+    findings = full["findings"]
+    received = [n["received_at"] for n in full["nodes"] if n.get("received_at")]
+    return {
+        # 노드 목록(수백 행)은 보내지 않는다 — 보고 끊김은 경고로, 마지막 보고 시각은 요약으로.
+        "summary": {**full["summary"], "latest_received_at": max(received) if received else None},
+        "findings": findings[:MAX_FINDINGS_OUT if limit else 5],
+        "findings_total": len(findings),
+        "interfaces": [_slim(r) for r in rows[offset:offset + limit]],
+        "interfaces_total": len(rows),
+        "offset": offset,
+        "limit": limit,
+        "pending_agents": full["pending_agents"],
+        "agent_count": full["agent_count"],
+        "settings": full["settings"],
+        "overridden": full.get("overridden", []),
+    }
+
+
+def interface_detail(db: Session, cluster: Cluster, node: str, iface: str,
+                     now: Optional[datetime] = None) -> Optional[dict[str, Any]]:
+    """행 하나의 전체(카운터·offload 전체·본딩 하위 상태·경고)."""
+    for r in _analysis(db, cluster, now)["interfaces"]:
+        if r["node"] == node and r["name"] == iface:
+            return r
+    return None
 
 
 def remove_node(db: Session, cluster_id: Any, node: str) -> None:
     db.query(NodeNicState).filter(NodeNicState.cluster_id == cluster_id, NodeNicState.node == node).delete()
     db.commit()
+    invalidate(cluster_id)
