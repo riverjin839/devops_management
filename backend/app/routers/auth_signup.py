@@ -285,12 +285,12 @@ def approve_request(
         details={"username": user.username, "role": user.role, "method": "signup_approval"}, request=request,
     )
     try:
-        from app.models.user_notification import UserNotification
+        from app.services.user_notify import create_notification
 
-        db.add(UserNotification(
-            recipient=user.username, type="signup_approved", title="가입이 승인되었습니다",
+        create_notification(
+            db, user=user, type="signup_approved", title="가입이 승인되었습니다",
             body=f"역할: {user.role}. 필요한 권한이 더 있으면 관리자에게 요청하세요.", link="/",
-        ))
+        )
         db.commit()
     except Exception:  # noqa: BLE001
         db.rollback()

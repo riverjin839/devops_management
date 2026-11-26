@@ -1605,6 +1605,32 @@ def _run_migrations():
         _safe_create_index("ix_check_logs_checked_at", "check_logs", "(checked_at)")
     if "user_notifications" in inspector.get_table_names():
         _safe_create_index("ix_user_notifications_created_at", "user_notifications", "(created_at)")
+        # 업무 알람 상용화(P0~P3) — 받는 사람을 users.id 로 판정 + 읽은 시각·중복 방지 키·외부 발송 상태.
+        _safe_add_column("user_notifications", "recipient_user_id", "VARCHAR(36)")
+        _safe_add_column("user_notifications", "read_at", "TIMESTAMP")
+        _safe_add_column("user_notifications", "dedupe_key", "VARCHAR(200)")
+        _safe_add_column("user_notifications", "external_status", "VARCHAR(20)")
+        _safe_add_column("user_notifications", "external_channels", "JSONB")
+        _safe_add_column("user_notifications", "external_error", "TEXT")
+        _safe_add_column("user_notifications", "external_sent_at", "TIMESTAMP")
+        _safe_create_index("ix_user_notifications_recipient_user_id", "user_notifications", "(recipient_user_id)")
+        _safe_create_index("ix_user_notifications_dedupe_key", "user_notifications", "(dedupe_key)")
+        _safe_create_index("ix_user_notifications_external_status", "user_notifications", "(external_status)")
+        # 예전 행 채우기 — username·사번은 유일하므로 그대로, display_name 은 활성 사용자 중 한 명일 때만
+        # (동명이인이면 비워 둔다 — 조회도 그런 이름은 매칭하지 않는다).
+        _safe_exec(
+            "UPDATE user_notifications n SET recipient_user_id = u.id FROM users u "
+            "WHERE n.recipient_user_id IS NULL AND (n.recipient = u.username OR n.recipient = u.employee_id)",
+            label="user_notifications.recipient_user_id backfill (username)",
+        )
+        _safe_exec(
+            "UPDATE user_notifications n SET recipient_user_id = u.id FROM users u "
+            "WHERE n.recipient_user_id IS NULL AND n.recipient = u.display_name "
+            "AND (SELECT count(*) FROM users u2 WHERE u2.display_name = u.display_name) = 1",
+            label="user_notifications.recipient_user_id backfill (unique display_name)",
+        )
+    if "work_items" in inspector.get_table_names():
+        _safe_add_column("work_items", "watchers", "JSONB")
         # k8s 효율화 샘플/실행 로그 — purge(log_retention_service) 가 sampled_at/queued_at 로 스캔.
         _safe_create_index("ix_k8s_ns_samples_at", "k8s_ns_samples", "(sampled_at)")
         _safe_create_index("ix_k8s_wl_samples_at", "k8s_workload_samples", "(sampled_at)")
@@ -2717,7 +2743,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.108.0",
+    version="1.109.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2952,7 +2978,7 @@ app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.108.0",
+        "version": "1.109.0",
         "status": "running"
     }
 

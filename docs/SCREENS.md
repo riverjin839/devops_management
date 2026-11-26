@@ -124,7 +124,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 
 ### 홈 (`/`)
 
-- **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `pages/BatchJobsPage.tsx`(플랫폼 현황 탭의 배치잡 서브탭으로 임베드 — 아래 Batch Jobs 섹션 참고)). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고).
+- **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `pages/BatchJobsPage.tsx`(플랫폼 현황 탭의 배치잡 서브탭으로 임베드 — 아래 Batch Jobs 섹션 참고)). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고 — 알림 종은 §알림 `/notifications`).
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 라벨 있는 **세그먼트 탭**(`업무 현황`/`플랫폼 현황`)이 화면 최상단이고, 이걸로 홈 본문에서 뭘 볼지 고른다. 예전엔 이 선택이 "홈 모드"라는 이름으로 **사이드바 네비게이션 전체를 게이팅**했지만(R-4 5차 D-054 — work 모드에서 클러스터·서버·네트워크 등 36개 화면이 레일에서 통째로 사라짐), 지금은 순수 홈 화면 로컬 상태다 — 사이드바·상단바 노출 범위와 무관하다. **[2026-09-17, Main UI 간소화]** 탭 위에 있던 KPI 스트립(나의 아일랜드 진입 필 + 내 할일/미해결 이슈/위험 클러스터/점검 실패/다음 일정 5종 필)을 통째로 제거했다 — 사용자 요청("정보를 줄이고 중요한 부분을 부각"). 위험 신호는 `플랫폼 현황` 탭 라벨의 배지(아래) 하나로 압축됐고, 아일랜드 진입은 상단바 opt-in 항목("나의 아일랜드")으로만 남는다(§Your Island 참고). KPI 필이 제공하던 개별 카운트(내 할일/미해결 이슈 등)는 각 목적지 화면(`/todo-today`, `/tasks-mgmt`)에서 직접 확인한다.
 - **UI 구성**:
   - 세그먼트 탭(`role="tablist"`, 좌우 화살표 키 이동, 화면 최상단): `[업무 현황]`(`ListTodo` 아이콘) / `[플랫폼 현황]`(`ServerCog` 아이콘, 위험 클러스터 + 점검 실패 합계 배지 — 0이면 숨김, `useCheckMatrixFailureCount()`+`useClusters()` 파생). 선택은 `useHomeStore().homeTab` 에 저장되고 localStorage(`pep:homeTab`)에 영속된다.
@@ -248,6 +248,25 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 변경 성공 시 `mustChangePassword: false`로 로컬 `AuthUser` 갱신(`setUser`) → 강제 변경 플로우 해제.
   - 실패 시(현재 비밀번호 불일치, 신규=기존과 동일 등) 서버 `detail` 메시지를 그대로 노출.
 - **디렉터리·SSO 계정(R-7)**: `/auth/me` 의 `auth_source` 가 `ldap` 이면 "사내 디렉터리에서 변경", `external`(로컬 비밀번호 없는 SSO 계정)이면 "사내 IdP 에서 변경" 안내만 보여주고 폼을 그리지 않는다. 서버 `POST /auth/me/password` 도 400(`directory_account`/`no_local_password`).
+- **요청사항 (수정 요청)**:
+  - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### 알림 (`/notifications`) + 상단 바 알림 종
+
+- **파일**: `frontend/src/pages/NotificationsPage.tsx` (+ `components/notifications/{NotificationHistoryList,NotificationPrefsPanel,DeliverySettingsCard}.tsx`), 알림 종 `components/layout/WorkAlarmBell.tsx`(전역 `AppTopBar`), `components/ui/popover.tsx`(Base UI Popover 래퍼), 업무 상세 구독 버튼 `components/work-items/WatchButton.tsx`.
+- **목적 / UX**: 업무 알람을 상용 수준으로 — 받는 사람을 사용자 ID 로 판정(동명이인 오배달 없음), 일정 알람은 서버가 마감일 기준으로 판정, 라인마다 지우기, 실시간 수신, 지난 알림 다시 보기, 알림 종류별 앱·메일·메신저 선택.
+- **알림 종(상단 바)**: shadcn/Base UI `Popover`(포커스 가둠·Escape·포커스 복귀). 탭 **업무 / 운영**(`SegTabs mode="tabs"`, 탭에 건수).
+  - 업무 탭: 일정 알람 **지연 · 오늘 마감 · 내일 마감**(`GET /work-items/my-alarms` — 기준일 = 마감일, 없으면 시작일(서비스 시간대). 완료·회의·교육 제외, 백로그는 마감일 있을 때만, 내일 마감은 마감일 명시 건만) + 업무 알림(배정·멘션·댓글·상태 변경·마감 알림·VOC 답변).
+  - 일정 알람 라인 오른쪽 눈 아이콘 = **오늘 그만 보기**(`POST /work-items/my-alarms/{id}/dismiss`, 내일도 미완료면 다시 보임) · 하단 「숨긴 n건 다시 보기」(`DELETE /work-items/my-alarms/dismissals`). 알림 라인 체크 = 읽음 처리. 버튼은 상시 노출(키보드 접근) + `aria-label`.
+  - 운영 탭: 알람 인박스 알림 규칙·critical K8S 이벤트 알림.
+  - 배지 = 지연 + 오늘 마감 + 안 읽은 알림(내일 마감은 예고라 제외). 하단 「알림 전체 보기」 → `/notifications`, 「모두 읽음」은 현재 탭 종류만.
+  - 실시간: `GET /notifications/my/stream`(SSE, 서버 5초 폴링·10분마다 재연결, `Content-Encoding: identity` 로 gzip 제외) — 새 알림이면 토스트(「열기」) + 배지 갱신. 끊기면 지수 백오프 재연결, 그동안은 2분 폴링.
+- **화면 `/notifications`** (`PageShell doc`, 탭 URL `?tab=inbox|settings&category=`):
+  - **받은 알림**: 읽은 알림 포함 전체 이력(`GET /notifications/my/history` — 종류 전체/업무/운영 · 안 읽은 알림만 · 제목·내용 검색 · 더 보기). 행: 안 읽음 점 · 제목 · 종류 · 상대 시각 · 외부 발송 상태(메일·메신저 발송됨/실패 사유). 라인별 읽음 ↔ 안 읽음 전환(`POST /my/{id}/read|unread`), 삭제(`DELETE /my/{id}`), 「모두 읽음」. 보관: 읽은 알림 90일, 안 읽은 알림 1년.
+  - **알림 설정**(본인 설정 — viewer 도 저장): 알림 종류(업무 8 · 운영 2) × 앱(알림 종)/메일/메신저 체크 표(관리자가 채널을 지정하지 않았거나 내 메일이 없으면 「미설정」), 메일·메신저 발송 방식(바로 / 하루 한 번 요약 + 시각), 방해 금지 시간(외부 채널만 보류). `GET|PUT /notifications/my/prefs`(이벤트는 `{type,…}` 목록 — axios 키 camelCase 변환 회피).
+  - **발송 채널**(operator 조회, admin 저장): 외부 발송 켜기 · 메일 채널(email 형 알림 채널의 SMTP 재사용, 받는 사람만 사용자 메일) · 메신저 채널(webhook 형 — 본문에 `recipient`·`employee_id`·`email`·`link`) · PEP 주소(링크 접두). `GET|PUT /notifications/delivery-settings`(AppSetting `user_notify.delivery`, 감사 `notifications.delivery.update`).
+- **업무 상세 구독**: 헤더 「구독/구독 해제 n」(`POST|DELETE /work-items/{id}/watch`, `work_items.watchers`) — 담당자가 아니어도 댓글·상태 변경 알림.
+- **Backend**: `routers/notifications.py`(개인 알림·스트림·설정·발송 채널 + 알림 채널 CRUD — 채널 조회 operator(비밀 값·비 admin 은 URL 도 `********`), 생성·수정·삭제·테스트 발송·발송 이력 admin, 웹훅 대상은 http(s)만·루프백/링크 로컬/메타데이터 거부, 가려진 값은 저장 시 기존 값 유지). `services/user_notify.py`(`EVENT_CATALOG`, `UserIndex`(username → 사번 → 유일한 이름), `create_notification`(설정 적용·`dedupe_key`), 업무 이벤트 알림), `services/work_alarms.py`(일정 알람 판정·아침 마감 알림), `services/user_notify_delivery.py`(외부 발송). Beat `work-item-due-reminder`(08:40) · `user-notify-delivery`(매분). 모델 `UserNotification`(+`recipient_user_id`·`read_at`·`dedupe_key`·`external_*`), `UserNotificationPref`, `WorkAlarmDismissal`(로그성 30일).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 

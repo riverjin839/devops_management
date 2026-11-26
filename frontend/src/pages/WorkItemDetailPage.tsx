@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ListTodo, Plus, Trash2, UploadCloud, Ticket } from 'lucide-react';
-import { WorkItemForm, WorkItemReadView, JiraPushDialog, ServiceNowRegisterDialog } from '@/components/work-items';
+import { WorkItemForm, WorkItemReadView, JiraPushDialog, ServiceNowRegisterDialog, WatchButton } from '@/components/work-items';
 import { ConfirmDialog, useToast, EmptyState, PageHeader, PageShell } from '@/components/common';
 import { MacCard } from '@/components/ui/MacCard';
 import { useWorkItem, useDeleteWorkItem } from '@/hooks/useWorkItems';
@@ -96,6 +96,7 @@ export function WorkItemDetailPage() {
               )}
               {!isEditing && (
                 <>
+                  <WatchButton item={item} />
                   <button
                     onClick={() => navigate(`/tasks-mgmt/new?parentId=${item.id}`)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-secondary hover:bg-secondary/80 border border-border rounded-lg transition-colors"

@@ -919,6 +919,12 @@ export const sprintsApi = {
 };
 
 export const workItemsApi = {
+  // 업무 일정 알람(알림 종) — 서버가 지연/오늘/내일 마감을 판정한다.
+  myAlarms: () => api.get<import('@/types').MyWorkAlarms>('/work-items/my-alarms'),
+  dismissAlarm: (id: string) => api.post(`/work-items/my-alarms/${id}/dismiss`),
+  restoreAlarms: () => api.delete<{ ok: boolean; restored: number }>('/work-items/my-alarms/dismissals'),
+  watch: (id: string) => api.post<{ watching: boolean; watchers: string[] }>(`/work-items/${id}/watch`),
+  unwatch: (id: string) => api.delete<{ watching: boolean; watchers: string[] }>(`/work-items/${id}/watch`),
   getAll: (params?: WorkItemFilters) =>
     api.get<WorkItemListResponse>('/work-items', {
       params: params
@@ -2362,11 +2368,26 @@ export const notificationsApi = {
     api.put<NotificationChannel>(`/notifications/channels/${id}`, data),
   remove: (id: string) => api.delete(`/notifications/channels/${id}`),
   test: (id: string) => api.post<NotificationLogEntry>(`/notifications/test/${id}`),
-  // 개인 인앱 알림 (알림 종)
-  listMy: (limit = 30) =>
-    api.get<{ data: import('@/types').UserNotification[]; unread: number }>('/notifications/my', { params: { limit } }),
+  log: (limit = 50) => api.get<NotificationLogEntry[]>('/notifications/log', { params: { limit } }),
+  // 개인 인앱 알림 (알림 종) — 안 읽은 것만
+  listMy: (limit = 30, category?: import('@/types').NotificationCategory) =>
+    api.get<import('@/types').MyNotificationsResponse>('/notifications/my', {
+      params: { limit, ...(category ? { category } : {}) },
+    }),
+  // 알림 화면 — 읽은 것 포함 전체 이력
+  history: (params: { offset?: number; limit?: number; category?: import('@/types').NotificationCategory; type?: string; unread_only?: boolean; q?: string }) =>
+    api.get<import('@/types').NotificationHistoryResponse>('/notifications/my/history', { params }),
   markRead: (id: string) => api.post(`/notifications/my/${id}/read`),
-  markAllRead: () => api.post('/notifications/my/read-all'),
+  markUnread: (id: string) => api.post(`/notifications/my/${id}/unread`),
+  removeMy: (id: string) => api.delete(`/notifications/my/${id}`),
+  markAllRead: (category?: import('@/types').NotificationCategory) =>
+    api.post('/notifications/my/read-all', null, { params: category ? { category } : {} }),
+  getPrefs: () => api.get<import('@/types').NotificationPrefs>('/notifications/my/prefs'),
+  putPrefs: (data: import('@/types').NotificationPrefsInput) =>
+    api.put<import('@/types').NotificationPrefs>('/notifications/my/prefs', data),
+  getDelivery: () => api.get<import('@/types').NotificationDeliverySettings>('/notifications/delivery-settings'),
+  putDelivery: (data: import('@/types').NotificationDeliverySettings) =>
+    api.put<import('@/types').NotificationDeliverySettings>('/notifications/delivery-settings', data),
 };
 
 // ── Observability (관측 스택 지표) + 알람 인박스 ──────────────────────────────

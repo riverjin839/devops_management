@@ -145,7 +145,7 @@ def test_submit_stores_hash_only_and_notifies_admin(client, db, admin):
     assert req.password_hash and req.password_hash != PW and verify_password(PW, req.password_hash)
     # 계정은 아직 없다.
     assert db.query(User).filter(User.username == form["username"]).first() is None
-    assert db.query(UserNotification).filter(UserNotification.recipient == admin.username,
+    assert db.query(UserNotification).filter(UserNotification.recipient_user_id == admin.id,
                                              UserNotification.type == "signup_request").count() == 1
     assert db.query(AuditLog).filter(AuditLog.action == "signup.submit", AuditLog.status == "success",
                                      AuditLog.target_id == req.id).count() == 1
@@ -251,6 +251,9 @@ def test_pending_login_hint_then_approve_then_login(client, db, admin):
     user = db.query(User).filter(User.username == req.username).one()
     assert user.role == "operator" and user.email == "hong@corp.example" and user.employee_id == req.username
     assert db.query(SignupRequest).filter(SignupRequest.id == req.id).one().password_hash is None
+    # 승인 알림은 새 계정 id 로 묶인다(알림 조회는 recipient_user_id 기준).
+    assert db.query(UserNotification).filter(UserNotification.recipient_user_id == user.id,
+                                             UserNotification.type == "signup_approved").count() == 1
 
     r = client.post("/api/v1/auth/login", json={"username": req.username, "password": PW})
     assert r.status_code == 200, r.text
