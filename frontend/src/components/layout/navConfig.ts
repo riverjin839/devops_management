@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import {
-  Activity, Archive, ArrowRightLeft, BarChart3, BellRing, Blocks, BookMarked, BookOpen, Boxes, Calculator,
+  Activity, Archive, ArrowRightLeft, BarChart3, Binary, BellRing, Blocks, BookMarked, BookOpen, Boxes, Calculator,
   CalendarCheck2, ClipboardCheck, ClipboardList, Cog, Command, Container, Database, Dog, Droplets,
   Eye, FileCode2, FileSpreadsheet, FileText, Files, Gauge, GitBranch, GitFork, HardDrive, Home, Hourglass,
   KeyRound, Layers, LayoutGrid, Library, Link2, ListChecks, ListTodo, ListTree, Map, Network,
@@ -79,6 +79,8 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/incident-analysis':  { labelKey: 'incidentAnalysis', defaultLabel: 'K8s 로그 (분석·실시간)', icon: Siren },
   '/packet-flow':        { labelKey: 'packetFlow', defaultLabel: '패킷 흐름 분석', icon: Route },
   '/cilium-trace':       { labelKey: 'ciliumTrace', defaultLabel: 'Cilium BPF 추적', icon: Waves },
+  // Cilium 데이터패스 — Rust 노드 에이전트(pep-bpf-agent)가 보고한 BPF 맵 사용률·프로그램 목록(K8S 허브 진단 탭).
+  '/cilium-datapath':    { labelKey: 'ciliumDatapath', defaultLabel: 'Cilium 데이터패스', icon: Binary },
   '/service-topology':   { labelKey: 'serviceTopology', defaultLabel: '서비스 토폴로지', icon: Workflow },
   '/service-architecture': { labelKey: 'serviceArchitecture', defaultLabel: '서비스 아키텍처', icon: Blocks },
   '/architecture':       { labelKey: 'architecture', defaultLabel: '서비스 모듈 관계도', icon: GitBranch },
@@ -109,7 +111,7 @@ export const HUB_ABSORBED_PATHS: ReadonlySet<string> = new Set([
   '/clusters', '/k8s-manage', '/k8s-allocation', '/cluster-trends', '/observability', '/k8s-events',
   '/k8s-logs', '/incident-analysis', '/daily-check/review', '/k8s-rbac', '/node-images', '/versions',
   '/etcdctl', '/kernel-params', '/pod-bottleneck', '/cilium-trace', '/packet-flow', '/ops-checks',
-  '/os-param-watch', '/k8s-services',
+  '/os-param-watch', '/k8s-services', '/cilium-datapath',
   // D-243 — 노드 라벨(전체 클러스터 모드 포함)·k9s·노드 SSH 도 허브 뷰가 됐다.
   '/node-labels', '/k9s', '/node-ssh',
 ]);

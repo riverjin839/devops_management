@@ -2787,6 +2787,24 @@ export const nodeParamWatchApi = {
     api.put<import('@/types').NodeParamSettings>('/node-params/settings', body),
 };
 
+// ── Cilium 데이터패스 — Rust 노드 에이전트(pep-bpf-agent) 보고 기반. 맵 사용률·프로그램·지금 수집(SSE)·설정(JWT) ──
+export const ciliumDatapathApi = {
+  view: (clusterId: string) => api.get<import('@/types').CiliumDatapathView>(`/cilium-datapath/clusters/${clusterId}`),
+  runs: (clusterId: string, limit = 20) =>
+    api.get<{ items: import('@/types').CiliumDatapathRun[] }>(`/cilium-datapath/clusters/${clusterId}/runs`, { params: { limit } }),
+  /** SSE 엔드포인트 경로 — `streamLogged` 로 호출(본문은 camelCase → snake_case 자동 변환). */
+  collectStreamUrl: (clusterId: string) => `/api/v1/cilium-datapath/clusters/${clusterId}/collect`,
+  setBaseline: (clusterId: string, agentId: string) =>
+    api.post<{ ok: boolean; node: string; baselineAt: string }>(`/cilium-datapath/clusters/${clusterId}/agents/${agentId}/baseline`),
+  deleteAgent: (clusterId: string, agentId: string) =>
+    api.delete(`/cilium-datapath/clusters/${clusterId}/agents/${agentId}`),
+  manifest: (clusterId: string) =>
+    api.get<import('@/types').CiliumDatapathManifest>(`/cilium-datapath/clusters/${clusterId}/manifest`),
+  settings: () => api.get<import('@/types').CiliumDatapathSettings>('/cilium-datapath/settings'),
+  updateSettings: (body: Partial<Omit<import('@/types').CiliumDatapathSettings, 'tokenConfigured'>>) =>
+    api.put<import('@/types').CiliumDatapathSettings>('/cilium-datapath/settings', body),
+};
+
 // ── 외부 서비스 — 조회는 비인증 공개 API(저장 스냅샷), 수집(SSE)·설정은 JWT ──────────────────
 export const externalServicesApi = {
   clusters: () => api.get<{ clusters: { id: string; name: string }[]; accessMode?: string; linkExpiresAt?: string | null }>(

@@ -37,6 +37,7 @@ export const en: TranslationResource = {
       mc: 'mc Client',
       isilonNfs: 'NFS Monitoring',
       osParamWatch: 'OS Parameter Watch',
+      ciliumDatapath: 'Cilium Datapath',
       serviceConfig: 'Service Config',
       infraTopology: 'Infra Topology',
       nodeSpecs: 'Node Server Specs',

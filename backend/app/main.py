@@ -97,6 +97,8 @@ from app.routers import (
     node_param_watch_router,
     nic_watch_router,
     node_param_ingest_router,
+    cilium_datapath_router,
+    cilium_datapath_ingest_router,
     service_config_router,
     ns_migration_router,
     daily_report_router,
@@ -1503,6 +1505,9 @@ def _run_migrations():
     # node_param_agents: 노드 파라미터 에이전트 상태 — 테이블은 create_all, 워치독 조회 인덱스 보강.
     if "node_param_agents" in inspector.get_table_names():
         _safe_create_index("ix_node_param_agents_last_seen", "node_param_agents", "(last_seen_at)")
+    # cilium_datapath_runs: 「지금 수집」 실행 — 에이전트 작업 수신(long-poll)이 진행 중 실행을 자주 찾는다.
+    if "cilium_datapath_runs" in inspector.get_table_names():
+        _safe_create_index("ix_cilium_datapath_runs_cluster_status", "cilium_datapath_runs", "(cluster_id, status, created_at)")
     # service_config_versions: 서비스 구성 설정 버전 — 테이블은 create_all, 화면 조회 인덱스 보강.
     if "service_config_versions" in inspector.get_table_names():
         _safe_create_index("ix_service_config_versions_lookup", "service_config_versions",
@@ -2886,6 +2891,10 @@ app.include_router(node_param_ingest_router, prefix="/api/v1")
 app.include_router(node_param_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NIC 상태(본딩/LACP·링크·MTU·ring buffer·드롭·offload) — 에이전트 보고의 nic 필드를 저장, 서비스 구성 ▸ NIC 화면(읽기 전용).
 app.include_router(nic_watch_router, prefix="/api/v1", dependencies=_cluster_scoped)
+# Cilium 데이터패스(eBPF) — Rust 노드 에이전트 보고·작업 수신·로그(Bearer CILIUM_BPF_AGENT_TOKEN 자체 검증, fail-closed)를
+# 먼저 include 하고, 화면 API(맵 사용률·프로그램·지금 수집 SSE·설정·매니페스트)는 JWT.
+app.include_router(cilium_datapath_ingest_router, prefix="/api/v1")
+app.include_router(cilium_datapath_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # 서비스 구성(etcd·containerd·cilium·OS 설정 목록·현재 값·설정 버전) — K8S 허브 ▸ 구성.
 app.include_router(service_config_router, prefix="/api/v1", dependencies=_cluster_scoped)
 # NS 마이그레이션(개발 → 운영) — 소스 read·타깃 operate 는 body 의 클러스터라 라우터가 직접 검사한다.

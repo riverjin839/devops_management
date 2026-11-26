@@ -15,6 +15,9 @@
 ### Fixed
 - **실행 로그 명령 줄 — 역할 변경이 모든 백엔드 워커에 바로 반영**: 관리자 판정 캐시(10초)가 프로세스마다 따로라, 역할을 바꾼 요청을 처리하지 않은 다른 워커·replica 에서는 강등된 관리자가 최대 10초 동안 실행 명령(CMD 줄)을 더 받을 수 있던 문제를 고쳤다. 역할 변경·사용자 삭제 때 Redis 에 사용자별 세대 값을 올리고, 모든 워커가 캐시를 쓰기 전에 세대를 비교한다. Redis 를 못 쓰면 캐시를 쓰지 않고 매번 DB 를 본다. Backend: `command_trace.forget_user`·`resolve_admin`(Redis `pep:cmdtrace:admin_gen:*`).
 
+### Added
+- **Cilium 데이터패스(eBPF) — Rust 노드 에이전트로 BPF 맵 용량 상시 감시**: K8S 허브 ▸ 진단 ▸ **Cilium 데이터패스**. 노드마다 뜨는 `pep-bpf-agent`(Rust)가 Cilium 이 고정한 BPF 맵(CT·NAT·LB·ipcache·정책·이웃 등)을 읽기 전용으로 열어 항목 수·최대치를 세고 요약만 보고한다(원본 키·값은 노드 밖으로 나가지 않는다). 노드 × 맵 사용률 히트맵, 칸 상세(설정 추천 — cilium-config 키), 임계치(기본 주의 70%·위험 90%)를 넘으면 알람 인박스 `CiliumBpfMapPressure`. 「지금 수집」 은 에이전트에 바로 작업을 보내고 노드별 단계 로그를 실시간으로 보여준다(로그 보기 선택, 관리자는 노드에 넘긴 작업 명령 줄부터 본다). 노드별 커널 기능(CAP_BPF·drop reason 지원 등)과 BPF 프로그램 목록(기준 대비 다시 로드된 프로그램 표시, CAP_SYS_ADMIN 설정 시)도 본다. 임계치·주기·시간 예산·고정 경로·권한은 화면 설정. Backend: `routers/cilium_datapath.py`(에이전트 수신은 `CILIUM_BPF_AGENT_TOKEN` fail-closed) · `services/cilium_datapath/` · 모델 `CiliumBpfAgent`·`CiliumDatapathRun`. Agent: `agents/pep-bpf-agent/`(libbpf 없이 `bpf(2)` 직접 호출, CAP_BPF 만) · 배포 `deploy/k8s/cilium-bpf-agent/`. 데이터패스 일관성·드롭 사유 탭은 다음 단계.
+
 ## [1.107.2] - 2026-11-25
 
 ### Fixed
