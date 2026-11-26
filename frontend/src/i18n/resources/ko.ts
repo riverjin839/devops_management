@@ -213,6 +213,11 @@ export const ko = {
     },
   },
   home: {
+    empty: {
+      title: '메인 화면 준비 중',
+      description: '왼쪽 앱에서 원하는 화면으로 이동하세요. 앱은 사이드바의 「+」로 추가할 수 있습니다.',
+      openK8s: 'K8s 클러스터 열기',
+    },
     viewAria: '플랫폼 현황 보기',
     rangeAria: '진행 현황 범위',
     title: '홈',

@@ -15,6 +15,7 @@
 - **첫 로그인 비밀번호 변경**: 초기 비밀번호로 로그인한 계정(사번으로 자동 발급·관리자가 만들거나 재설정·부트스트랩 admin)은 같은 팝업에서 새 비밀번호(영문+숫자 8자 이상, 아이디·사번과 다르게)를 정해야 한다. 이미 사번으로 발급된 뒤 한 번도 바꾸지 않은 계정도 부팅 시 대상으로 표시된다. LDAP·SSO 계정은 제외. Backend: `users.must_change_password` 를 다시 사용(매 부팅 FALSE 초기화 제거), `POST /auth/me/password` 가 아이디·사번과 같은 새 비밀번호를 400 으로 거부. 이메일·IP 형식을 검사하고, 관리자가 값을 지워 다시 비면 다음 접속 때 같은 팝업이 뜬다. 사용자 메뉴의 내 정보 패널도 세 항목을 비운 채 저장할 수 없다. Backend: `GET /ui-settings/assignees/me`(`profileComplete`), `PUT /ui-settings/assignees/me` 이메일·IP 형식 검사. Frontend: `components/layout/ProfileSetupDialog.tsx`.
 
 ### Changed
+- **홈(Main UI) 비우기 + 신규 사용자 기본 앱 K8s 클러스터**: 홈(`/`)은 모든 사용자에게 「메인 화면 준비 중」 안내와 「K8s 클러스터 열기」 버튼만 보여 준다(로그인 후 자동 이동 없음). 예전 홈의 업무 현황·플랫폼 현황(점검 매트릭스) 탭은 화면에서 빠지고 코드는 `pages/HomeDashboard.tsx` 에 남겨 둔다. 앱을 직접 고른 적 없는 사용자의 내장 기본 앱이 상단바 「업무 관리」에서 사이드바 「K8s 클러스터(/k8s)」로 바뀐다 — 관리자가 Settings 에 저장한 조직 기본 구성이 있으면 그대로 따른다. 배치잡은 `/batch-jobs` 에서 바로 연다.
 - **정 담당역할·부담당 역할 → 「담당 업무」 한 칸으로 통합**: Settings ▸ 시스템 담당자 표·내 정보 패널·팀원 보드가 담당 업무 하나만 보여 준다. 기존 값은 부팅 시 「정, 부」 순서로 쉼표로 이어 `users.duty` 에 한 번 옮겨지고(옛 두 컬럼은 DB 에 남지만 쓰지 않는다), API 필드는 `primaryRole`/`secondaryRole` 대신 `duty` 다.
 
 ## [1.110.1] - 2026-11-26

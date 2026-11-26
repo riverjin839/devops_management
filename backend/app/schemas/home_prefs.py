@@ -13,7 +13,8 @@ Accent = Literal["blue", "teal", "green", "amber", "coral", "violet"]
 HOME_PREFS_LAYOUT_VERSION = 3
 # 조직 기본 설치 목록(`app_settings` 의 ``home_prefs_defaults``)이 아직 없을 때 쓰는 내장 기본값 —
 # 사이드바는 빈 레일, 상단바는 "업무 관리" 하나(사용자 요청: "업무 관리만 기본, 나머지는 add-on").
-BUILTIN_DEFAULT_INSTALLED_APPS = ["/tasks-mgmt"]
+# 앱을 직접 고른 적 없고 조직 기본값(Settings ▸ 기본 앱 구성)도 저장된 적 없을 때의 구성 — K8s 클러스터 허브 하나.
+BUILTIN_DEFAULT_INSTALLED_APPS = ["/k8s"]
 
 
 class HomePrefs(BaseModel):
