@@ -1486,6 +1486,30 @@ export const vocApi = {
   delete: (id: string) => api.delete(`/voc/${id}`),
 };
 
+// 알람 등록 요청 API (/alarm-requests)
+export const alarmRequestsApi = {
+  meta: () => api.get<import('@/types').AlarmRequestMeta>('/alarm-requests/meta'),
+  list: (params?: { status?: string; service?: string; mine?: boolean }) =>
+    api.get<{ data: import('@/types').AlarmRequest[]; total: number }>('/alarm-requests', { params: params || undefined }),
+  get: (id: number) => api.get<import('@/types').AlarmRequest>(`/alarm-requests/${id}`),
+  create: (data: import('@/types').AlarmRequestInput) =>
+    api.post<import('@/types').AlarmRequest>('/alarm-requests', data),
+  update: (id: number, data: import('@/types').AlarmRequestInput) =>
+    api.put<import('@/types').AlarmRequest>(`/alarm-requests/${id}`, data),
+  cancel: (id: number) => api.delete(`/alarm-requests/${id}`),
+  act: (id: number, data: { action: import('@/types').AlarmRequestActionKind; comment?: string }) =>
+    api.post<import('@/types').AlarmRequest>(`/alarm-requests/${id}/action`, data),
+  catalog: (params?: { service?: string; includeDisabled?: boolean }) =>
+    api.get<import('@/types').AlarmCatalogItem[]>('/alarm-requests/catalog', {
+      params: { service: params?.service, include_disabled: params?.includeDisabled || undefined },
+    }),
+  createCatalog: (data: import('@/types').AlarmCatalogItemInput) =>
+    api.post<import('@/types').AlarmCatalogItem>('/alarm-requests/catalog', data),
+  updateCatalog: (id: number, data: import('@/types').AlarmCatalogItemInput) =>
+    api.put<import('@/types').AlarmCatalogItem>(`/alarm-requests/catalog/${id}`, data),
+  deleteCatalog: (id: number) => api.delete(`/alarm-requests/catalog/${id}`),
+};
+
 // Mind Map API
 export const mindmapApi = {
   list: () => api.get<MindMapListItem[]>('/mindmaps/'),

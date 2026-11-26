@@ -50,6 +50,7 @@ from app.routers import (
     work_guide_router,
     ops_note_router,
     voc_router,
+    alarm_requests_router,
     reactions_router,
     mindmap_router,
     management_server_router,
@@ -2108,6 +2109,17 @@ def _seed_node_param_watch_rules():
         db.close()
 
 
+def _seed_alarm_catalog():
+    """알람 등록 요청 화면의 서비스별 알람 카탈로그 — 비어 있을 때만(지운 항목은 되살리지 않는다)."""
+    from app.services.alarm_requests import seed_catalog
+
+    db = SessionLocal()
+    try:
+        seed_catalog(db)
+    finally:
+        db.close()
+
+
 def _seed_service_config_catalog():
     """서비스 구성 설정 목록·의존 규칙 — 없는 것만 추가(운영자 수정 보존)."""
     from app.services.service_config.catalog_seed import seed_catalog, seed_rules
@@ -2706,6 +2718,7 @@ async def lifespan(app: FastAPI):
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
             ("seed_dc_inventory_defaults", _seed_dc_inventory_defaults),
+            ("seed_alarm_catalog", _seed_alarm_catalog),
             ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_observability_catalog", _seed_observability_catalog),
             # 행 단위 버전 이관 — 전역 sentinel 이 없어 몇 번을 다시 돌아도 개인 설정을
@@ -2875,6 +2888,7 @@ app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(voc_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(alarm_requests_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)

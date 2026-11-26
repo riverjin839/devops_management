@@ -15,6 +15,9 @@
 ### Added
 - **Namespaces 목록 Quota 사용/한도 열** — K8S 상세 관리 Namespaces → 목록에 NS 별 ResourceQuota 의 CPU 요청·메모리 요청·CPU 한도·메모리 한도·Pods 를 "사용 / 한도" + 사용률 막대로 보여준다(80% 이상 경고·100% 이상 위험 색, 정상은 중립색). 같은 자원을 여러 quota 가 걸면 먼저 막히는(사용률이 가장 높은) 것을 보이고, 셀에 마우스를 올리면 quota 이름이 보인다. 「사용률 높은 순」 정렬 버튼, 컬럼 표시/숨김 지원. Backend: `GET /k8s/{id}/namespace-quotas`(전 NS quota 1회 LIST, 목록 캐시 경유). Frontend: `components/k8s-manage/NsQuotaCell.tsx`.
 
+### Added
+- **알람 등록 요청**: 서비스 담당자가 `/alarm-requests`(사이드바 「관측」)에서 운영 알람 추가·임계치 변경을 요청한다 — 요청자(로그인 사용자 자동), 서비스 명(k8s·cilium·aistor·cnpg·keycloak·nexus·jenkins·argocd 등), metric 명(알람 항목), 알람 의미, 심각도별 **기본 임계치(expr·for)·수정 임계치(expr·for)** 표, 적용 클러스터(복수 선택), 비고. 관리자(operator 이상)는 검토 시작·승인·반려(사유 필수)·반영 완료로 처리하고 모든 처리가 이력·감사 로그에 남으며, 새 요청은 관리자에게·처리 결과는 요청자에게 알림이 간다. 알람 항목을 고르면 서비스별 **알람 카탈로그**의 의미·기본 임계치가 채워지고, 반영 완료된 수정 임계치는 카탈로그 기본 임계치로 저장된다(카탈로그는 화면에서 편집). 반영 완료는 처리 기록이며 클러스터에 명령을 보내지 않는다. Backend: `routers/alarm_requests.py`, `services/alarm_requests.py`, `alarm_requests`·`alarm_catalog_items` 테이블. Frontend: `pages/AlarmRequestsPage.tsx`, `components/alarm-requests/`.
+
 ## [1.111.0] - 2026-11-26
 
 ### Added

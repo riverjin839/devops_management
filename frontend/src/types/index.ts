@@ -7536,3 +7536,88 @@ export interface CiliumDatapathManifest {
   tokenConfigured: boolean;
   sysAdmin: boolean;
 }
+
+// ── 알람 등록 요청 (/alarm-requests) ─────────────────────────────────────────
+export type AlarmRequestStatus = 'requested' | 'reviewing' | 'approved' | 'applied' | 'rejected';
+export type AlarmSeverity = 'critical' | 'warning' | 'info';
+export type AlarmRequestActionKind = 'reviewing' | 'approved' | 'rejected' | 'applied';
+
+/** 카탈로그 기본 임계치 한 행 — JSON 키 `for` 는 그대로 쓴다. */
+export interface AlarmCatalogThreshold {
+  severity: AlarmSeverity;
+  expr: string;
+  for: string;
+}
+
+export interface AlarmCatalogItem {
+  id: number;
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  thresholds: AlarmCatalogThreshold[];
+  enabled: boolean;
+  updatedBy?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface AlarmCatalogItemInput {
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  thresholds: AlarmCatalogThreshold[];
+  enabled: boolean;
+}
+
+/** 요청 임계치 한 행 — 기본(카탈로그 값) / 수정(요청 값). */
+export interface AlarmRequestThreshold {
+  severity: AlarmSeverity;
+  baseExpr: string;
+  baseFor: string;
+  newExpr: string;
+  newFor: string;
+}
+
+export interface AlarmRequestHistoryEntry {
+  at: string;
+  by: string;
+  action: 'created' | 'updated' | AlarmRequestActionKind;
+  comment?: string | null;
+}
+
+export interface AlarmRequest {
+  id: number;
+  code: string;
+  status: AlarmRequestStatus;
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  catalogItemId?: number | null;
+  thresholds: AlarmRequestThreshold[];
+  clusters: { id: string; name: string; hidden: boolean }[];
+  note?: string | null;
+  requestedBy: string;
+  requesterName?: string | null;
+  reviewComment?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  appliedAt?: string | null;
+  history: AlarmRequestHistoryEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlarmRequestInput {
+  service: string;
+  metricName: string;
+  meaning: string;
+  catalogItemId?: number | null;
+  thresholds: AlarmRequestThreshold[];
+  clusterIds: string[];
+  note?: string | null;
+}
+
+export interface AlarmRequestMeta {
+  services: string[];
+  statuses: { key: AlarmRequestStatus; label: string }[];
+  severities: { key: AlarmSeverity; label: string }[];
+}

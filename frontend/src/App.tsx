@@ -41,6 +41,7 @@ import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
 import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { AlertInboxPage } from '@/pages/AlertInboxPage';
+import { AlarmRequestsPage } from '@/pages/AlarmRequestsPage';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { CheckItemDetailPage } from '@/pages/CheckItemDetailPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
@@ -270,6 +271,8 @@ function AppShell() {
               <Route path="/observability" element={<RedirectToHub view="metrics" />} />
               {/* 알람 인박스 — Alertmanager / alert-forwarder 수신 인시던트 알람 */}
               <Route path="/alerts" element={<AlertInboxPage />} />
+              {/* 알람 등록 요청 — 서비스 담당자의 알람 추가·임계치 변경 요청 + 관리자 검토 */}
+              <Route path="/alarm-requests" element={<AlarmRequestsPage />} />
               <Route path="/daily-check/review/:clusterId" element={<RedirectToHub view="review" />} />
               <Route path="/daily-check/review" element={<RedirectToHub view="review" />} />
               <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />

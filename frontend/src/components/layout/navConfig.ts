@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import {
-  Activity, Archive, ArrowRightLeft, BarChart3, Binary, BellRing, Blocks, BookMarked, BookOpen, Boxes, Calculator,
+  Activity, Archive, BellPlus, ArrowRightLeft, BarChart3, Binary, BellRing, Blocks, BookMarked, BookOpen, Boxes, Calculator,
   CalendarCheck2, ClipboardCheck, ClipboardList, Cog, Command, Container, Database, Dog, Droplets,
   Eye, FileCode2, FileSpreadsheet, FileText, Files, Gauge, GitBranch, GitFork, HardDrive, Home, Hourglass,
   KeyRound, Layers, LayoutGrid, Library, Link2, ListChecks, ListTodo, ListTree, Map, Network,
@@ -76,6 +76,8 @@ export const NAV_MAP: Record<string, NavMapEntry> = {
   '/k8s-events':         { labelKey: 'k8sEvents', defaultLabel: 'K8s 실시간 이벤트', icon: Radar },
   '/observability':      { labelKey: 'observability', defaultLabel: '관측 지표',       icon: Activity },
   '/alerts':             { labelKey: 'alerts', defaultLabel: '알람 인박스',      icon: BellRing },
+  // 알람 등록 요청 — 서비스 담당자가 알람 추가·임계치 변경을 요청하고 관리자가 검토·반영한다.
+  '/alarm-requests':     { labelKey: 'alarmRequests', defaultLabel: '알람 등록 요청', icon: BellPlus },
   '/incident-analysis':  { labelKey: 'incidentAnalysis', defaultLabel: 'K8s 로그 (분석·실시간)', icon: Siren },
   '/packet-flow':        { labelKey: 'packetFlow', defaultLabel: '패킷 흐름 분석', icon: Route },
   '/cilium-trace':       { labelKey: 'ciliumTrace', defaultLabel: 'Cilium BPF 추적', icon: Waves },
@@ -162,7 +164,7 @@ export const GROUPS: NavGroup[] = [
   { id: 'k8s',       label: 'K8s 클러스터', labelKey: 'k8s', descriptionKey: 'k8s', icon: ShipWheel, description: '클러스터 하나를 골라 상세·리소스·자원·관측·로그·점검·진단·구성·콘솔을 한 화면에서', domain: 'platform',
     paths: ['/k8s'] },
   { id: 'observe',   label: '관측', labelKey: 'observe', descriptionKey: 'observe', icon: Eye,    description: '상태를 본다 — 읽기 전용', domain: 'platform',
-    paths: ['/alerts', '/isilon-nfs', '/lake-services'] },
+    paths: ['/alerts', '/alarm-requests', '/isilon-nfs', '/lake-services'] },
   // '/ops-checks'(운영 점검 콘솔, 레거시)는 사이드바에서 뺐다 — 같은 패널을 종합 상태까지 포함해
   // 보여주는 '/clusters/:id' 로 대체됐다(App.tsx 주석). 라우트·NAV_MAP 은 북마크/아일랜드 패널
   // 호환으로 유지(D-129).

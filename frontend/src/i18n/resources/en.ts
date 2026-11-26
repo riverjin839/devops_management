@@ -51,6 +51,7 @@ export const en: TranslationResource = {
       k8sEvents: 'K8s Live Events',
       observability: 'Observability',
       alerts: 'Alert Inbox',
+      alarmRequests: 'Alarm Requests',
       incidentAnalysis: 'K8s Logs (Analysis · Live)',
       packetFlow: 'Packet Flow Analysis',
       ciliumTrace: 'Cilium BPF Trace',
