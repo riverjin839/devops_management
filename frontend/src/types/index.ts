@@ -1934,8 +1934,8 @@ export interface Assignee {
   email?: string;
   ip?: string;
   seatLocation?: string;
-  primaryRole?: string;
-  secondaryRole?: string;
+  /** 담당 업무 — 예전 정/부 담당역할 두 칸을 하나로 합친 필드. */
+  duty?: string;
   // 로그인 계정 필드 — admin 으로 조회할 때만 채워진다(비-admin 응답에는 없음).
   id?: string;
   username?: string;
@@ -1946,7 +1946,14 @@ export interface Assignee {
 }
 
 /** 본인이 직접 수정할 수 있는 담당자 필드 (이름/사번은 admin 전용이라 제외). */
-export type SelfAssigneePatch = Pick<Assignee, 'email' | 'ip' | 'seatLocation' | 'primaryRole' | 'secondaryRole'>;
+export type SelfAssigneePatch = Pick<Assignee, 'email' | 'ip' | 'seatLocation' | 'duty'>;
+
+/** GET /ui-settings/assignees/me — 본인 행 + 필수 항목(이메일/IP/좌석) 등록 여부. */
+export interface MyAssigneeResponse {
+  data: Assignee;
+  profileComplete: boolean;
+  requiredFields: ('email' | 'ip' | 'seatLocation')[];
+}
 
 // Management Server
 export interface ManagementServer {
