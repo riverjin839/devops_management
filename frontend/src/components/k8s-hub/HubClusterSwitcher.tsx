@@ -37,6 +37,7 @@ export function HubClusterSwitcher() {
             title={label}
             anchorRect={anchor}
             placement="bottom"
+            wide
             autoFocus
             returnFocusTo={btnRef.current}
             onClose={() => setAnchor(null)}

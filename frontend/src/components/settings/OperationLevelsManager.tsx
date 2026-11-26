@@ -193,7 +193,8 @@ export function OperationLevelsManager() {
       if (!value || seen.has(value)) continue;
       seen.add(value);
       cleaned.push({
-        value, label, color: l.color || 'slate', icon: l.icon || undefined,
+        value, label, shortLabel: l.shortLabel?.trim() || undefined,
+        color: l.color || 'slate', icon: l.icon || undefined,
         customHex: isValidHex(l.customHex) ? l.customHex : undefined,
         // 미지정(구버전 항목)이면 서버와 같은 기본 규칙(production·dr)으로 채워 저장한다.
         guarded: typeof l.guarded === 'boolean' ? l.guarded : defaultGuarded(value),
@@ -221,7 +222,8 @@ export function OperationLevelsManager() {
         클러스터 운영 단계 라벨/색상/이모지를 자유롭게 정의합니다. 여기서 정의한 항목은 클러스터 관리 페이지의
         "운영레벨" 컬럼/필터/모달과 클러스터 카드 이모지, 클러스터 아이콘 빌더의 테두리·배경 색에
         즉시 반영됩니다. <strong>value</strong> 는 저장된 식별자(라벨이 비어 있으면 자동 생성),
-        <strong> label</strong> 은 화면 표시 이름, <strong>이모지</strong>는 클러스터 카드 앞에
+        <strong> label</strong> 은 화면 표시 이름, <strong>약칭</strong>은 클러스터 목록 그룹 머리글(예: PROD),
+        목록 순서는 클러스터 목록의 그룹 순서, <strong>이모지</strong>는 클러스터 카드 앞에
         표시됩니다(자동 = 운영레벨 이름으로 추론). <Sparkles className="w-3 h-3 inline -mt-0.5" /> 아이콘을
         누르면 큐레이션 배색 패턴(Burnt Sienna 등)에서 커스텀 색을 바로 고를 수 있습니다.
         <strong> 보호</strong>로 표시한 레벨의 클러스터는 k9s·노드 SSH 터미널에 접속하기 전에 대상·계정을
@@ -234,6 +236,7 @@ export function OperationLevelsManager() {
             <tr className="text-xs font-medium text-muted-foreground">
               <th className="px-2 py-1.5 w-8"><span className="sr-only">순서</span></th>
               <th className="px-2 py-1.5">표시 라벨</th>
+              <th className="px-2 py-1.5 w-24">약칭</th>
               <th className="px-2 py-1.5">value (식별자)</th>
               <th className="px-2 py-1.5">색상</th>
               <th className="px-2 py-1.5 w-24">이모지</th>
@@ -244,7 +247,7 @@ export function OperationLevelsManager() {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={8} className="text-center py-6 text-sm text-muted-foreground">
+              <tr><td colSpan={9} className="text-center py-6 text-sm text-muted-foreground">
                 <Loader2 className="w-3 h-3 inline animate-spin mr-1" /> 불러오는 중…
               </td></tr>
             )}
@@ -271,6 +274,15 @@ export function OperationLevelsManager() {
                     }}
                     placeholder="운영 (Production)"
                     aria-label="표시 라벨 입력"
+                    className="w-full px-2 py-1 text-sm bg-background border border-border rounded" />
+                </td>
+                <td className="px-2 py-1">
+                  <input value={l.shortLabel ?? ''}
+                    onChange={(e) => update(idx, { shortLabel: e.target.value })}
+                    maxLength={16}
+                    placeholder="PROD"
+                    title="클러스터 목록 그룹 머리글에 쓰는 짧은 이름 — 비우면 표시 라벨"
+                    aria-label="약칭 입력"
                     className="w-full px-2 py-1 text-sm bg-background border border-border rounded" />
                 </td>
                 <td className="px-2 py-1">
@@ -359,7 +371,7 @@ export function OperationLevelsManager() {
               </tr>
             ))}
             {!isLoading && draft.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-6 text-sm text-muted-foreground">
+              <tr><td colSpan={9} className="text-center py-6 text-sm text-muted-foreground">
                 운영레벨이 비어있습니다. "항목 추가" 로 시작하세요.
               </td></tr>
             )}

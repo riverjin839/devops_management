@@ -10,6 +10,11 @@
 
 1.110.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Changed
+
+- **K8s 클러스터 목록(사이드바 flyout·「클러스터 전환」) — 운영등급 섹션 + 가독성**: 클러스터를 운영등급별 색 섹션(머리글 + 개수, 옅은 배경·테두리 — `--chart-*`)으로 묶고, 섹션 순서는 Settings 운영레벨 목록 순서를 따른다(기본 PROD → DEV → STAGE). 이름은 고정폭 글꼴 대신 화면 본문 글꼴 14px, 아래 줄에 리전 · 버전 · 노드 수를 보인다. 목록 폭을 320px 로 넓혔고, 「비정상 N개만 보기」 토글과 하단 「클러스터 등록」 항목은 걷어냈다(상태는 행마다 아이콘, 등록은 클러스터 관리 화면).
+- **운영레벨 약칭**: Settings ▸ 운영레벨에 「약칭」 칸(예: PROD)을 추가 — 클러스터 목록 섹션 머리글에 쓰이고, 비우면 표시 라벨을 쓴다. 기본 레벨은 PROD·DEV·STAGE·TEST·DR 약칭과 운영 → 개발 → 스테이징 순서로 바뀌었고, 스테이징 기본 색은 경고 아이콘과 겹치지 않게 emerald. Backend: `OperationLevelItem.short_label`(약칭 없는 예전 데이터는 기본 레벨 value 기준 기본 약칭). Frontend: `levelShortLabel`·`levelSectionClasses`·`levelSectionStyle`, `FlyoutShell` `wide`.
+
 ## [1.110.1] - 2026-11-26
 
 ### Fixed
