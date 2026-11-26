@@ -1636,9 +1636,11 @@ export const assigneesApi = {
     api.put<{ data: import('@/types').Assignee[]; accounts?: { created?: string[]; revoked?: string[] } }>(
       '/ui-settings/assignees', { assignees },
     ),
+  // 본인 담당자 정보 + 필수 항목 등록 여부(첫 로그인 "내 정보 등록" 팝업 판정).
+  getMine: () => api.get<import('@/types').MyAssigneeResponse>('/ui-settings/assignees/me'),
   // 본인 담당자 정보만 부분 수정 — admin 이 아닌 사용자(operator/viewer)도 호출 가능.
   updateMine: (patch: import('@/types').SelfAssigneePatch) =>
-    api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee }>(
+    api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee; profileComplete: boolean }>(
       '/ui-settings/assignees/me', patch,
     ),
 };

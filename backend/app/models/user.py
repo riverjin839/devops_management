@@ -40,8 +40,9 @@ class User(Base):
     email = Column(String(255), nullable=True)
     ip = Column(String(64), nullable=True)
     seat_location = Column(String(64), nullable=True)
-    primary_role = Column(String(64), nullable=True)    # 정 담당역할 (업무 직무, auth role 과 무관)
-    secondary_role = Column(String(64), nullable=True)  # 부담당 역할
+    # 담당 업무 (업무 직무, auth role 과 무관). 예전의 정/부 담당역할(primary_role/secondary_role)
+    # 두 칸을 하나로 합친 필드 — 옛 두 컬럼은 DB 에 남아 있지만 더 이상 읽고 쓰지 않는다(main.py 백필).
+    duty = Column(String(255), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

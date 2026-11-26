@@ -1426,6 +1426,16 @@ def _run_migrations():
         _safe_add_column("users", "seat_location", "VARCHAR(64)")
         _safe_add_column("users", "primary_role", "VARCHAR(64)")
         _safe_add_column("users", "secondary_role", "VARCHAR(64)")
+        # 정/부 담당역할 → "담당 업무"(duty) 하나로 통합. 옛 두 값을 ", " 로 이어 1회 백필한다
+        # (duty 가 비어 있는 행만 — 멱등). 옛 컬럼은 남겨 두되 코드에서는 더 이상 쓰지 않는다.
+        _safe_add_column("users", "duty", "VARCHAR(255)")
+        _safe_exec(
+            "UPDATE users SET duty = NULLIF(CONCAT_WS(', ', "
+            "NULLIF(TRIM(primary_role), ''), NULLIF(TRIM(secondary_role), '')), '') "
+            "WHERE duty IS NULL AND (COALESCE(TRIM(primary_role), '') <> '' "
+            "OR COALESCE(TRIM(secondary_role), '') <> '')",
+            label="users.primary_role/secondary_role → duty 통합",
+        )
         _safe_exec(
             "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_employee_id ON users (employee_id) "
             "WHERE employee_id IS NOT NULL",
