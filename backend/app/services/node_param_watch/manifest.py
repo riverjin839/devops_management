@@ -66,7 +66,7 @@ def render_manifest(*, cluster_id: str, cluster_name: str, api_base_url: str, im
         resources = "cpu: 10m\n              memory: 48Mi", "cpu: 100m\n              memory: 128Mi"
     else:  # Rust 정적 바이너리 — ENTRYPOINT 가 에이전트라 command 없음, 상주 메모리가 한 자릿수 MiB
         command, env_extra = "", ""
-        image_note = ("# 이미지 안내: node-agent 이미지는 릴리스 1.106.0 이상에서 제공된다. 레지스트리에 없으면(이전 릴리스·폐쇄망 미반입)\n"
+        image_note = ("# 이미지 안내: node-agent 이미지는 릴리스 1.107.1 이상에서 제공된다. 레지스트리에 없으면(이전 릴리스·폐쇄망 미반입)\n"
                       "# 이미지를 PEP backend 이미지로 바꾸면 Python 에이전트 방식(command 포함)으로 다시 렌더된다.\n")
         resources = "cpu: 5m\n              memory: 8Mi", "cpu: 100m\n              memory: 64Mi"
     req, lim = resources

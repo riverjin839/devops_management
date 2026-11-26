@@ -259,7 +259,7 @@ bash scripts/deploy/deploy-airgap.sh save
 ```
 
 **노드 에이전트 이미지(node-agent)** 는 정적 Rust 바이너리라 수 MB 입니다. 폐쇄망에는 crates.io 가 없어 `agent-rs/` 를 직접 빌드할 수 없으므로,
-인터넷 되는 PC 에서 릴리스된 공개 이미지(1.106.0 이상)를 지정해 받아 두세요(`build` 와 `save` 모두 같은 변수를 씁니다):
+인터넷 되는 PC 에서 릴리스된 공개 이미지(1.107.1 이상 — 1.107.0 이전 릴리스에는 node-agent 이미지가 없다)를 지정해 받아 두세요(`build` 와 `save` 모두 같은 변수를 씁니다):
 
 ```bash
 NODE_AGENT_SOURCE_IMAGE=ghcr.io/riverjin839/devops_management/node-agent:<릴리스 버전> \
