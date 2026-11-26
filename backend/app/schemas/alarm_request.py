@@ -87,6 +87,7 @@ class AlarmRequestOut(BaseModel):
     reviewed_at: Optional[datetime] = None
     applied_at: Optional[datetime] = None
     history: list[dict]
+    apply_runs: list[dict] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -100,3 +101,32 @@ class AlarmRequestMeta(BaseModel):
     services: list[str]
     statuses: list[dict]
     severities: list[dict]
+
+
+class LabelPair(BaseModel):
+    """라벨 한 쌍 — 키를 JSON 객체 키로 두면 프론트의 camelCase 변환이 라벨 키를 바꿔 버려 목록으로 주고받는다."""
+    key: str = Field(..., min_length=1, max_length=253)
+    value: str = Field(default="", max_length=63)
+
+
+class ClusterOverride(BaseModel):
+    cluster_id: str
+    namespace: Optional[str] = None
+    rule_labels: list[LabelPair] = Field(default_factory=list)
+
+
+class AlarmApplySettings(BaseModel):
+    namespace: str = Field(..., min_length=1, max_length=63)
+    rule_labels: list[LabelPair] = Field(default_factory=list)
+    name_prefix: str = Field(..., min_length=1, max_length=40)
+    alert_labels: list[LabelPair] = Field(default_factory=list)
+    mark_applied_on_success: bool = True
+    cluster_overrides: list[ClusterOverride] = Field(default_factory=list, max_length=200)
+
+
+class RulePreviewItem(BaseModel):
+    cluster_id: str
+    cluster_name: str
+    namespace: str
+    name: str
+    yaml: str

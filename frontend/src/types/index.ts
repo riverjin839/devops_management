@@ -7580,7 +7580,7 @@ export interface AlarmRequestThreshold {
 export interface AlarmRequestHistoryEntry {
   at: string;
   by: string;
-  action: 'created' | 'updated' | AlarmRequestActionKind;
+  action: 'created' | 'updated' | 'rule_applied' | 'rule_apply_failed' | AlarmRequestActionKind;
   comment?: string | null;
 }
 
@@ -7602,8 +7602,55 @@ export interface AlarmRequest {
   reviewedAt?: string | null;
   appliedAt?: string | null;
   history: AlarmRequestHistoryEntry[];
+  /** PrometheusRule 자동 적용 실행 기록(최신이 앞). */
+  applyRuns: AlarmApplyRun[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AlarmApplyClusterResult {
+  clusterId: string;
+  clusterName: string;
+  namespace?: string;
+  name?: string;
+  status: 'created' | 'updated' | 'failed';
+  message: string;
+}
+
+/** 저장된 실행 1건 — log 는 [ts, level, message] (cmd 줄은 관리자에게만 온다). */
+export interface AlarmApplyRun {
+  at: string;
+  by: string;
+  ok: boolean;
+  results: AlarmApplyClusterResult[];
+  log: [string, string, string][];
+}
+
+export interface AlarmApplyResult {
+  ok: boolean;
+  summary: string;
+  results: AlarmApplyClusterResult[];
+  status: AlarmRequestStatus;
+}
+
+/** 라벨 한 쌍 — 키가 객체 키가 아니라 값이라 camelCase 변환을 타지 않는다. */
+export interface AlarmLabelPair { key: string; value: string }
+
+export interface AlarmApplySettings {
+  namespace: string;
+  ruleLabels: AlarmLabelPair[];
+  namePrefix: string;
+  alertLabels: AlarmLabelPair[];
+  markAppliedOnSuccess: boolean;
+  clusterOverrides: { clusterId: string; namespace?: string | null; ruleLabels: AlarmLabelPair[] }[];
+}
+
+export interface AlarmRulePreview {
+  clusterId: string;
+  clusterName: string;
+  namespace: string;
+  name: string;
+  yaml: string;
 }
 
 export interface AlarmRequestInput {

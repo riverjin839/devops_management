@@ -49,6 +49,7 @@ TRANSITIONS: dict[str, set[str]] = {
 ACTION_LABEL = {
     "created": "요청 등록", "updated": "요청 수정",
     "reviewing": "검토 시작", "approved": "승인", "rejected": "반려", "applied": "반영 완료",
+    "rule_applied": "PrometheusRule 적용", "rule_apply_failed": "PrometheusRule 적용 실패",
 }
 
 
@@ -178,7 +179,7 @@ def add_history(req: AlarmRequest, actor: User, action: str, comment: str | None
     req.history = [*(req.history or []), entry]   # JSONB 변경 감지를 위해 새 리스트로 교체
 
 
-def serialize(req: AlarmRequest, hidden: frozenset) -> dict[str, Any]:
+def serialize(req: AlarmRequest, hidden: frozenset, is_admin: bool = False) -> dict[str, Any]:
     clusters = []
     for c in req.clusters or []:
         try:
@@ -193,8 +194,20 @@ def serialize(req: AlarmRequest, hidden: frozenset) -> dict[str, Any]:
         "requested_by": req.requested_by, "requester_name": req.requester_name,
         "review_comment": req.review_comment, "reviewed_by": req.reviewed_by, "reviewed_at": req.reviewed_at,
         "applied_at": req.applied_at, "history": req.history or [],
+        "apply_runs": _visible_runs(req.apply_runs, is_admin),
         "created_at": req.created_at, "updated_at": req.updated_at,
     }
+
+
+def _visible_runs(runs: Any, is_admin: bool) -> list[dict[str, Any]]:
+    """적용 실행 기록 — 실제 K8S API 호출(cmd 줄)은 관리자에게만."""
+    from app.services.command_trace import filter_log_lines
+
+    out = []
+    for r in runs or []:
+        if isinstance(r, dict):
+            out.append({**r, "log": filter_log_lines(r.get("log") or [], is_admin)})
+    return out
 
 
 # ── 관리자 처리 ──────────────────────────────────────────────────────────────

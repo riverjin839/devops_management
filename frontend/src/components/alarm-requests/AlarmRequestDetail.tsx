@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { formatDateTime } from '@/lib/utils';
 import type { CanOperate } from '@/hooks/useCanOperate';
 import type { AlarmRequest, AlarmRequestActionKind } from '@/types';
+import { RuleApplyPanel } from './RuleApplyPanel';
 import { ThresholdTable } from './ThresholdTable';
 import { ACTION_LABEL, BTN, BTN_DANGER, BTN_PRIMARY, INPUT, STATUS_LABEL, STATUS_VARIANT } from './styles';
 
@@ -101,6 +102,8 @@ export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, 
           </Field>
         </div>
 
+        <RuleApplyPanel req={req} perm={perm} />
+
         {adminActions.length > 0 && (
           <label className="grid gap-1">
             <span className="text-xs font-semibold">검토 의견 <span className="font-normal text-muted-foreground">(반려 시 필수)</span></span>
@@ -133,11 +136,11 @@ export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, 
         {adminActions.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {adminActions.map((a) => {
-              const label = a === 'applied' ? '반영 완료 처리' : ACTION_LABEL[a];
+              const label = a === 'applied' ? '수동 반영 완료' : ACTION_LABEL[a];
               return (
                 <button key={a} type="button" disabled={busy || !perm.canOperate}
                   title={perm.withHint(label)} aria-label={perm.ariaWithHint(label)}
-                  className={a === 'rejected' ? BTN_DANGER : a === 'approved' || a === 'applied' ? BTN_PRIMARY : BTN}
+                  className={a === 'rejected' ? BTN_DANGER : a === 'approved' ? BTN_PRIMARY : BTN}
                   onClick={() => act(a)}>
                   {label}
                 </button>
@@ -160,9 +163,9 @@ export function AlarmRequestDetail({ req, username, perm, busy, onEdit, onCopy, 
       />
       <ConfirmDialog
         open={confirm === 'applied'}
-        title={`${req.code} 반영 완료로 처리할까요?`}
-        description="알람 규칙(PrometheusRule 등)에 반영을 마친 뒤 누르세요. 이 화면은 클러스터에 명령을 보내지 않습니다. 수정 임계치가 이 알람의 기본 임계치(카탈로그)로 저장됩니다."
-        confirmLabel="반영 완료"
+        title={`${req.code} 수동으로 반영 완료 처리할까요?`}
+        description="GitOps 등 다른 경로로 알람 규칙 반영을 마쳤을 때 누르세요. 클러스터에는 아무것도 보내지 않습니다(자동 적용은 「클러스터에 적용」). 수정 임계치가 이 알람의 기본 임계치(카탈로그)로 저장됩니다."
+        confirmLabel="반영 완료 처리"
         busy={busy}
         onCancel={() => setConfirm(null)}
         onConfirm={() => { setConfirm(null); onAct('applied', comment.trim() || undefined); setComment(''); }}

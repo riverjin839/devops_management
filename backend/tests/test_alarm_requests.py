@@ -233,3 +233,193 @@ def test_foreign_catalog_id_is_ignored_and_not_overwritten(client, db):
     assert db.get(AlarmCatalogItem, victim.id).thresholds == [{"severity": "warning", "expr": "orig > 1", "for": "5m"}]
     created = db.query(AlarmCatalogItem).filter(AlarmCatalogItem.metric_name == metric).one()
     assert created.service == "cnpg" and created.id != victim.id
+
+
+# ── PrometheusRule 자동 적용 ───────────────────────────────────────────────────
+import json  # noqa: E402
+
+from app.models.app_setting import AppSetting  # noqa: E402
+from app.services import alarm_rule_apply as rule_apply  # noqa: E402
+
+
+class _ApiErr(Exception):
+    def __init__(self, status, message="err"):
+        super().__init__(message)
+        self.status = status
+        self.body = json.dumps({"message": message})
+
+
+class FakeCustomApi:
+    """클러스터 이름별 PrometheusRule 저장소. fail_clusters 에 있으면 create 가 403."""
+
+    def __init__(self, store, fail_clusters=()):
+        self.store = store
+        self.fail = set(fail_clusters)
+        self.calls = []
+        self.cluster = None
+
+    def bind(self, cluster):
+        self.cluster = cluster.name
+        return self
+
+    def get_namespaced_custom_object(self, group, version, ns, plural, name, **_):
+        self.calls.append(("GET", self.cluster, ns, name))
+        obj = self.store.get((self.cluster, ns, name))
+        if obj is None:
+            raise _ApiErr(404, "not found")
+        return obj
+
+    def create_namespaced_custom_object(self, group, version, ns, plural, body, **_):
+        self.calls.append(("POST", self.cluster, ns, body["metadata"]["name"]))
+        if self.cluster in self.fail:
+            raise _ApiErr(403, "forbidden: cannot create prometheusrules")
+        self.store[(self.cluster, ns, body["metadata"]["name"])] = {**body, "metadata": {**body["metadata"], "resourceVersion": "1"}}
+
+    def replace_namespaced_custom_object(self, group, version, ns, plural, name, body, **_):
+        self.calls.append(("PUT", self.cluster, ns, name, body["metadata"].get("resourceVersion")))
+        self.store[(self.cluster, ns, name)] = body
+
+
+@pytest.fixture
+def fake_k8s(monkeypatch):
+    store: dict = {}
+    api = FakeCustomApi(store)
+    monkeypatch.setattr(rule_apply, "_custom_api", api.bind)
+    s = SessionLocal()
+    row = s.query(AppSetting).filter(AppSetting.key == rule_apply.SETTINGS_KEY).first()
+    saved = dict(row.value) if row else None
+    s.close()
+    yield api
+    s = SessionLocal()
+    row = s.query(AppSetting).filter(AppSetting.key == rule_apply.SETTINGS_KEY).first()
+    if saved is None:
+        if row is not None:
+            s.delete(row)
+    else:
+        row.value = saved
+    s.commit()
+    s.close()
+
+
+def _approved(client, db, clusters, metric=f"{PREFIX}RuleLag"):
+    viewer = _user(db, "viewer", "요청자")
+    op = _user(db, "operator", "운영자")
+    rid = client.post("/api/v1/alarm-requests", json=_payload(clusters, metric=metric), headers=_h(viewer)).json()["id"]
+    assert client.post(f"/api/v1/alarm-requests/{rid}/action", json={"action": "approved"}, headers=_h(op)).status_code == 200
+    return rid, viewer, op
+
+
+def _sse(resp):
+    return [json.loads(line[6:]) for line in resp.text.splitlines() if line.startswith("data: ")]
+
+
+def test_apply_settings_validation_and_operator_only(client, db, fake_k8s):
+    viewer = _user(db, "viewer", "v")
+    op = _user(db, "operator", "o")
+    got = client.get("/api/v1/alarm-requests/apply-settings", headers=_h(viewer)).json()
+    assert got["namespace"] == "monitoring" and got["rule_labels"] == [{"key": "release", "value": "kube-prometheus-stack"}]
+    body = {**got, "namespace": "Bad_NS"}
+    assert client.put("/api/v1/alarm-requests/apply-settings", json=body, headers=_h(viewer)).status_code == 403
+    assert client.put("/api/v1/alarm-requests/apply-settings", json=body, headers=_h(op)).status_code == 422
+    body = {**got, "namespace": "obs", "rule_labels": [{"key": "prometheus", "value": "k8s"}],
+            "alert_labels": [{"key": "teamName", "value": "platform"}]}
+    r = client.put("/api/v1/alarm-requests/apply-settings", json=body, headers=_h(op))
+    assert r.status_code == 200 and r.json()["namespace"] == "obs"
+    assert r.json()["alert_labels"] == [{"key": "teamName", "value": "platform"}]
+    bad = {**body, "rule_labels": [{"key": "bad key!", "value": "x"}]}
+    assert client.put("/api/v1/alarm-requests/apply-settings", json=bad, headers=_h(op)).status_code == 422
+
+
+def test_preview_builds_prometheus_rule_without_touching_cluster(client, db, fake_k8s):
+    c1, c2 = _cluster(db, "pv1"), _cluster(db, "pv2")
+    rid, viewer, _ = _approved(client, db, [c1, c2])
+    rule_apply.save_settings(db, {"cluster_overrides": [{"cluster_id": str(c2.id), "namespace": "obs2",
+                                                          "rule_labels": {"prometheus": "k8s"}}]})
+    items = client.get(f"/api/v1/alarm-requests/{rid}/rule-preview", headers=_h(viewer)).json()
+    assert [i["namespace"] for i in items] == ["monitoring", "obs2"]
+    import yaml
+    m = yaml.safe_load(items[0]["yaml"])
+    assert m["kind"] == "PrometheusRule" and m["metadata"]["labels"]["app.kubernetes.io/managed-by"] == "pep"
+    assert m["metadata"]["labels"]["release"] == "kube-prometheus-stack"
+    rule = m["spec"]["groups"][0]["rules"][0]
+    assert rule == {"alert": f"{PREFIX}RuleLag", "expr": "lag > 60",
+                    "labels": {"severity": "warning", "service": "cnpg"},
+                    "annotations": {"summary": "복제 지연", "pep_request": rule["annotations"]["pep_request"]},
+                    "for": "10m"}
+    assert yaml.safe_load(items[1]["yaml"])["metadata"]["labels"]["prometheus"] == "k8s"
+    assert fake_k8s.calls == []
+
+
+def test_apply_stream_creates_rules_marks_applied_and_hides_commands(client, db, fake_k8s):
+    admin = _user(db, "admin", "관리자")
+    c1, c2 = _cluster(db, "ap1"), _cluster(db, "ap2")
+    rid, viewer, op = _approved(client, db, [c1, c2])
+    # 권한·상태 검증은 스트림을 열기 전에
+    assert client.post(f"/api/v1/alarm-requests/{rid}/apply-rules/stream", headers=_h(viewer)).status_code == 403
+    r = client.post(f"/api/v1/alarm-requests/{rid}/apply-rules/stream", headers=_h(op))
+    assert r.status_code == 200
+    events = _sse(r)
+    assert events[-1]["type"] == "result" and events[-1]["result"]["ok"] is True
+    assert events[-1]["result"]["status"] == "applied"
+    assert not [e for e in events if e.get("level") == "cmd"]          # operator 에게는 명령 줄이 안 간다
+    assert [c[0] for c in fake_k8s.calls] == ["GET", "POST", "GET", "POST"]
+    # 저장된 실행 기록: 관리자에게만 cmd 줄
+    as_admin = client.get(f"/api/v1/alarm-requests/{rid}", headers=_h(admin)).json()
+    as_viewer = client.get(f"/api/v1/alarm-requests/{rid}", headers=_h(viewer)).json()
+    run = as_admin["apply_runs"][0]
+    assert run["ok"] and [x["status"] for x in run["results"]] == ["created", "created"]
+    assert any(line[1] == "cmd" and "POST /apis/monitoring.coreos.com/v1/namespaces/monitoring/prometheusrules" in line[2]
+               for line in run["log"])
+    assert not any(line[1] == "cmd" for line in as_viewer["apply_runs"][0]["log"])
+    assert as_admin["status"] == "applied"
+    assert [h["action"] for h in as_admin["history"]][-2:] == ["rule_applied", "applied"]
+    # 반영 완료 뒤에는 다시 적용할 수 없다
+    assert client.post(f"/api/v1/alarm-requests/{rid}/apply-rules/stream", headers=_h(op)).status_code == 409
+
+
+def test_apply_updates_pep_rule_and_refuses_foreign_rule(client, db, fake_k8s):
+    c1, c2 = _cluster(db, "up1"), _cluster(db, "up2")
+    rid, _, op = _approved(client, db, [c1, c2])
+    name = rule_apply.rule_name(rule_apply.get_settings(db), db.get(AlarmRequest, rid))
+    fake_k8s.store[(c1.name, "monitoring", name)] = {
+        "metadata": {"name": name, "resourceVersion": "7", "labels": {"app.kubernetes.io/managed-by": "pep"}}}
+    fake_k8s.store[(c2.name, "monitoring", name)] = {
+        "metadata": {"name": name, "resourceVersion": "3", "labels": {"app.kubernetes.io/managed-by": "helm"}}}
+    events = _sse(client.post(f"/api/v1/alarm-requests/{rid}/apply-rules/stream", headers=_h(op)))
+    res = events[-1]["result"]
+    assert res["ok"] is False and res["status"] == "approved"
+    assert [x["status"] for x in res["results"]] == ["updated", "failed"]
+    assert ("PUT", c1.name, "monitoring", name, "7") in fake_k8s.calls
+    assert not any(c[0] in ("PUT", "POST") and c[1] == c2.name for c in fake_k8s.calls)
+    assert fake_k8s.store[(c2.name, "monitoring", name)]["metadata"]["labels"]["app.kubernetes.io/managed-by"] == "helm"
+    failed = [e for e in events if e.get("type") == "step" and e.get("status") == "failed"]
+    assert len(failed) == 1
+
+
+def test_apply_partial_failure_keeps_approved_and_can_retry(client, db, fake_k8s):
+    c1, c2 = _cluster(db, "pf1"), _cluster(db, "pf2")
+    rid, _, op = _approved(client, db, [c1, c2])
+    fake_k8s.fail = {c2.name}
+    res = _sse(client.post(f"/api/v1/alarm-requests/{rid}/apply-rules/stream", headers=_h(op)))[-1]["result"]
+    assert res["ok"] is False and "forbidden" in res["results"][1]["message"]
+    fake_k8s.fail = set()
+    res = _sse(client.post(f"/api/v1/alarm-requests/{rid}/apply-rules/stream", headers=_h(op)))[-1]["result"]
+    assert res["ok"] is True and [x["status"] for x in res["results"]] == ["updated", "created"]
+    db.expire_all()
+    req = db.get(AlarmRequest, rid)
+    assert req.status == "applied" and len(req.apply_runs) == 2 and req.apply_runs[0]["ok"] is True
+
+
+def test_admin_stream_shows_k8s_api_commands(client, db, fake_k8s):
+    admin = _user(db, "admin", "관리자")
+    c1 = _cluster(db, "adm1")
+    rid, _, _ = _approved(client, db, [c1])
+    events = _sse(client.post(f"/api/v1/alarm-requests/{rid}/apply-rules/stream", headers=_h(admin)))
+    cmds = [e["message"] for e in events if e.get("level") == "cmd"]
+    assert any(m.startswith("$ [k8s-api cluster ") and "GET /apis/monitoring.coreos.com/v1/namespaces/monitoring/prometheusrules/" in m
+               for m in cmds)
+    assert any("POST /apis/monitoring.coreos.com/v1" in m for m in cmds)
+    # 명령 줄은 해당 단계(로그) 앞에 온다
+    first_cmd = next(i for i, e in enumerate(events) if e.get("level") == "cmd")
+    created = next(i for i, e in enumerate(events) if "생성 완료" in str(e.get("message", "")))
+    assert first_cmd < created

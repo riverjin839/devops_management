@@ -45,6 +45,8 @@ export const ACTION_LABEL: Record<string, string> = {
   approved: '승인',
   rejected: '반려',
   applied: '반영 완료',
+  rule_applied: 'PrometheusRule 적용',
+  rule_apply_failed: 'PrometheusRule 적용 실패',
 };
 
 /** Prometheus duration(5m, 1h30m, 30s, 0). 빈 값 허용. */

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BellPlus, BookMarked, Plus } from 'lucide-react';
+import { BellPlus, BookMarked, Plus, SlidersHorizontal } from 'lucide-react';
 import { PageShell } from '@/components/common/PageShell';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/EmptyState';
@@ -9,7 +9,7 @@ import { SegTabs } from '@/components/common/SegTabs';
 import { useToast } from '@/components/common/Toast';
 import { MacCard } from '@/components/ui/MacCard';
 import {
-  AlarmCatalogDialog, AlarmRequestDetail, AlarmRequestForm, emptyDraft,
+  AlarmCatalogDialog, AlarmRequestDetail, ApplySettingsDialog, AlarmRequestForm, emptyDraft,
   STATUS_LABEL, STATUS_VARIANT, type AlarmRequestDraft,
 } from '@/components/alarm-requests';
 import { BTN, BTN_PRIMARY, INPUT } from '@/components/alarm-requests/styles';
@@ -58,6 +58,7 @@ export function AlarmRequestsPage() {
 
   const [draft, setDraft] = useState<AlarmRequestDraft | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [applySettingsOpen, setApplySettingsOpen] = useState(false);
   const [status, setStatus] = useState<StatusFilter>('all');
   const [service, setService] = useState('all');
   const [mine, setMine] = useState(false);
@@ -115,9 +116,13 @@ export function AlarmRequestsPage() {
         <PageHeader
           title="알람 등록 요청"
           icon={BellPlus}
-          description="서비스 담당자가 운영 알람 추가·임계치 변경을 요청하고, 관리자가 검토한 뒤 클러스터 알람 규칙에 반영합니다."
+          description="서비스 담당자가 운영 알람 추가·임계치 변경을 요청하고, 관리자가 검토한 뒤 클러스터에 PrometheusRule 로 적용합니다."
           actions={
             <div className="flex flex-wrap gap-2">
+              <button type="button" className={BTN} onClick={() => setApplySettingsOpen(true)}
+                title="PrometheusRule 을 만들 네임스페이스·라벨">
+                <SlidersHorizontal className="w-4 h-4" /> 적용 설정
+              </button>
               <button type="button" className={BTN} onClick={() => setCatalogOpen(true)}
                 title={perm.canOperate ? '알람 카탈로그 편집' : '알람 카탈로그 보기'}>
                 <BookMarked className="w-4 h-4" /> 알람 카탈로그
@@ -244,6 +249,7 @@ export function AlarmRequestsPage() {
         </div>
       </PageShell>
 
+      <ApplySettingsDialog open={applySettingsOpen} onClose={() => setApplySettingsOpen(false)} />
       <AlarmCatalogDialog open={catalogOpen} onClose={() => setCatalogOpen(false)} services={services} />
     </div>
   );

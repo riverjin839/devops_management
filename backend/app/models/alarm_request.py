@@ -53,6 +53,10 @@ class AlarmRequest(Base):
     applied_at = Column(DateTime, nullable=True)
     # [{"at": iso, "by": "표시명", "action": "created|updated|reviewing|approved|rejected|applied", "comment": "..."}]
     history = Column(JSONB, nullable=False, default=list)
+    # PrometheusRule 자동 적용 실행 기록(최근 N건, 최신이 앞) —
+    # [{"at", "by", "ok", "results": [{cluster_id, cluster_name, namespace, name, status, message}], "log": [[ts, level, msg]]}]
+    # log 의 level="cmd" 줄(실제 K8S API 호출)은 조회 때 관리자가 아니면 뺀다.
+    apply_runs = Column(JSONB, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
