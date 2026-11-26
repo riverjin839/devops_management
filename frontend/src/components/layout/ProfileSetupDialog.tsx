@@ -107,7 +107,7 @@ export function ProfileSetupDialog() {
 
   return (
     // onOpenChange 를 무시 — Escape·바깥 클릭·뒤로가기로 닫지 않는다(필수 등록).
-    <Dialog open={open} onOpenChange={() => {}} dismissible={false}>
+    <Dialog open={open} onOpenChange={() => {}} disablePointerDismissal>
       <DialogContent hideClose className="max-w-md">
         <form onSubmit={handleSubmit} noValidate>
           <DialogHeader>

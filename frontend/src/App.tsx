@@ -54,6 +54,7 @@ import { K8sHubPage } from '@/pages/K8sHubPage';
 import { HomePage } from '@/pages/HomePage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
+import { ProfileSetupDialog } from '@/components/layout/ProfileSetupDialog';
 import { ManualPage } from '@/pages/ManualPage';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
 import { DailyReportPage } from '@/pages/DailyReportPage';
@@ -329,6 +330,8 @@ function AuthedRoot() {
     <>
       <AppShell />
       <AgentChat />
+      {/* 첫 로그인 "내 정보 등록" — 이메일·IP·좌석이 비어 있으면 닫을 수 없는 팝업(터미널 팝업 창 제외). */}
+      <ProfileSetupDialog />
     </>
   );
 }

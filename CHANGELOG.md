@@ -10,6 +10,12 @@
 
 1.110.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **첫 로그인 「내 정보 등록」 팝업**: 이메일·IP 주소·좌석 위치 중 하나라도 비어 있으면 로그인 직후 닫을 수 없는 팝업이 떠서 등록해야 화면을 쓸 수 있다(빠져나가는 길은 로그아웃뿐, 담당 업무는 선택). 이메일·IP 형식을 검사하고, 관리자가 값을 지워 다시 비면 다음 접속 때 같은 팝업이 뜬다. 사용자 메뉴의 내 정보 패널도 세 항목을 비운 채 저장할 수 없다. Backend: `GET /ui-settings/assignees/me`(`profileComplete`), `PUT /ui-settings/assignees/me` 이메일·IP 형식 검사. Frontend: `components/layout/ProfileSetupDialog.tsx`.
+
+### Changed
+- **정 담당역할·부담당 역할 → 「담당 업무」 한 칸으로 통합**: Settings ▸ 시스템 담당자 표·내 정보 패널·팀원 보드가 담당 업무 하나만 보여 준다. 기존 값은 부팅 시 「정, 부」 순서로 쉼표로 이어 `users.duty` 에 한 번 옮겨지고(옛 두 컬럼은 DB 에 남지만 쓰지 않는다), API 필드는 `primaryRole`/`secondaryRole` 대신 `duty` 다.
+
 ## [1.110.1] - 2026-11-26
 
 ### Fixed
