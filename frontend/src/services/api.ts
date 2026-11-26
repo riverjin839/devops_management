@@ -2520,6 +2520,12 @@ export const k8sResourcesApi = {
       `/k8s/${clusterId}/resources/${kind}`,
       { params: { ...(namespace ? { namespace } : {}), ...(refresh ? { refresh: true } : {}) }, timeout: 120_000 },
     ),
+  /** NS 별 ResourceQuota 사용/한도 요약(전 NS quota 1회 LIST) — Namespaces 목록의 Quota 열 */
+  namespaceQuotas: (clusterId: string, refresh?: boolean) =>
+    api.get<import('@/types').K8sNamespaceQuotaResponse>(
+      `/k8s/${clusterId}/namespace-quotas`,
+      { params: refresh ? { refresh: true } : {}, timeout: 120_000 },
+    ),
   yaml: (clusterId: string, kind: string, namespace: string, name: string) =>
     api.get<import('@/types').K8sResourceDetail>(
       `/k8s/${clusterId}/resources/${kind}/${namespace || '-'}/${name}/yaml`,

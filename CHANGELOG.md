@@ -10,6 +10,10 @@
 
 1.110.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+
+- **Namespaces 목록 Quota 사용/한도 열** — K8S 상세 관리 Namespaces → 목록에 NS 별 ResourceQuota 의 CPU 요청·메모리 요청·CPU 한도·메모리 한도·Pods 를 "사용 / 한도" + 사용률 막대로 보여준다(80% 이상 경고·100% 이상 위험 색, 정상은 중립색). 같은 자원을 여러 quota 가 걸면 먼저 막히는(사용률이 가장 높은) 것을 보이고, 셀에 마우스를 올리면 quota 이름이 보인다. 「사용률 높은 순」 정렬 버튼, 컬럼 표시/숨김 지원. Backend: `GET /k8s/{id}/namespace-quotas`(전 NS quota 1회 LIST, 목록 캐시 경유). Frontend: `components/k8s-manage/NsQuotaCell.tsx`.
+
 ## [1.110.1] - 2026-11-26
 
 ### Fixed

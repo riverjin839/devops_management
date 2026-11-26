@@ -4120,6 +4120,28 @@ export interface K8sResourceRow {
   ageSeconds?: number | null;
 }
 export interface K8sColumnDef { key: string; label: string }
+/** Namespaces 목록의 ResourceQuota 사용/한도 — `GET /k8s/{id}/namespace-quotas`. */
+export interface K8sQuotaUsageCell {
+  used: string;
+  hard: string;
+  /** used / hard (0~1+). hard 가 0 이면 null */
+  ratio: number | null;
+  /** 이 값을 정한 ResourceQuota 이름(같은 자원을 여러 quota 가 걸면 사용률이 가장 높은 것) */
+  quota: string;
+}
+export interface K8sNamespaceQuotaRow {
+  namespace: string;
+  quotaCount: number;
+  cells: Record<string, K8sQuotaUsageCell>;
+  maxRatio: number | null;
+}
+export interface K8sNamespaceQuotaResponse {
+  resources: K8sColumnDef[];
+  items: K8sNamespaceQuotaRow[];
+  truncated: boolean;
+  cache?: string | null;
+  cacheAgeSeconds?: number | null;
+}
 export interface K8sResourceListResponse {
   kind: string;
   columns?: K8sColumnDef[];
