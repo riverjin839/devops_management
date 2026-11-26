@@ -21,8 +21,7 @@ const ASSIGNEE_COLUMNS: { key: keyof Assignee; label: string }[] = [
   { key: 'email', label: '이메일' },
   { key: 'ip', label: 'IP 주소' },
   { key: 'seatLocation', label: '좌석 위치' },
-  { key: 'primaryRole', label: '정 담당역할' },
-  { key: 'secondaryRole', label: '부담당 역할' },
+  { key: 'duty', label: '담당 업무' },
 ];
 
 const ACCOUNT_ROLES: { value: UserRoleApi; label: string; desc: string }[] = [
@@ -247,7 +246,7 @@ export function AssigneeManager() {
   const rosterReady = !isLoading && !isError;
 
   const assigneeColW = useColumnWidths('settings-assignee-table', {
-    defaults: { empId: 100, name: 140, email: 220, ip: 150, seatLocation: 130, primaryRole: 180, secondaryRole: 180, account: 150, actions: 130 },
+    defaults: { empId: 100, name: 140, email: 220, ip: 150, seatLocation: 130, duty: 260, account: 150, actions: 130 },
     min: 60, max: 600,
   });
 
@@ -411,7 +410,7 @@ export function AssigneeManager() {
       <DoubleScrollX>
         <table className="text-sm" style={{ tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
           <colgroup>
-            {(['empId', 'name', 'email', 'ip', 'seatLocation', 'primaryRole', 'secondaryRole', 'account', 'actions'] as const).map((k) => (
+            {(['empId', 'name', 'email', 'ip', 'seatLocation', 'duty', 'account', 'actions'] as const).map((k) => (
               <col key={k} style={{ width: `${assigneeColW.getWidth(k)}px` }} />
             ))}
           </colgroup>
@@ -432,11 +431,8 @@ export function AssigneeManager() {
               <th className="relative text-left px-4 py-3 font-medium">좌석 위치
                 <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('seatLocation', e)} onDoubleClick={() => assigneeColW.autoFit('seatLocation')} />
               </th>
-              <th className="relative text-left px-4 py-3 font-medium">정 담당역할
-                <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('primaryRole', e)} onDoubleClick={() => assigneeColW.autoFit('primaryRole')} />
-              </th>
-              <th className="relative text-left px-4 py-3 font-medium">부담당 역할
-                <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('secondaryRole', e)} onDoubleClick={() => assigneeColW.autoFit('secondaryRole')} />
+              <th className="relative text-left px-4 py-3 font-medium">담당 업무
+                <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('duty', e)} onDoubleClick={() => assigneeColW.autoFit('duty')} />
               </th>
               <th className="relative text-left px-4 py-3 font-medium">로그인 계정
                 <ResizeGrip onMouseDown={(e) => assigneeColW.beginResize('account', e)} onDoubleClick={() => assigneeColW.autoFit('account')} />
@@ -503,16 +499,9 @@ export function AssigneeManager() {
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    {isEditing ? cellInput('primaryRole', 'Backend Engineer') : (
-                      a.primaryRole
-                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1-text border border-chart-1/20">{a.primaryRole}</span>
-                        : <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {isEditing ? cellInput('secondaryRole', 'DevOps') : (
-                      a.secondaryRole
-                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-3/10 text-chart-3-text border border-chart-3/20">{a.secondaryRole}</span>
+                    {isEditing ? cellInput('duty', 'K8s 운영, CI/CD') : (
+                      a.duty
+                        ? <span className="text-sm px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1-text border border-chart-1/20">{a.duty}</span>
                         : <span className="text-muted-foreground">—</span>
                     )}
                   </td>
@@ -580,7 +569,7 @@ export function AssigneeManager() {
             {/* Add new row */}
             {showAddRow && (
               <tr className="bg-primary/5 border-t-2 border-primary/30">
-                {(['employeeId', 'name', 'email', 'ip', 'seatLocation', 'primaryRole', 'secondaryRole'] as (keyof Assignee)[]).map((field) => (
+                {(['employeeId', 'name', 'email', 'ip', 'seatLocation', 'duty'] as (keyof Assignee)[]).map((field) => (
                   <td key={field} className="px-4 py-2.5">
                     <input
                       type="text"
@@ -593,8 +582,7 @@ export function AssigneeManager() {
                         : field === 'email' ? 'user@co.kr'
                         : field === 'ip' ? '10.0.0.1'
                         : field === 'seatLocation' ? '3층 A-12'
-                        : field === 'primaryRole' ? '정 담당역할'
-                        : '부담당 역할'
+                        : '담당 업무'
                       }
                       aria-label={
                         field === 'employeeId' ? '사번 입력'
@@ -602,8 +590,7 @@ export function AssigneeManager() {
                         : field === 'email' ? '이메일 입력'
                         : field === 'ip' ? 'IP 입력'
                         : field === 'seatLocation' ? '좌석 위치 입력'
-                        : field === 'primaryRole' ? '정 담당역할 입력'
-                        : '부담당 역할 입력'
+                        : '담당 업무 입력'
                       }
                       autoFocus={field === 'name'}
                       className="w-full px-2 py-1 bg-background border border-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-ring"

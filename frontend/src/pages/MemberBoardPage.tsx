@@ -149,7 +149,7 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
     <MacCard
       title={bucket.assignee}
       icon={User}
-      description={(bucket.info?.employeeId || bucket.info?.email || bucket.info?.primaryRole) && (
+      description={(bucket.info?.employeeId || bucket.info?.email || bucket.info?.duty) && (
         <span className="inline-flex items-center gap-2">
           {bucket.info?.employeeId && (
             <span className="inline-flex items-center gap-0.5"><Hash className="w-2.5 h-2.5" />{bucket.info.employeeId}</span>
@@ -157,8 +157,8 @@ function MemberSection({ bucket, onTaskClick, onIssueClick }: {
           {bucket.info?.email && (
             <span className="inline-flex items-center gap-0.5"><Mail className="w-2.5 h-2.5" />{bucket.info.email}</span>
           )}
-          {bucket.info?.primaryRole && (
-            <span>{bucket.info.primaryRole}</span>
+          {bucket.info?.duty && (
+            <span>{bucket.info.duty}</span>
           )}
         </span>
       )}
@@ -400,7 +400,7 @@ export function MemberBoardPage() {
         b.assignee.toLowerCase().includes(q)
         || (b.info?.employeeId ?? '').toLowerCase().includes(q)
         || (b.info?.email ?? '').toLowerCase().includes(q)
-        || (b.info?.primaryRole ?? '').toLowerCase().includes(q),
+        || (b.info?.duty ?? '').toLowerCase().includes(q),
       );
     }
     if (filter === 'active') {

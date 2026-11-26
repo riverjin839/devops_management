@@ -3,7 +3,7 @@
 과거에는 담당자 명부가 ``app_settings`` 의 JSON blob 이고, 사번이 있는 담당자만
 별도 로그인 계정(``User``)으로 단방향 provisioning 됐다(생성 전용 — 명부를 고쳐도
 이미 만든 계정은 갱신되지 않고, 삭제되지도 않았다). 지금은 ``users`` 테이블 자체가
-명부다 — 담당자 필드(이름/사번/이메일/IP/좌석/역할)와 로그인 필드(username/
+명부다 — 담당자 필드(이름/사번/이메일/IP/좌석/담당 업무)와 로그인 필드(username/
 hashed_password/role/is_active) 가 한 행에 함께 있다(``models/user.py`` 참고).
 
 이 모듈은 그 구(舊) JSON 명부를 ``users`` 테이블로 흡수하는 1회성 마이그레이션만
@@ -23,12 +23,27 @@ _log = logging.getLogger("k8s_monitor.assignee_accounts")
 ASSIGNEE_ACCOUNT_ROLE = "operator"
 
 
+def _merge_duty(a: dict) -> str | None:
+    """담당 업무 값 — ``duty`` 가 있으면 그대로, 없으면 옛 정/부 담당역할을 ", " 로 합친다."""
+    duty = a.get("duty")
+    if duty is not None and str(duty).strip():
+        return str(duty).strip()
+    parts = []
+    for keys in (("primaryRole", "primary_role"), ("secondaryRole", "secondary_role")):
+        for k in keys:
+            v = a.get(k)
+            if v is not None and str(v).strip():
+                parts.append(str(v).strip())
+                break
+    return ", ".join(parts) or None
+
+
 def _normalize_legacy_entry(a) -> dict | None:
     """구 JSON 담당자 항목(문자열 또는 dict)을 정규화. 이름이 없으면 None."""
     if isinstance(a, str):
         name = a.strip()
         return {"name": name, "employee_id": None, "email": None, "ip": None,
-                "seat_location": None, "primary_role": None, "secondary_role": None} if name else None
+                "seat_location": None, "duty": None} if name else None
     if isinstance(a, dict):
         name = str(a.get("name", "")).strip()
         if not name:
@@ -45,8 +60,7 @@ def _normalize_legacy_entry(a) -> dict | None:
             "email": _s("email"),
             "ip": _s("ip"),
             "seat_location": _s("seatLocation", "seat_location"),
-            "primary_role": _s("primaryRole", "primary_role"),
-            "secondary_role": _s("secondaryRole", "secondary_role"),
+            "duty": _merge_duty(a),
         }
     return None
 
@@ -94,8 +108,7 @@ def migrate_legacy_roster_into_users(db: Session, raw_entries: list) -> dict:
             user.email = e["email"]
             user.ip = e["ip"]
             user.seat_location = e["seat_location"]
-            user.primary_role = e["primary_role"]
-            user.secondary_role = e["secondary_role"]
+            user.duty = e["duty"]
             db.commit()
             migrated.append(e["name"])
         except Exception as ex:  # noqa: BLE001
