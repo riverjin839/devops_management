@@ -481,6 +481,7 @@ def update_assignees(
                 existing.employee_id = a["employeeId"]
                 existing.username = a["employeeId"]
                 existing.hashed_password = hash_password(a["employeeId"])
+                existing.must_change_password = True  # 초기 비밀번호(=사번) — 첫 로그인 때 변경
                 existing.role = existing.role or ASSIGNEE_ACCOUNT_ROLE
                 accounts_created.append(a["employeeId"])
                 created_users.append(existing)
@@ -524,6 +525,7 @@ def update_assignees(
                 _ensure_username_free(db, a["employeeId"], None)
                 new_user.username = a["employeeId"]
                 new_user.hashed_password = hash_password(a["employeeId"])
+                new_user.must_change_password = True  # 초기 비밀번호(=사번) — 첫 로그인 때 변경
                 new_user.role = ASSIGNEE_ACCOUNT_ROLE
                 accounts_created.append(a["employeeId"])
                 created_users.append(new_user)

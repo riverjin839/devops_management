@@ -70,7 +70,7 @@ Jira Excel 가져오기)·문서 관리 그룹 전체·즐겨찾기·Your Island
 이 안내 문구가 있다(상세 `DESIGN_SYSTEM.md` "접근 제어가 아니다").
 로고(홈 버튼)는 유일한 예외로 opt-in 대상이 아니다 — 사용자가 전부 제거해도 "/" 로 돌아올
 방법이 하나는 남아 있어야 하므로 항상 클릭 가능하다. 앱을 직접 고른 적 없는 계정은 **조직 기본
-앱 구성**(admin, Settings → 화면 UI 설정 → "기본 앱 구성", 내장 기본값은 `/tasks-mgmt` 하나)을
+앱 구성**(admin, Settings → 화면 UI 설정 → "기본 앱 구성", 내장 기본값은 사이드바 `/k8s` 하나)을
 따르고, 하나라도 추가·제거하면 그때의 목록으로 고정된다 — `AddAppDialog` 하단 "기본값으로 초기화"로
 다시 기본값을 따른다. 토글은 목록 전체가 아니라 추가/제거 델타만 보내 서버가 행 잠금 아래에서
 합친다(여러 기기·탭 동시 편집 안전). 옛 레이아웃으로 저장된 계정은 `backend/app/main.py`
@@ -123,6 +123,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## 홈 / 인증 / 시스템
 
 ### 홈 (`/`)
+
+> **[2026-11-26] Main UI 일단 비우기** — 지금 `/` 는 `frontend/src/pages/HomePage.tsx` 가 모든 사용자에게 빈 상태
+> 안내(「메인 화면 준비 중」 + 「K8s 클러스터 열기」 버튼, `common/EmptyState`)만 그린다. 로그인 후 자동 이동은 없다.
+> 아래 설명은 예전 홈(업무 현황/플랫폼 현황 탭)으로, 코드는 `frontend/src/pages/HomeDashboard.tsx`(`HomeDashboard`,
+> 어느 라우트에도 연결 안 됨)에 남아 있다 — 다시 채울 때 참고. 배치잡은 `/batch-jobs` 가 `BatchJobsPage` 를 직접 연다.
 
 - **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `pages/BatchJobsPage.tsx`(플랫폼 현황 탭의 배치잡 서브탭으로 임베드 — 아래 Batch Jobs 섹션 참고)). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고 — 알림 종은 §알림 `/notifications`).
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 라벨 있는 **세그먼트 탭**(`업무 현황`/`플랫폼 현황`)이 화면 최상단이고, 이걸로 홈 본문에서 뭘 볼지 고른다. 예전엔 이 선택이 "홈 모드"라는 이름으로 **사이드바 네비게이션 전체를 게이팅**했지만(R-4 5차 D-054 — work 모드에서 클러스터·서버·네트워크 등 36개 화면이 레일에서 통째로 사라짐), 지금은 순수 홈 화면 로컬 상태다 — 사이드바·상단바 노출 범위와 무관하다. **[2026-09-17, Main UI 간소화]** 탭 위에 있던 KPI 스트립(나의 아일랜드 진입 필 + 내 할일/미해결 이슈/위험 클러스터/점검 실패/다음 일정 5종 필)을 통째로 제거했다 — 사용자 요청("정보를 줄이고 중요한 부분을 부각"). 위험 신호는 `플랫폼 현황` 탭 라벨의 배지(아래) 하나로 압축됐고, 아일랜드 진입은 상단바 opt-in 항목("나의 아일랜드")으로만 남는다(§Your Island 참고). KPI 필이 제공하던 개별 카운트(내 할일/미해결 이슈 등)는 각 목적지 화면(`/todo-today`, `/tasks-mgmt`)에서 직접 확인한다.

@@ -101,6 +101,7 @@ def migrate_legacy_roster_into_users(db: Session, raw_entries: list) -> dict:
                 if emp:
                     user.username = emp
                     user.hashed_password = hash_password(emp)
+                    user.must_change_password = True  # 초기 비밀번호(=사번)
                 db.add(user)
 
             user.display_name = e["name"]

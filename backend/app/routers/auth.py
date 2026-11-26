@@ -102,7 +102,7 @@ def _user_out(db: Session, user: User, source: str | None = None) -> UserOut:
     out = UserOut.model_validate(user)
     out.auth_source = source or _auth_source(db, user)
     if out.auth_source != "local":
-        # 디렉터리·IdP 계정은 PEP 비밀번호를 바꿀 수 없으므로 강제 변경 화면으로 보내지 않는다.
+        # 디렉터리·IdP 계정은 PEP 비밀번호를 바꿀 수 없으므로 첫 로그인 비밀번호 변경을 요구하지 않는다.
         out.must_change_password = False
     return out
 
@@ -395,6 +395,14 @@ def change_my_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="새 비밀번호는 기존 비밀번호와 달라야 합니다.",
         )
+    if payload.new_password.lower() in {
+        (v or "").lower() for v in (user.username, user.employee_id) if v
+    }:
+        # 초기 비밀번호가 사번이므로 사번·아이디를 그대로 새 비밀번호로 쓰면 변경한 의미가 없다.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="아이디·사번과 같은 비밀번호는 쓸 수 없습니다.",
+        )
     user.hashed_password = hash_password(payload.new_password)
     user.must_change_password = False
     # 이 시각 이전에 로그인한 토큰(다른 브라우저·탭의 세션, 그리고 이 요청의 토큰)은 무효가 된다.
@@ -465,6 +473,8 @@ def create_user(
         hashed_password=hash_password(payload.password),
         role=payload.role,
         display_name=payload.display_name,
+        # 관리자가 정해 준 비밀번호 — 첫 로그인 때 본인이 바꾸게 한다.
+        must_change_password=True,
     )
     db.add(user)
     db.commit()
@@ -563,6 +573,8 @@ def admin_reset_password(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
     user.hashed_password = hash_password(payload.new_password)
+    # 관리자가 정한 임시 비밀번호 — 다음 로그인 때 본인이 바꾸게 한다(첫 로그인 팝업).
+    user.must_change_password = True
     # 재설정 이전에 로그인한 그 사용자의 세션(토큰)을 모두 끊는다.
     user.password_changed_at = utcnow_naive()
     db.commit()

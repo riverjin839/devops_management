@@ -204,6 +204,11 @@ export const en: TranslationResource = {
     },
   },
   home: {
+    empty: {
+      title: 'Main screen coming soon',
+      description: 'Open a screen from the apps on the left. Add more apps with the + button in the sidebar.',
+      openK8s: 'Open K8s clusters',
+    },
     viewAria: 'Platform view',
     rangeAria: 'Progress range',
     title: 'Home',

@@ -1442,10 +1442,15 @@ def _run_migrations():
             "WHERE employee_id IS NOT NULL",
             label="users.employee_id unique index",
         )
-        # 강제 변경 정책 폐기 — 과거 시드/리셋으로 True 였던 사용자를 모두 해제.
+        # 첫 로그인 비밀번호 변경 — 사번으로 자동 발급된 뒤 한 번도 비밀번호를 바꾸지 않은 계정
+        # (username = 사번, password_changed_at 없음)은 아직 초기 비밀번호(=사번)이므로 변경 대상으로 표시한다.
+        # 예전엔 강제 변경 정책을 폐기하면서 매 부팅 플래그를 FALSE 로 되돌렸지만, 첫 로그인 변경을 다시
+        # 도입하면서 그 초기화는 없앴다. 비밀번호를 바꾸면 password_changed_at 이 채워져 다시 걸리지 않는다(멱등).
         _safe_exec(
-            "UPDATE users SET must_change_password = FALSE WHERE must_change_password = TRUE",
-            label="users.must_change_password → FALSE (강제 변경 정책 해제)",
+            "UPDATE users SET must_change_password = TRUE "
+            "WHERE must_change_password = FALSE AND password_changed_at IS NULL "
+            "AND hashed_password IS NOT NULL AND employee_id IS NOT NULL AND username = employee_id",
+            label="users.must_change_password ← 초기 비밀번호(=사번) 계정",
         )
 
     # audit_logs: create_all 이 테이블 자체는 만들지만 보조 인덱스만 명시.
@@ -2585,6 +2590,8 @@ def _seed_initial_admin():
             hashed_password=hash_password(settings.initial_admin_password),
             role="admin",
             display_name="Administrator",
+            # 설정 파일의 초기 비밀번호 — 첫 로그인 "내 정보 등록" 팝업에서 바꾸게 한다.
+            must_change_password=True,
         )
         db.add(admin)
         db.commit()

@@ -53,6 +53,7 @@ import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { K8sHubPage } from '@/pages/K8sHubPage';
 import { HomePage } from '@/pages/HomePage';
+import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
 import { ProfileSetupDialog } from '@/components/layout/ProfileSetupDialog';
@@ -226,7 +227,8 @@ function AppShell() {
               <Route path="/etcdctl" element={<RedirectToHub view="etcdctl" />} />
               {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크가 홈 첫 탭이 아니라
                   배치잡 서브탭에 바로 떨어지도록 쿼리로 탭/서브뷰를 넘긴다(HomePage 가 읽고 지움, D-129). */}
-              <Route path="/batch-jobs" element={<Navigate to="/?tab=platform&view=batch" replace />} />
+              {/* 홈(Main UI)을 비우면서 "플랫폼 현황 ▸ 배치잡" 서브탭이 사라져 배치잡 화면을 직접 연다. */}
+              <Route path="/batch-jobs" element={<BatchJobsPage />} />
               <Route path="/os-param-watch" element={<RedirectToHub view="os-param-watch" />} />
               <Route path="/cilium-datapath" element={<RedirectToHub view="cilium-datapath" />} />
               <Route path="/k8s-services" element={<RedirectToHub view="services" />} />
