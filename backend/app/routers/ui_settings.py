@@ -27,7 +27,7 @@ from app.services.cluster_network_mask import (
     DEFAULT_CLUSTER_VIEWER_MASK,
     normalize_mask_setting,
 )
-from app.services.operation_levels import DEFAULT_OPERATION_LEVELS, OPERATION_LEVELS_KEY
+from app.services.operation_levels import DEFAULT_OPERATION_LEVELS, DEFAULT_SHORT_LABELS, OPERATION_LEVELS_KEY
 from app.schemas.home_prefs import HomePrefsDefaults
 from app.services.home_prefs import (
     DEFAULTS_KEY as HOME_PREFS_DEFAULTS_KEY,
@@ -850,9 +850,12 @@ def get_operation_levels(db: Session = Depends(get_db)):
         icon_raw = it.get("icon")
         hex_raw = it.get("custom_hex")
         guarded_raw = it.get("guarded")
+        short_raw = it.get("short_label")
         items.append(OperationLevelItem(
             value=v,
             label=str(it.get("label", v)),
+            # 구버전 데이터(약칭 없음)는 기본 레벨이면 기본 약칭(PROD 등), 아니면 비워 label 을 쓰게 한다.
+            short_label=short_raw.strip()[:16] if isinstance(short_raw, str) and short_raw.strip() else DEFAULT_SHORT_LABELS.get(v),
             color=str(it.get("color", "slate")),
             icon=str(icon_raw) if isinstance(icon_raw, str) and icon_raw.strip() else None,
             custom_hex=str(hex_raw) if isinstance(hex_raw, str) and _HEX_RE.match(hex_raw) else None,
@@ -883,7 +886,9 @@ def update_operation_levels(
         if custom_hex and not _HEX_RE.match(custom_hex):
             custom_hex = None
         cleaned.append({
-            "value": v, "label": it.label.strip() or v, "color": it.color or "slate",
+            "value": v, "label": it.label.strip() or v,
+            "short_label": (it.short_label or "").strip() or None,
+            "color": it.color or "slate",
             "icon": icon, "custom_hex": custom_hex,
             "guarded": it.guarded if it.guarded is not None else default_guarded(v),
         })

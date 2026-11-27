@@ -15,13 +15,16 @@ OPERATION_LEVELS_KEY = "operation_levels"
 
 DEFAULT_OPERATION_LEVELS = {
     "levels": [
-        {"value": "production", "label": "운영 (Production)", "color": "red",    "icon": "🚀", "guarded": True},
-        {"value": "staging",    "label": "스테이징 (Staging)", "color": "amber",  "icon": "✨", "guarded": False},
-        {"value": "dev",        "label": "개발 (Dev)",         "color": "blue",   "icon": "💻", "guarded": False},
-        {"value": "test",       "label": "테스트 (Test)",      "color": "slate",  "icon": "🧪", "guarded": False},
-        {"value": "dr",         "label": "DR",                 "color": "purple", "icon": "🛡️", "guarded": True},
+        {"value": "production", "label": "운영 (Production)", "short_label": "PROD",  "color": "red",    "icon": "🚀", "guarded": True},
+        {"value": "dev",        "label": "개발 (Dev)",         "short_label": "DEV",   "color": "blue",   "icon": "💻", "guarded": False},
+        {"value": "staging",    "label": "스테이징 (Staging)", "short_label": "STAGE", "color": "emerald", "icon": "✨", "guarded": False},
+        {"value": "test",       "label": "테스트 (Test)",      "short_label": "TEST",  "color": "slate",  "icon": "🧪", "guarded": False},
+        {"value": "dr",         "label": "DR",                 "short_label": "DR",    "color": "purple", "icon": "🛡️", "guarded": True},
     ]
 }
+
+# 약칭이 저장되지 않은 항목(구버전 데이터)의 기본 약칭 — value 기준.
+DEFAULT_SHORT_LABELS = {it["value"]: it["short_label"] for it in DEFAULT_OPERATION_LEVELS["levels"]}
 
 
 def is_operation_level_guarded(db: Session, level: str | None) -> bool:

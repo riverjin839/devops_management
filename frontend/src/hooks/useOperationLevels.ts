@@ -9,11 +9,11 @@ export const opsLevelsKeys = {
 };
 
 const FALLBACK: OperationLevelItem[] = [
-  { value: 'production', label: '운영 (Production)', color: 'red',    icon: '🚀', guarded: true },
-  { value: 'staging',    label: '스테이징 (Staging)', color: 'amber',  icon: '✨', guarded: false },
-  { value: 'dev',        label: '개발 (Dev)',         color: 'blue',   icon: '💻', guarded: false },
-  { value: 'test',       label: '테스트 (Test)',      color: 'slate',  icon: '🧪', guarded: false },
-  { value: 'dr',         label: 'DR',                 color: 'purple', icon: '🛡️', guarded: true },
+  { value: 'production', label: '운영 (Production)', shortLabel: 'PROD',  color: 'red',     icon: '🚀', guarded: true },
+  { value: 'dev',        label: '개발 (Dev)',         shortLabel: 'DEV',   color: 'blue',    icon: '💻', guarded: false },
+  { value: 'staging',    label: '스테이징 (Staging)', shortLabel: 'STAGE', color: 'emerald', icon: '✨', guarded: false },
+  { value: 'test',       label: '테스트 (Test)',      shortLabel: 'TEST',  color: 'slate',   icon: '🧪', guarded: false },
+  { value: 'dr',         label: 'DR',                 shortLabel: 'DR',    color: 'purple',  icon: '🛡️', guarded: true },
 ];
 
 /** `guarded` 가 없는 항목(구버전 데이터)의 기본 판정 — 서버 `default_guarded` 와 같은 규칙. */
@@ -101,6 +101,31 @@ const COLOR_BADGE: Record<string, string> = {
 
 export const COLOR_OPTIONS = Object.keys(COLOR_BADGE);
 
+// 클러스터 목록 그룹 섹션(면·머리글·구분선) — 배지와 같은 chart-N 수렴 규칙. Tailwind 가 읽도록 리터럴로 둔다.
+export interface LevelSectionClasses { section: string; header: string; divider: string }
+const SECTION_BY_CHART: Record<number, LevelSectionClasses> = {
+  1: { section: 'border-chart-1/30 bg-chart-1/[0.04]', header: 'bg-chart-1/15 text-chart-1-text border-chart-1/30', divider: 'border-chart-1/15' },
+  2: { section: 'border-chart-2/30 bg-chart-2/[0.04]', header: 'bg-chart-2/15 text-chart-2-text border-chart-2/30', divider: 'border-chart-2/15' },
+  3: { section: 'border-chart-3/30 bg-chart-3/[0.04]', header: 'bg-chart-3/15 text-chart-3-text border-chart-3/30', divider: 'border-chart-3/15' },
+  4: { section: 'border-chart-4/30 bg-chart-4/[0.04]', header: 'bg-chart-4/15 text-chart-4-text border-chart-4/30', divider: 'border-chart-4/15' },
+  5: { section: 'border-chart-5/30 bg-chart-5/[0.04]', header: 'bg-chart-5/15 text-chart-5-text border-chart-5/30', divider: 'border-chart-5/15' },
+  6: { section: 'border-chart-6/30 bg-chart-6/[0.04]', header: 'bg-chart-6/15 text-chart-6-text border-chart-6/30', divider: 'border-chart-6/15' },
+  7: { section: 'border-chart-7/30 bg-chart-7/[0.04]', header: 'bg-chart-7/15 text-chart-7-text border-chart-7/30', divider: 'border-chart-7/15' },
+  8: { section: 'border-chart-8/30 bg-chart-8/[0.04]', header: 'bg-chart-8/15 text-chart-8-text border-chart-8/30', divider: 'border-chart-8/15' },
+};
+const COLOR_CHART: Record<string, number> = {
+  red: 5, pink: 5, amber: 3, yellow: 3, emerald: 2, sky: 6, cyan: 6, blue: 1, purple: 4, violet: 4, orange: 7, slate: 8,
+};
+const SECTION_MUTED: LevelSectionClasses = {
+  section: 'border-border bg-card', header: 'bg-muted text-muted-foreground border-border', divider: 'border-border',
+};
+
+/** 운영레벨 색 키 → 클러스터 목록 그룹 섹션 클래스. 등급 미지정·muted 는 무채색. */
+export function levelSectionClasses(color: string | undefined): LevelSectionClasses {
+  const n = color ? COLOR_CHART[color] : undefined;
+  return n ? SECTION_BY_CHART[n] : SECTION_MUTED;
+}
+
 export function levelBadgeClass(color: string | undefined): string {
   return COLOR_BADGE[color ?? 'slate'] ?? COLOR_BADGE.slate;
 }
@@ -110,6 +135,15 @@ export function levelLabel(levels: OperationLevelItem[] | undefined, value: stri
   if (!value) return '';
   const hit = levels?.find((l) => l.value === value);
   return hit?.label ?? value;
+}
+
+/** value → 약칭(클러스터 패널 그룹 머리글). 약칭이 없으면 label 에서 괄호 설명을 뺀 이름, 그것도 없으면 value. */
+export function levelShortLabel(levels: OperationLevelItem[] | undefined, value: string | null | undefined): string {
+  if (!value) return '';
+  const hit = levels?.find((l) => l.value === value);
+  const short = hit?.shortLabel?.trim();
+  if (short) return short;
+  return (hit?.label ?? value).replace(/\s*\(.*\)\s*$/, '') || value;
 }
 
 /** value → color (프리셋 키, customHex 가 있어도 SVG fallback 용으로 계속 반환) */
@@ -133,6 +167,15 @@ export function levelBadgeStyle(levels: OperationLevelItem[] | undefined, value:
   if (!hex) return undefined;
   const { bg, ring, text } = deriveToneSet(hex);
   return { backgroundColor: bg, color: text, borderColor: ring };
+}
+
+/** customHex 가 지정된 레벨의 클러스터 목록 그룹 섹션 스타일(테두리·머리글) — levelBadgeStyle 과 같은 이유로 style. */
+export function levelSectionStyle(levels: OperationLevelItem[] | undefined, value: string | null | undefined):
+  { section: CSSProperties; header: CSSProperties } | undefined {
+  const hex = levelCustomHex(levels, value);
+  if (!hex) return undefined;
+  const { bg, ring, text } = deriveToneSet(hex);
+  return { section: { borderColor: ring }, header: { backgroundColor: bg, color: text, borderColor: ring } };
 }
 
 /** value → 이모지. 명시된 icon 우선 → value/label 키워드 hint → fallback. */

@@ -1431,6 +1431,8 @@ export interface HomeIcons {
 export interface OperationLevelItem {
   value: string;
   label: string;
+  /** 클러스터 패널 그룹 머리글처럼 좁은 자리의 약칭(예: PROD). 비어 있으면 label 을 쓴다. */
+  shortLabel?: string | null;
   /** tailwind 컬러 키 — red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted.
    *  customHex 가 있으면 fallback 으로만 쓰인다. */
   color: string;

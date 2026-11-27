@@ -115,6 +115,7 @@ class OperationLevelItem(BaseModel):
     """운영레벨 한 항목.
     - value: 클러스터.operation_level 에 저장되는 식별자 (영문 슬러그 권장).
     - label: 화면 표시 이름 (한글 가능).
+    - short_label: 클러스터 패널 그룹 머리글 등 좁은 자리의 약칭 (예: PROD). 비어있으면 label 을 쓴다.
     - color: 컬러 키 (red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted).
       custom_hex 가 지정되면 프리셋 대신 fallback 으로만 쓰인다.
     - icon: 클러스터 카드/행에 표시될 이모지 1자. 비어있으면 운영레벨별 기본값 사용.
@@ -126,6 +127,7 @@ class OperationLevelItem(BaseModel):
     """
     value: str = Field(..., min_length=1, max_length=64)
     label: str = Field(..., min_length=1, max_length=64)
+    short_label: str | None = Field(default=None, max_length=16)
     color: str = Field(default="slate", max_length=32)
     icon: str | None = Field(default=None, max_length=8)
     custom_hex: str | None = Field(default=None, max_length=9, pattern=r"^#[0-9a-fA-F]{3,8}$")

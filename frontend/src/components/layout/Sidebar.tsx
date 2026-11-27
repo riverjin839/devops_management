@@ -529,6 +529,7 @@ export function Sidebar() {
           <FlyoutShell
             title={getLabel(K8S_HUB_PATH)}
             anchorRect={k8sFlyoutAnchor}
+            wide
             {...focusProps}
             onClose={() => setK8sFlyoutAnchor(null)}
             onMouseEnter={cancelScheduledClose}
