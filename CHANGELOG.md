@@ -10,6 +10,9 @@
 
 1.113.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
 
+### Added
+- **SSH — 여러 노드 화면 안 4분할 터미널 · 즐겨찾기 명령**: 콘솔 ▸ 「노드 SSH」를 **SSH** 로 이름을 줄이고, 연결하면 새 창(플로팅 창)이 아니라 화면 안 분할 칸에 터미널이 열린다. 허브 「SSH」 탭 옆 「대상 노드」 리스트박스에서 여러 노드를 고르고(다른 K8S 클러스터 노드·직접 입력 호스트도) 한 번에 연결하면 **Ⅰ → Ⅳ → Ⅱ → Ⅲ 사분면** 순서로 칸을 채우고, 4개가 넘으면 다음 쪽으로 넘긴다(최대 16세션, 칸 크게 보기, 클러스터를 바꿔도 세션 유지). 터미널 창마다 **★ 즐겨찾기** 메뉴와 칩 바로 자주 쓰는 명령을 입력·실행하고(변경 명령은 확인, 보이는 모든 창에 동시 보내기), 즐겨찾기는 추가·편집·삭제·순서·기본값 복원이 되며 **서버에 저장**된다(기본 명령 = 옛 커널 파라미터 콘솔 프리셋). 연결 단계·종료 사유·즐겨찾기 보내기는 노드별 실시간 로그(「로그 보기」). Backend: `routers/ssh_favorites.py`, `models/ssh_favorite.py`(`ssh_favorite_commands`), `services/ssh_favorites.py`. Frontend: `NodeSshPage`, `components/node-ssh/`, `SshTerminalWindow` `embedded` 모드, 허브 툴바 자리(`toolbarSlot`)·`keepAcrossClusters`.
+
 ## [1.113.0] - 2026-11-26
 
 ### Added

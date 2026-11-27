@@ -31,7 +31,7 @@ export const en: TranslationResource = {
       members: 'Work by Member',
       clusterManage: 'Cluster Management',
       bulkExec: 'Bulk Node Exec',
-      nodeSsh: 'Node SSH Terminal',
+      nodeSsh: 'SSH',
       etcdctl: 'etcdctl Console',
       batchJobs: 'Batch Jobs',
       mc: 'mc Client',

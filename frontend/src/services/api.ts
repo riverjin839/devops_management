@@ -1423,6 +1423,18 @@ export const savedScriptsApi = {
   delete: (id: string) => api.delete(`/saved-scripts/${id}`),
 };
 
+// SSH 터미널 즐겨찾기 명령 — 사용자별 서버 저장(첫 조회 때 기본 명령 시드)
+export const sshFavoritesApi = {
+  list: () => api.get<import('@/types').SshFavorite[]>('/ssh-favorites'),
+  create: (data: import('@/types').SshFavoriteCreate) =>
+    api.post<import('@/types').SshFavorite>('/ssh-favorites', data),
+  update: (id: string, data: import('@/types').SshFavoriteUpdate) =>
+    api.put<import('@/types').SshFavorite>(`/ssh-favorites/${id}`, data),
+  delete: (id: string) => api.delete(`/ssh-favorites/${id}`),
+  reorder: (ids: string[]) => api.put<import('@/types').SshFavorite[]>('/ssh-favorites/order', { ids }),
+  reset: () => api.post<import('@/types').SshFavorite[]>('/ssh-favorites/reset'),
+};
+
 // 스크립트 라이브러리 API (DB 저장·버전관리되는 Python/Ansible/Shell 실행 스크립트 — Phase 1)
 export const scriptsApi = {
   list: (params?: { kind?: import('@/types').ScriptKind; tag?: string; q?: string }) =>
