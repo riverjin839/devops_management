@@ -64,6 +64,7 @@ from app.routers import (
     versions_router,
     bulk_exec_router,
     saved_scripts_router,
+    ssh_favorites_router,
     scripts_router,
     etcdctl_router,
     cilium_trace_router,
@@ -2783,7 +2784,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.113.0",
+    version="1.115.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2918,6 +2919,7 @@ app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(versions_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(bulk_exec_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(saved_scripts_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ssh_favorites_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(scripts_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_cluster_scoped)
@@ -3019,7 +3021,7 @@ app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.113.0",
+        "version": "1.115.0",
         "status": "running"
     }
 

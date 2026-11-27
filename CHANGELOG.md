@@ -8,7 +8,18 @@
 
 ## [Unreleased]
 
-1.113.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.115.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.115.0] - 2026-11-27
+
+### Changed
+- **K8s 클러스터 목록(사이드바 flyout·「클러스터 전환」) — 운영등급 섹션 + 가독성**: 클러스터를 운영등급별 색 섹션(머리글 + 개수, 옅은 배경·테두리 — `--chart-*`)으로 묶고, 섹션 순서는 Settings 운영레벨 목록 순서를 따른다(기본 PROD → DEV → STAGE). 이름은 고정폭 글꼴 대신 화면 본문 글꼴 14px, 아래 줄에 리전 · 버전 · 노드 수를 보인다. 목록 폭을 320px 로 넓혔고, 「비정상 N개만 보기」 토글과 하단 「클러스터 등록」 항목은 걷어냈다(상태는 행마다 아이콘, 등록은 클러스터 관리 화면).
+- **운영레벨 약칭**: Settings ▸ 운영레벨에 「약칭」 칸(예: PROD)을 추가 — 클러스터 목록 섹션 머리글에 쓰이고, 비우면 표시 라벨을 쓴다. 기본 레벨은 PROD·DEV·STAGE·TEST·DR 약칭과 운영 → 개발 → 스테이징 순서로 바뀌었고, 스테이징 기본 색은 경고 아이콘과 겹치지 않게 emerald. Backend: `OperationLevelItem.short_label`(약칭 없는 예전 데이터는 기본 레벨 value 기준 기본 약칭). Frontend: `levelShortLabel`·`levelSectionClasses`·`levelSectionStyle`, `FlyoutShell` `wide`.
+
+## [1.114.0] - 2026-11-27
+
+### Added
+- **SSH — 여러 노드 화면 안 4분할 터미널 · 즐겨찾기 명령**: 콘솔 ▸ 「노드 SSH」를 **SSH** 로 이름을 줄이고, 연결하면 새 창(플로팅 창)이 아니라 화면 안 분할 칸에 터미널이 열린다. 허브 「SSH」 탭 옆 「대상 노드」 리스트박스에서 여러 노드를 고르고(다른 K8S 클러스터 노드·직접 입력 호스트도) 한 번에 연결하면 **Ⅰ → Ⅳ → Ⅱ → Ⅲ 사분면** 순서로 칸을 채우고, 4개가 넘으면 다음 쪽으로 넘긴다(최대 16세션, 칸 크게 보기, 클러스터를 바꿔도 세션 유지). 터미널 창마다 **★ 즐겨찾기** 메뉴와 칩 바로 자주 쓰는 명령을 입력·실행하고(변경 명령은 확인, 보이는 모든 창에 동시 보내기), 즐겨찾기는 추가·편집·삭제·순서·기본값 복원이 되며 **서버에 저장**된다(기본 명령 = 옛 커널 파라미터 콘솔 프리셋). 연결 단계·종료 사유·즐겨찾기 보내기는 노드별 실시간 로그(「로그 보기」). Backend: `routers/ssh_favorites.py`, `models/ssh_favorite.py`(`ssh_favorite_commands`), `services/ssh_favorites.py`. Frontend: `NodeSshPage`, `components/node-ssh/`, `SshTerminalWindow` `embedded` 모드, 허브 툴바 자리(`toolbarSlot`)·`keepAcrossClusters`.
 
 ### Added
 - **알람 등록 요청 — PrometheusRule 자동 적용**: 「클러스터에 적용」으로 요청의 임계치를 적용 클러스터마다 `PrometheusRule`(알람 항목당 1개, 심각도별 rule)로 만들거나, PEP 가 만든 같은 규칙을 새 임계치로 교체한다(다른 도구가 만든 같은 이름은 덮어쓰지 않음). 실행은 실시간 로그로 보이고(관리자에게는 실제로 보낸 K8S API 호출부터), 클러스터별 결과·로그가 요청에 남으며, 모두 성공하면 「진행」 요청이 자동으로 「완료」가 된다. 「규칙 미리보기」로 적용 전 YAML 을 보고, 「적용 설정」에서 네임스페이스·ruleSelector 라벨·이름 접두사·알람 라벨·클러스터별 재정의를 고친다. Backend: `services/alarm_rule_apply.py`, `/alarm-requests/{id}/apply-rules/stream`·`/rule-preview`·`/apply-settings`, `alarm_requests.apply_runs`. Frontend: `RuleApplyPanel`, `RulePreviewDialog`, `ApplySettingsDialog`.

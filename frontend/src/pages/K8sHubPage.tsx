@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Lock, ShipWheel } from 'lucide-react';
 import { PageHeader, PageShell, EmptyState, ErrorState, LoadingState, SelectClusterEmptyState, ClusterCheckIcon } from '@/components/common';
@@ -51,7 +51,9 @@ export function K8sHubPage() {
     navigate(`/k8s/${id}/${viewId}${location.search}`);
   }, [clusterId, viewId, location.search, navigate]);
 
-  const embed = useMemo<K8sHubEmbed>(() => ({ clusterId, selectCluster }), [clusterId, selectCluster]);
+  // 2행 탭 옆 자리 — 화면이 포털로 컨트롤을 꽂는다(SSH 대상 노드 선택).
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
+  const embed = useMemo<K8sHubEmbed>(() => ({ clusterId, selectCluster, toolbarSlot }), [clusterId, selectCluster, toolbarSlot]);
 
   // 지운 뷰 → 대체 뷰로(쿼리 보존) — 터미널 → k9s(D-243), 버전 / 설정 → 서비스 구성.
   if (clusterId && !view && RETIRED_HUB_VIEWS[viewId]) {
@@ -82,7 +84,7 @@ export function K8sHubPage() {
             description={cluster ? `${getLabel('/k8s')} · ${activeView.label}` : undefined}
           />
 
-          {clusterId && <HubTabs clusterId={clusterId} views={allowedViews} active={activeView} />}
+          {clusterId && <HubTabs clusterId={clusterId} views={allowedViews} active={activeView} slotRef={setToolbarSlot} />}
 
           {!clusterId ? (
             isError ? <ErrorState error={error} onRetry={() => { void refetch(); }} />
@@ -97,7 +99,7 @@ export function K8sHubPage() {
             // 임베드 표식 — 페이지의 레일/헤더/셸을 허브가 대신하고, 전체 높이 셸(.island-embed)을 무력화한다.
             <div className="island-embed">
               <K8sHubContext.Provider value={embed}>
-                <ViewComponent key={`${clusterId}:${activeView.id}`} />
+                <ViewComponent key={activeView.keepAcrossClusters ? activeView.id : `${clusterId}:${activeView.id}`} />
               </K8sHubContext.Provider>
             </div>
           )}

@@ -27,13 +27,15 @@ interface FlyoutProps {
    *  않는다(마우스 사용자의 포커스가 뜬금없이 튀지 않게). */
   autoFocus?: boolean;
   returnFocusTo?: HTMLElement | null;
+  /** 넓은 목록용(클러스터 목록 등) — 폭 320px 고정. 기본은 내용 폭(180~260px). */
+  wide?: boolean;
 }
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"]:not([disabled]),[role="menuitemradio"]:not([disabled]),[role="menuitemcheckbox"]:not([disabled])';
 
 export function FlyoutShell({
   title, anchorRect, placement = 'right', children, onClose, onMouseEnter, onMouseLeave,
-  autoFocus = false, returnFocusTo = null,
+  autoFocus = false, returnFocusTo = null, wide = false,
 }: FlyoutProps) {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
@@ -108,7 +110,7 @@ export function FlyoutShell({
   const style = placement === 'bottom'
     ? {
         top: anchorRect.bottom + 6,
-        left: Math.min(anchorRect.left, window.innerWidth - 280),
+        left: Math.min(anchorRect.left, window.innerWidth - (wide ? 328 : 280)),
         maxHeight: window.innerHeight - (anchorRect.bottom + 6) - 8,
       }
     : {
@@ -125,7 +127,7 @@ export function FlyoutShell({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onKeyDown={handleKeyDown}
-      className="fixed z-50 bg-popover text-popover-foreground border border-border rounded-md shadow-xl flex flex-col overflow-hidden min-w-[180px] max-w-[260px] outline-none"
+      className={`fixed z-50 bg-popover text-popover-foreground border border-border rounded-md shadow-xl flex flex-col overflow-hidden outline-none ${wide ? 'w-[320px]' : 'min-w-[180px] max-w-[260px]'}`}
       role="menu"
       aria-label={title}
     >

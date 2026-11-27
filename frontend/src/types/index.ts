@@ -1431,6 +1431,8 @@ export interface HomeIcons {
 export interface OperationLevelItem {
   value: string;
   label: string;
+  /** 클러스터 패널 그룹 머리글처럼 좁은 자리의 약칭(예: PROD). 비어 있으면 label 을 쓴다. */
+  shortLabel?: string | null;
   /** tailwind 컬러 키 — red/amber/emerald/sky/slate/purple/blue/yellow/pink/cyan/violet/orange/muted.
    *  customHex 가 있으면 fallback 으로만 쓰인다. */
   color: string;
@@ -7327,6 +7329,31 @@ export interface CommonServiceWatchSettings {
 export interface CommonServiceStatusMap {
   services: Record<string, { count: number; level: 'ok' | 'warning' | 'critical'; reasons: string[] }>;
 }
+
+// ── SSH 터미널 즐겨찾기 명령(서버 저장, 사용자별) ─────────────────────────────
+export type SshFavoriteRunMode = 'insert' | 'run';
+export interface SshFavorite {
+  id: string;
+  name: string;
+  description?: string | null;
+  command: string;
+  /** insert = 입력만, run = 입력 후 Enter */
+  runMode: SshFavoriteRunMode;
+  sortOrder: number;
+  /** 기본 명령에서 온 행이면 프리셋 키, 내가 만든 명령이면 null */
+  presetKey?: string | null;
+  /** 기본 명령인데 기본값과 다르면 true */
+  modified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SshFavoriteCreate {
+  name: string;
+  description?: string | null;
+  command: string;
+  runMode: SshFavoriteRunMode;
+}
+export type SshFavoriteUpdate = Partial<SshFavoriteCreate>;
 
 // ── 가입 신청 + 관리자 승인 (/auth/signup*) ───────────────────────────────
 export type SignupStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'withdrawn';
