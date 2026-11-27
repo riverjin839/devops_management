@@ -37,6 +37,8 @@ EVENT_CATALOG: dict[str, dict[str, Any]] = {
     "alert": {"label": "알람", "category": "ops", "help": "알람 인박스 알림 규칙이 나에게 보낸 알람", "defaults": _OFF_EXT},
     "k8s_event": {"label": "K8S 이벤트", "category": "ops", "help": "critical K8S 이벤트", "defaults": _OFF_EXT},
     "signup_request": {"label": "가입 신청", "category": "ops", "help": "로그인 화면에서 새 가입 신청이 들어왔을 때(관리자)", "defaults": _OFF_EXT},
+    "alarm_request": {"label": "알람 등록 요청", "category": "ops", "help": "새 알람 등록 요청이 들어왔을 때(관리자)", "defaults": _OFF_EXT},
+    "alarm_request_status": {"label": "알람 요청 처리", "category": "ops", "help": "내 알람 등록 요청이 검토·승인·반려·반영됐을 때", "defaults": _OFF_EXT},
     "signup_approved": {"label": "가입 승인", "category": "ops", "help": "내 가입 신청이 승인됐을 때", "defaults": _OFF_EXT},
 }
 

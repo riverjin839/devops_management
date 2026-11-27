@@ -700,6 +700,152 @@ def list_resources(
                                 items=rows, cache=meta["cache"], cache_age_seconds=meta["age"])
 
 
+# ── 네임스페이스별 ResourceQuota 사용/한도 (Namespaces 목록 열) ─────────────────────
+# 목록 화면에 보일 대표 자원. 같은 자원을 두 키로 쓸 수 있는 것(cpu ≡ requests.cpu)은 앞 키 우선.
+_QUOTA_RESOURCES: list[tuple[str, str, tuple[str, ...], str]] = [
+    # (응답 key — 밑줄 없이: 프론트 axios 가 dict 키를 camelCase 로 바꾸므로, 라벨, ResourceQuota 키 후보, 단위 종류)
+    ("rcpu", "CPU 요청", ("requests.cpu", "cpu"), "cpu"),
+    ("rmem", "메모리 요청", ("requests.memory", "memory"), "mem"),
+    ("lcpu", "CPU 한도", ("limits.cpu",), "cpu"),
+    ("lmem", "메모리 한도", ("limits.memory",), "mem"),
+    ("pods", "Pods", ("pods", "count/pods"), "count"),
+]
+
+_QUOTA_LIST_CAP = 20000  # 한 번에 모을 quota 수 상한 — 넘으면 truncated
+
+_QTY_SUFFIX: dict[str, float] = {
+    "Ki": 2**10, "Mi": 2**20, "Gi": 2**30, "Ti": 2**40, "Pi": 2**50, "Ei": 2**60,
+    "n": 1e-9, "u": 1e-6, "m": 1e-3, "k": 1e3, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12, "P": 1e15, "E": 1e18,
+}
+
+
+def _parse_quantity(v: Any) -> Optional[float]:
+    """K8s Quantity 문자열 → 기본 단위 float(CPU=코어, 메모리=바이트, 개수=개). 못 읽으면 None."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    for suf in sorted(_QTY_SUFFIX, key=len, reverse=True):
+        if s.endswith(suf):
+            try:
+                return float(s[: -len(suf)]) * _QTY_SUFFIX[suf]
+            except ValueError:
+                return None
+    try:
+        return float(s)  # "2", "1.5", "1e3"
+    except ValueError:
+        return None
+
+
+def _fmt_quantity(v: float, unit: str) -> str:
+    if unit == "cpu":
+        if v >= 1 or v == 0:
+            return f"{v:.2f}".rstrip("0").rstrip(".")
+        return f"{int(round(v * 1000))}m"
+    if unit == "mem":
+        for suf, mul in (("Ti", 2**40), ("Gi", 2**30), ("Mi", 2**20), ("Ki", 2**10)):
+            if v >= mul:
+                return f"{v / mul:.1f}".rstrip("0").rstrip(".") + suf
+        return f"{int(v)}"
+    return str(int(round(v)))
+
+
+class QuotaUsageCell(BaseModel):
+    used: str                       # 사람이 읽는 값 (예: "1.5", "12Gi")
+    hard: str
+    ratio: Optional[float] = None   # used / hard (hard=0 이면 None)
+    quota: str                      # 이 값을 정한 ResourceQuota 이름
+
+
+class NamespaceQuotaRow(BaseModel):
+    namespace: str
+    quota_count: int
+    cells: dict[str, QuotaUsageCell]   # key = _QUOTA_RESOURCES 의 응답 key
+    max_ratio: Optional[float] = None
+
+
+class NamespaceQuotaResponse(BaseModel):
+    resources: list[ColumnDef]
+    items: list[NamespaceQuotaRow]
+    truncated: bool
+    cache: Optional[str] = None
+    cache_age_seconds: Optional[float] = None
+
+
+def _aggregate_quotas(items) -> list[NamespaceQuotaRow]:
+    """ResourceQuota 목록 → NS 별 대표 자원의 사용/한도.
+
+    한 NS 에 같은 자원을 거는 quota 가 여럿이면(스코프별 등) **사용률이 가장 높은 것**을 보인다 —
+    운영자가 알아야 하는 건 먼저 막히는 한도다. `status.hard` 가 실제 적용된 한도라 우선 쓰고,
+    컨트롤러가 아직 status 를 안 채웠으면 `spec.hard` 로 대신한다(이때 used 는 0).
+    """
+    by_ns: dict[str, dict[str, Any]] = {}
+    for o in (items or []):
+        ns = o.metadata.namespace or ""
+        name = o.metadata.name
+        hard = dict(_g(o, "status", "hard", default=None) or _g(o, "spec", "hard", default=None) or {})
+        used = dict(_g(o, "status", "used", default=None) or {})
+        entry = by_ns.setdefault(ns, {"count": 0, "cells": {}})
+        entry["count"] += 1
+        for key, _label, cand, unit in _QUOTA_RESOURCES:
+            rk = next((c for c in cand if c in hard), None)
+            if rk is None:
+                continue
+            h = _parse_quantity(hard.get(rk))
+            u = _parse_quantity(used.get(rk)) or 0.0
+            if h is None:
+                continue
+            ratio = (u / h) if h > 0 else None
+            prev = entry["cells"].get(key)
+            if prev is not None and (prev.ratio or 0) >= (ratio or 0):
+                continue
+            entry["cells"][key] = QuotaUsageCell(used=_fmt_quantity(u, unit), hard=_fmt_quantity(h, unit),
+                                                 ratio=None if ratio is None else round(ratio, 4), quota=name)
+    rows: list[NamespaceQuotaRow] = []
+    for ns, e in sorted(by_ns.items()):
+        ratios = [c.ratio for c in e["cells"].values() if c.ratio is not None]
+        rows.append(NamespaceQuotaRow(namespace=ns, quota_count=e["count"], cells=e["cells"],
+                                      max_ratio=max(ratios) if ratios else None))
+    return rows
+
+
+@router.get("/{cluster_id}/namespace-quotas", response_model=NamespaceQuotaResponse)
+def list_namespace_quotas(cluster_id: UUID, refresh: bool = False, db: Session = Depends(get_db)):
+    """전 NS ResourceQuota 를 한 번 LIST 해 NS 별 사용/한도로 요약 — Namespaces 목록의 Quota 열.
+
+    NS 마다 따로 묻지 않는다(1만 NS 대응). 목록 캐시(SWR)를 거치고 `refresh=true` 만 건너뛴다.
+    """
+    cluster = _require_cluster(cluster_id, db)
+    client = _api_client(cluster)
+    api = k8s_client.CoreV1Api(client)
+    group = cache_group(client, cluster_id)
+
+    def _load() -> dict:
+        items: list = []
+        cont: Optional[str] = None
+        while True:
+            kw: dict = {"limit": 500}
+            if cont:
+                kw["_continue"] = cont
+            page = raw_call(api.list_resource_quota_for_all_namespaces, timeout=_LIST_TIMEOUT, **kw)
+            items.extend(page.items or [])
+            cont = page.metadata._continue if page.metadata else None
+            if not cont or len(items) >= _QUOTA_LIST_CAP:
+                return {"rows": _aggregate_quotas(items), "truncated": bool(cont)}
+
+    try:
+        data, meta = _list_cache.get((group, "ns-quotas"), _load, refresh=refresh)
+    except Exception as e:  # noqa: BLE001
+        raise _list_http_error("resourcequotas", e)
+    return NamespaceQuotaResponse(
+        resources=[ColumnDef(key=k, label=lbl) for k, lbl, _c, _u in _QUOTA_RESOURCES],
+        items=data["rows"], truncated=data["truncated"],
+        cache=meta["cache"], cache_age_seconds=meta["age"],
+    )
+
+
+
 @router.get("/{cluster_id}/resources/{kind}/{namespace}/{name}/yaml")
 def get_resource_yaml(
     cluster_id: UUID,

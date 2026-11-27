@@ -41,6 +41,7 @@ import { ServiceTopologyPage } from '@/pages/ServiceTopologyPage';
 import { ServiceArchitecturePage } from '@/pages/ServiceArchitecturePage';
 import { ArchitecturePage } from '@/pages/ArchitecturePage';
 import { AlertInboxPage } from '@/pages/AlertInboxPage';
+import { AlarmRequestsPage } from '@/pages/AlarmRequestsPage';
 import { DeepCheckSettingsPage } from '@/pages/DeepCheckSettings';
 import { CheckItemDetailPage } from '@/pages/CheckItemDetailPage';
 import { K9sPopupPage } from '@/pages/K9sPopupPage';
@@ -52,8 +53,10 @@ import { PodBottleneckDetailPage } from '@/pages/PodBottleneckDetailPage';
 import { KnowledgeHubPage } from '@/pages/KnowledgeHubPage';
 import { K8sHubPage } from '@/pages/K8sHubPage';
 import { HomePage } from '@/pages/HomePage';
+import { BatchJobsPage } from '@/pages/BatchJobsPage';
 import { IslandPage } from '@/pages/IslandPage';
 import { ChangePasswordPage } from '@/pages/ChangePasswordPage';
+import { ProfileSetupDialog } from '@/components/layout/ProfileSetupDialog';
 import { ManualPage } from '@/pages/ManualPage';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
 import { DailyReportPage } from '@/pages/DailyReportPage';
@@ -224,7 +227,8 @@ function AppShell() {
               <Route path="/etcdctl" element={<RedirectToHub view="etcdctl" />} />
               {/* 홈 화면 "플랫폼 현황" 탭의 배치잡 서브탭으로 병합됨 — 기존 링크/북마크가 홈 첫 탭이 아니라
                   배치잡 서브탭에 바로 떨어지도록 쿼리로 탭/서브뷰를 넘긴다(HomePage 가 읽고 지움, D-129). */}
-              <Route path="/batch-jobs" element={<Navigate to="/?tab=platform&view=batch" replace />} />
+              {/* 홈(Main UI)을 비우면서 "플랫폼 현황 ▸ 배치잡" 서브탭이 사라져 배치잡 화면을 직접 연다. */}
+              <Route path="/batch-jobs" element={<BatchJobsPage />} />
               <Route path="/os-param-watch" element={<RedirectToHub view="os-param-watch" />} />
               <Route path="/cilium-datapath" element={<RedirectToHub view="cilium-datapath" />} />
               <Route path="/k8s-services" element={<RedirectToHub view="services" />} />
@@ -269,6 +273,8 @@ function AppShell() {
               <Route path="/observability" element={<RedirectToHub view="metrics" />} />
               {/* 알람 인박스 — Alertmanager / alert-forwarder 수신 인시던트 알람 */}
               <Route path="/alerts" element={<AlertInboxPage />} />
+              {/* 알람 등록 요청 — 서비스 담당자의 알람 추가·임계치 변경 요청 + 관리자 검토 */}
+              <Route path="/alarm-requests" element={<AlarmRequestsPage />} />
               <Route path="/daily-check/review/:clusterId" element={<RedirectToHub view="review" />} />
               <Route path="/daily-check/review" element={<RedirectToHub view="review" />} />
               <Route path="/daily-check/settings" element={<RequireAdmin><DeepCheckSettingsPage /></RequireAdmin>} />
@@ -329,6 +335,8 @@ function AuthedRoot() {
     <>
       <AppShell />
       <AgentChat />
+      {/* 첫 로그인 "내 정보 등록" — 이메일·IP·좌석이 비어 있으면 닫을 수 없는 팝업(터미널 팝업 창 제외). */}
+      <ProfileSetupDialog />
     </>
   );
 }

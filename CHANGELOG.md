@@ -8,7 +8,32 @@
 
 ## [Unreleased]
 
-1.110.1 이후 main 에 병합된 변경 (다음 릴리스 후보).
+1.114.0 이후 main 에 병합된 변경 (다음 릴리스 후보).
+
+## [1.114.0] - 2026-11-27
+
+### Added
+- **SSH — 여러 노드 화면 안 4분할 터미널 · 즐겨찾기 명령**: 콘솔 ▸ 「노드 SSH」를 **SSH** 로 이름을 줄이고, 연결하면 새 창(플로팅 창)이 아니라 화면 안 분할 칸에 터미널이 열린다. 허브 「SSH」 탭 옆 「대상 노드」 리스트박스에서 여러 노드를 고르고(다른 K8S 클러스터 노드·직접 입력 호스트도) 한 번에 연결하면 **Ⅰ → Ⅳ → Ⅱ → Ⅲ 사분면** 순서로 칸을 채우고, 4개가 넘으면 다음 쪽으로 넘긴다(최대 16세션, 칸 크게 보기, 클러스터를 바꿔도 세션 유지). 터미널 창마다 **★ 즐겨찾기** 메뉴와 칩 바로 자주 쓰는 명령을 입력·실행하고(변경 명령은 확인, 보이는 모든 창에 동시 보내기), 즐겨찾기는 추가·편집·삭제·순서·기본값 복원이 되며 **서버에 저장**된다(기본 명령 = 옛 커널 파라미터 콘솔 프리셋). 연결 단계·종료 사유·즐겨찾기 보내기는 노드별 실시간 로그(「로그 보기」). Backend: `routers/ssh_favorites.py`, `models/ssh_favorite.py`(`ssh_favorite_commands`), `services/ssh_favorites.py`. Frontend: `NodeSshPage`, `components/node-ssh/`, `SshTerminalWindow` `embedded` 모드, 허브 툴바 자리(`toolbarSlot`)·`keepAcrossClusters`.
+
+## [1.113.0] - 2026-11-26
+
+### Added
+- **알람 등록 요청**: 서비스 담당자가 `/alarm-requests`(사이드바 「관측」)에서 운영 알람 추가·임계치 변경을 요청한다 — 요청자(로그인 사용자 자동), 서비스 명(k8s·cilium·aistor·cnpg·keycloak·nexus·jenkins·argocd 등), metric 명(알람 항목), 알람 의미, 심각도별 **기본 임계치(expr·for)·수정 임계치(expr·for)** 표, 적용 클러스터(복수 선택), 비고. 관리자(operator 이상)는 검토 시작·승인·반려(사유 필수)·반영 완료로 처리하고 모든 처리가 이력·감사 로그에 남으며, 새 요청은 관리자에게·처리 결과는 요청자에게 알림이 간다. 알람 항목을 고르면 서비스별 **알람 카탈로그**의 의미·기본 임계치가 채워지고, 반영 완료된 수정 임계치는 카탈로그 기본 임계치로 저장된다(카탈로그는 화면에서 편집). 반영 완료는 처리 기록이며 클러스터에 명령을 보내지 않는다. Backend: `routers/alarm_requests.py`, `services/alarm_requests.py`, `alarm_requests`·`alarm_catalog_items` 테이블. Frontend: `pages/AlarmRequestsPage.tsx`, `components/alarm-requests/`.
+
+## [1.112.0] - 2026-11-26
+
+### Added
+- **Namespaces 목록 Quota 사용/한도 열** — K8S 상세 관리 Namespaces → 목록에 NS 별 ResourceQuota 의 CPU 요청·메모리 요청·CPU 한도·메모리 한도·Pods 를 "사용 / 한도" + 사용률 막대로 보여준다(80% 이상 경고·100% 이상 위험 색, 정상은 중립색). 같은 자원을 여러 quota 가 걸면 먼저 막히는(사용률이 가장 높은) 것을 보이고, 셀에 마우스를 올리면 quota 이름이 보인다. 「사용률 높은 순」 정렬 버튼, 컬럼 표시/숨김 지원. Backend: `GET /k8s/{id}/namespace-quotas`(전 NS quota 1회 LIST, 목록 캐시 경유). Frontend: `components/k8s-manage/NsQuotaCell.tsx`.
+
+## [1.111.0] - 2026-11-26
+
+### Added
+- **첫 로그인 「내 정보 등록」 팝업**: 이메일·IP 주소·좌석 위치 중 하나라도 비어 있으면 로그인 직후 닫을 수 없는 팝업이 떠서 등록해야 화면을 쓸 수 있다(빠져나가는 길은 로그아웃뿐, 담당 업무는 선택).
+- **첫 로그인 비밀번호 변경**: 초기 비밀번호로 로그인한 계정(사번으로 자동 발급·관리자가 만들거나 재설정·부트스트랩 admin)은 같은 팝업에서 새 비밀번호(영문+숫자 8자 이상, 아이디·사번과 다르게)를 정해야 한다. 이미 사번으로 발급된 뒤 한 번도 바꾸지 않은 계정도 부팅 시 대상으로 표시된다. LDAP·SSO 계정은 제외. Backend: `users.must_change_password` 를 다시 사용(매 부팅 FALSE 초기화 제거), `POST /auth/me/password` 가 아이디·사번과 같은 새 비밀번호를 400 으로 거부. 이메일·IP 형식을 검사하고, 관리자가 값을 지워 다시 비면 다음 접속 때 같은 팝업이 뜬다. 사용자 메뉴의 내 정보 패널도 세 항목을 비운 채 저장할 수 없다. Backend: `GET /ui-settings/assignees/me`(`profileComplete`), `PUT /ui-settings/assignees/me` 이메일·IP 형식 검사. Frontend: `components/layout/ProfileSetupDialog.tsx`.
+
+### Changed
+- **홈(Main UI) 비우기 + 신규 사용자 기본 앱 K8s 클러스터**: 홈(`/`)은 모든 사용자에게 「메인 화면 준비 중」 안내와 「K8s 클러스터 열기」 버튼만 보여 준다(로그인 후 자동 이동 없음). 예전 홈의 업무 현황·플랫폼 현황(점검 매트릭스) 탭은 화면에서 빠지고 코드는 `pages/HomeDashboard.tsx` 에 남겨 둔다. 앱을 직접 고른 적 없는 사용자의 내장 기본 앱이 상단바 「업무 관리」에서 사이드바 「K8s 클러스터(/k8s)」로 바뀐다 — 관리자가 Settings 에 저장한 조직 기본 구성이 있으면 그대로 따른다. 배치잡은 `/batch-jobs` 에서 바로 연다.
+- **정 담당역할·부담당 역할 → 「담당 업무」 한 칸으로 통합**: Settings ▸ 시스템 담당자 표·내 정보 패널·팀원 보드가 담당 업무 하나만 보여 준다. 기존 값은 부팅 시 「정, 부」 순서로 쉼표로 이어 `users.duty` 에 한 번 옮겨지고(옛 두 컬럼은 DB 에 남지만 쓰지 않는다), API 필드는 `primaryRole`/`secondaryRole` 대신 `duty` 다.
 
 ### Changed
 

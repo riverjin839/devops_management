@@ -17,6 +17,7 @@ from app.routers.workflows import router as workflows_router
 from app.routers.work_guide import router as work_guide_router
 from app.routers.ops_note import router as ops_note_router
 from app.routers.voc import router as voc_router
+from app.routers.alarm_requests import router as alarm_requests_router
 from app.routers.reactions import router as reactions_router
 from app.routers.mindmap import router as mindmap_router
 from app.routers.management_servers import router as management_server_router
@@ -30,6 +31,7 @@ from app.routers.trends import router as trends_router
 from app.routers.versions import router as versions_router
 from app.routers.bulk_exec import router as bulk_exec_router
 from app.routers.saved_scripts import router as saved_scripts_router
+from app.routers.ssh_favorites import router as ssh_favorites_router
 from app.routers.scripts import router as scripts_router
 from app.routers.etcdctl import router as etcdctl_router
 from app.routers.cilium_trace import router as cilium_trace_router
@@ -150,6 +152,7 @@ __all__ = [
     "work_guide_router",
     "ops_note_router",
     "voc_router",
+    "alarm_requests_router",
     "reactions_router",
     "mindmap_router",
     "management_server_router",
@@ -163,6 +166,7 @@ __all__ = [
     "versions_router",
     "bulk_exec_router",
     "saved_scripts_router",
+    "ssh_favorites_router",
     "scripts_router",
     "etcdctl_router",
     "cilium_trace_router",

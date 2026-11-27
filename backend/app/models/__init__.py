@@ -21,11 +21,13 @@ from app.models.llm_credential import LlmCredential
 from app.models.incident_analysis import IncidentAnalysis
 from app.models.agent_conversation import AgentConversation, AgentMessage
 from app.models.saved_script import SavedScript
+from app.models.ssh_favorite import SshFavoriteCommand
 from app.models.executable_script import ExecutableScript, ExecutableScriptVersion
 from app.models.workflow import Workflow, WorkflowStep, WorkflowEdge
 from app.models.work_guide import WorkGuide
 from app.models.ops_note import OpsNote
 from app.models.voc_post import VocPost
+from app.models.alarm_request import AlarmCatalogItem, AlarmRequest
 from app.models.reaction import Reaction
 from app.models.management_server import ManagementServer
 from app.models.isilon_server import IsilonServer, IsilonCommand
@@ -150,6 +152,8 @@ __all__ = [
     "WorkGuide",
     "OpsNote",
     "VocPost",
+    "AlarmCatalogItem",
+    "AlarmRequest",
     "ManagementServer",
     "IsilonServer",
     "IsilonCommand",
@@ -229,6 +233,7 @@ __all__ = [
     "CheckMatrixSourceType",
     "CheckMatrixTrigger",
     "SavedScript",
+    "SshFavoriteCommand",
     "K8sNamespaceSample",
     "K8sWorkloadSample",
     "K8sRightsizeRecommendation",

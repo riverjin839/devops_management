@@ -293,8 +293,7 @@ def _assignee_out(u: User, *, include_account: bool) -> dict:
         "email": u.email,
         "ip": u.ip,
         "seatLocation": u.seat_location,
-        "primaryRole": u.primary_role,
-        "secondaryRole": u.secondary_role,
+        "duty": u.duty,
     }
     if include_account:
         out.update({
@@ -315,9 +314,42 @@ SELF_EDITABLE_ASSIGNEE_FIELDS: dict[str, tuple[str, ...]] = {
     "email": ("email",),
     "ip": ("ip",),
     "seat_location": ("seatLocation", "seat_location"),
-    "primary_role": ("primaryRole", "primary_role"),
-    "secondary_role": ("secondaryRole", "secondary_role"),
+    "duty": ("duty",),
 }
+
+
+# 첫 로그인 "내 정보 등록" 팝업이 반드시 채우게 하는 필드. 하나라도 비어 있으면
+# profileComplete=False 로 내려가고, 프론트엔드(ProfileSetupDialog)가 닫을 수 없는 팝업을 띄운다.
+REQUIRED_PROFILE_FIELDS: tuple[str, ...] = ("email", "ip", "seat_location")
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _profile_complete(u: User) -> bool:
+    return all((getattr(u, f) or "").strip() for f in REQUIRED_PROFILE_FIELDS)
+
+
+def _validate_self_fields(user: User, payload: dict) -> None:
+    """바뀌는 이메일/IP 값의 형식만 검사(400). 기존 값과 같으면 통과 — 레거시 값이 다른 필드 저장을 막지 않게."""
+    import ipaddress
+
+    def _new(attr: str) -> str | None:
+        for alias in SELF_EDITABLE_ASSIGNEE_FIELDS[attr]:
+            if alias in payload:
+                raw = payload.get(alias)
+                v = raw.strip() if isinstance(raw, str) else raw
+                return v if v and v != getattr(user, attr) else None
+        return None
+
+    email = _new("email")
+    if email and not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이메일 형식이 올바르지 않습니다.")
+    ip = _new("ip")
+    if ip:
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="IP 주소 형식이 올바르지 않습니다.")
 
 
 def _apply_self_editable_fields(user: User, payload: dict) -> None:
@@ -388,8 +420,7 @@ def update_assignees(
             "email": _s("email"),
             "ip": _s("ip"),
             "seatLocation": _s("seatLocation", "seat_location"),
-            "primaryRole": _s("primaryRole", "primary_role"),
-            "secondaryRole": _s("secondaryRole", "secondary_role"),
+            "duty": _s("duty"),
         })
 
     # 안전 정규화: 담당자 이름과 사번(employeeId)은 고유해야 한다.
@@ -440,8 +471,7 @@ def update_assignees(
             existing.email = a["email"]
             existing.ip = a["ip"]
             existing.seat_location = a["seatLocation"]
-            existing.primary_role = a["primaryRole"]
-            existing.secondary_role = a["secondaryRole"]
+            existing.duty = a["duty"]
             if not a["employeeIdGiven"]:
                 # 사번 키가 없는 항목 — 사번·로그인 계정은 그대로 둔다.
                 continue
@@ -451,6 +481,7 @@ def update_assignees(
                 existing.employee_id = a["employeeId"]
                 existing.username = a["employeeId"]
                 existing.hashed_password = hash_password(a["employeeId"])
+                existing.must_change_password = True  # 초기 비밀번호(=사번) — 첫 로그인 때 변경
                 existing.role = existing.role or ASSIGNEE_ACCOUNT_ROLE
                 accounts_created.append(a["employeeId"])
                 created_users.append(existing)
@@ -487,13 +518,14 @@ def update_assignees(
         else:
             new_user = User(
                 display_name=a["name"], email=a["email"], ip=a["ip"],
-                seat_location=a["seatLocation"], primary_role=a["primaryRole"],
-                secondary_role=a["secondaryRole"], employee_id=a["employeeId"],
+                seat_location=a["seatLocation"], duty=a["duty"],
+                employee_id=a["employeeId"],
             )
             if a["employeeId"]:
                 _ensure_username_free(db, a["employeeId"], None)
                 new_user.username = a["employeeId"]
                 new_user.hashed_password = hash_password(a["employeeId"])
+                new_user.must_change_password = True  # 초기 비밀번호(=사번) — 첫 로그인 때 변경
                 new_user.role = ASSIGNEE_ACCOUNT_ROLE
                 accounts_created.append(a["employeeId"])
                 created_users.append(new_user)
@@ -546,18 +578,33 @@ def _ensure_username_free(db: Session, username: str, self_id: str | None) -> No
         )
 
 
+@router.get("/assignees/me")
+def get_my_assignee(user: User = Depends(get_current_user)):
+    """로그인한 본인의 담당자 정보 + 필수 항목(이메일/IP/좌석) 등록 여부.
+
+    `profileComplete` 가 False 면 프론트엔드가 첫 로그인 "내 정보 등록" 팝업을 띄운다.
+    사번 없이 만든 계정(부트스트랩 admin 등)도 본인 행이 있으므로 똑같이 대상이다.
+    """
+    return {
+        "data": _assignee_out(user, include_account=True),
+        "profileComplete": _profile_complete(user),
+        "requiredFields": ["email", "ip", "seatLocation"],
+    }
+
+
 @router.put("/assignees/me")
 def update_my_assignee(
     payload: dict,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """본인 담당자 정보(이메일/IP/좌석/역할)만 수정 — 로그인한 사용자 누구나 가능.
+    """본인 담당자 정보(이메일/IP/좌석/담당 업무)만 수정 — 로그인한 사용자 누구나 가능.
 
     사용자 메뉴의 "내 담당자 정보" 패널이 쓰는 엔드포인트다. 예전에는 이 패널도 전체 목록을
     덮어쓰는 admin 전용 `PUT /assignees` 를 호출해서 operator 가 본인 IP 를 바꾸면 403 이
     났다. `get_current_user` 로 이미 본인 행이 확정되므로 다른 담당자 데이터는 건드리지 않는다.
     """
+    _validate_self_fields(user, payload)
     _apply_self_editable_fields(user, payload)
     db.commit()
     db.refresh(user)
@@ -566,6 +613,7 @@ def update_my_assignee(
     return {
         "data": [_assignee_out(u, include_account=include_account) for u in rows],
         "me": _assignee_out(user, include_account=True),
+        "profileComplete": _profile_complete(user),
     }
 
 

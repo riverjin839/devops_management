@@ -270,3 +270,28 @@ def test_is_token_revoked_compares_whole_seconds():
     assert security.is_token_revoked({"iat": t - 1}, changed) is True
     assert security.is_token_revoked({"exp": t + 999}, changed) is True
     assert security.is_token_revoked({"auth_time": t - 1}, None) is False
+
+
+def test_first_login_password_change_clears_flag_and_rejects_username(client, db, user):
+    """첫 로그인 비밀번호 변경 — 아이디(=사번)를 새 비밀번호로 쓰면 400, 바꾸면 must_change_password 가 풀린다."""
+    user.must_change_password = True
+    db.commit()
+    token = _login(client, user.username)
+    me = client.get("/api/v1/auth/me", headers=_auth(token)).json()
+    assert me["must_change_password"] is True
+
+    r = client.post(
+        "/api/v1/auth/me/password",
+        headers=_auth(token),
+        json={"current_password": PASSWORD, "new_password": user.username.upper()},
+    )
+    assert r.status_code == 400, r.text
+
+    r = client.post(
+        "/api/v1/auth/me/password",
+        headers=_auth(token),
+        json={"current_password": PASSWORD, "new_password": "first-login-9876"},
+    )
+    assert r.status_code == 200, r.text
+    db.expire_all()
+    assert db.query(User).filter(User.id == user.id).one().must_change_password is False

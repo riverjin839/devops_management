@@ -36,7 +36,7 @@ export const ko = {
       members: '멤버별 업무',
       clusterManage: '클러스터 관리',
       bulkExec: '노드 일괄 실행',
-      nodeSsh: '노드 SSH 터미널',
+      nodeSsh: 'SSH',
       etcdctl: 'etcdctl 콘솔',
       batchJobs: '배치잡',
       mc: 'mc 클라이언트',
@@ -56,6 +56,7 @@ export const ko = {
       k8sEvents: 'K8s 실시간 이벤트',
       observability: '관측 지표',
       alerts: '알람 인박스',
+      alarmRequests: '알람 등록 요청',
       incidentAnalysis: 'K8s 로그 (분석·실시간)',
       packetFlow: '패킷 흐름 분석',
       ciliumTrace: 'Cilium BPF 추적',
@@ -211,6 +212,11 @@ export const ko = {
     },
   },
   home: {
+    empty: {
+      title: '메인 화면 준비 중',
+      description: '왼쪽 앱에서 원하는 화면으로 이동하세요. 앱은 사이드바의 「+」로 추가할 수 있습니다.',
+      openK8s: 'K8s 클러스터 열기',
+    },
     viewAria: '플랫폼 현황 보기',
     rangeAria: '진행 현황 범위',
     title: '홈',

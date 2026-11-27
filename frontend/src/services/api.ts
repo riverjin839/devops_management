@@ -1423,6 +1423,18 @@ export const savedScriptsApi = {
   delete: (id: string) => api.delete(`/saved-scripts/${id}`),
 };
 
+// SSH 터미널 즐겨찾기 명령 — 사용자별 서버 저장(첫 조회 때 기본 명령 시드)
+export const sshFavoritesApi = {
+  list: () => api.get<import('@/types').SshFavorite[]>('/ssh-favorites'),
+  create: (data: import('@/types').SshFavoriteCreate) =>
+    api.post<import('@/types').SshFavorite>('/ssh-favorites', data),
+  update: (id: string, data: import('@/types').SshFavoriteUpdate) =>
+    api.put<import('@/types').SshFavorite>(`/ssh-favorites/${id}`, data),
+  delete: (id: string) => api.delete(`/ssh-favorites/${id}`),
+  reorder: (ids: string[]) => api.put<import('@/types').SshFavorite[]>('/ssh-favorites/order', { ids }),
+  reset: () => api.post<import('@/types').SshFavorite[]>('/ssh-favorites/reset'),
+};
+
 // 스크립트 라이브러리 API (DB 저장·버전관리되는 Python/Ansible/Shell 실행 스크립트 — Phase 1)
 export const scriptsApi = {
   list: (params?: { kind?: import('@/types').ScriptKind; tag?: string; q?: string }) =>
@@ -1484,6 +1496,30 @@ export const vocApi = {
   reply: (id: string, data: import('@/types').VocReply) =>
     api.post<import('@/types').VocPost>(`/voc/${id}/reply`, data),
   delete: (id: string) => api.delete(`/voc/${id}`),
+};
+
+// 알람 등록 요청 API (/alarm-requests)
+export const alarmRequestsApi = {
+  meta: () => api.get<import('@/types').AlarmRequestMeta>('/alarm-requests/meta'),
+  list: (params?: { status?: string; service?: string; mine?: boolean }) =>
+    api.get<{ data: import('@/types').AlarmRequest[]; total: number }>('/alarm-requests', { params: params || undefined }),
+  get: (id: number) => api.get<import('@/types').AlarmRequest>(`/alarm-requests/${id}`),
+  create: (data: import('@/types').AlarmRequestInput) =>
+    api.post<import('@/types').AlarmRequest>('/alarm-requests', data),
+  update: (id: number, data: import('@/types').AlarmRequestInput) =>
+    api.put<import('@/types').AlarmRequest>(`/alarm-requests/${id}`, data),
+  cancel: (id: number) => api.delete(`/alarm-requests/${id}`),
+  act: (id: number, data: { action: import('@/types').AlarmRequestActionKind; comment?: string }) =>
+    api.post<import('@/types').AlarmRequest>(`/alarm-requests/${id}/action`, data),
+  catalog: (params?: { service?: string; includeDisabled?: boolean }) =>
+    api.get<import('@/types').AlarmCatalogItem[]>('/alarm-requests/catalog', {
+      params: { service: params?.service, include_disabled: params?.includeDisabled || undefined },
+    }),
+  createCatalog: (data: import('@/types').AlarmCatalogItemInput) =>
+    api.post<import('@/types').AlarmCatalogItem>('/alarm-requests/catalog', data),
+  updateCatalog: (id: number, data: import('@/types').AlarmCatalogItemInput) =>
+    api.put<import('@/types').AlarmCatalogItem>(`/alarm-requests/catalog/${id}`, data),
+  deleteCatalog: (id: number) => api.delete(`/alarm-requests/catalog/${id}`),
 };
 
 // Mind Map API
@@ -1636,9 +1672,11 @@ export const assigneesApi = {
     api.put<{ data: import('@/types').Assignee[]; accounts?: { created?: string[]; revoked?: string[] } }>(
       '/ui-settings/assignees', { assignees },
     ),
+  // 본인 담당자 정보 + 필수 항목 등록 여부(첫 로그인 "내 정보 등록" 팝업 판정).
+  getMine: () => api.get<import('@/types').MyAssigneeResponse>('/ui-settings/assignees/me'),
   // 본인 담당자 정보만 부분 수정 — admin 이 아닌 사용자(operator/viewer)도 호출 가능.
   updateMine: (patch: import('@/types').SelfAssigneePatch) =>
-    api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee }>(
+    api.put<{ data: import('@/types').Assignee[]; me: import('@/types').Assignee; profileComplete: boolean }>(
       '/ui-settings/assignees/me', patch,
     ),
 };
@@ -2519,6 +2557,12 @@ export const k8sResourcesApi = {
     api.get<import('@/types').K8sResourceListResponse>(
       `/k8s/${clusterId}/resources/${kind}`,
       { params: { ...(namespace ? { namespace } : {}), ...(refresh ? { refresh: true } : {}) }, timeout: 120_000 },
+    ),
+  /** NS 별 ResourceQuota 사용/한도 요약(전 NS quota 1회 LIST) — Namespaces 목록의 Quota 열 */
+  namespaceQuotas: (clusterId: string, refresh?: boolean) =>
+    api.get<import('@/types').K8sNamespaceQuotaResponse>(
+      `/k8s/${clusterId}/namespace-quotas`,
+      { params: refresh ? { refresh: true } : {}, timeout: 120_000 },
     ),
   yaml: (clusterId: string, kind: string, namespace: string, name: string) =>
     api.get<import('@/types').K8sResourceDetail>(

@@ -56,6 +56,8 @@ export interface HubView {
   /** 한 뷰가 여러 옛 화면을 대신할 때(콘솔 ▸ 터미널 = k9s + 노드 SSH) — 하나라도 허용이면 탭을 보인다. */
   extraNavKeys?: readonly string[];
   component: ComponentType;
+  /** 허브 레일에서 클러스터를 바꿔도 다시 마운트하지 않는다 — 여러 클러스터에 걸친 SSH 세션을 끊지 않게. */
+  keepAcrossClusters?: boolean;
 }
 
 /**
@@ -93,7 +95,7 @@ export const HUB_VIEWS: readonly HubView[] = [
   { id: 'node-images', category: 'config', label: '노드 이미지', icon: Package, navKey: '/node-images', component: NodeImagesPage },
   { id: 'etcdctl', category: 'console', label: 'etcdctl', icon: Database, navKey: '/etcdctl', component: EtcdCtlPage },
   { id: 'k9s', category: 'console', label: 'k9s', icon: Dog, navKey: '/k9s', component: K9sPage },
-  { id: 'node-ssh', category: 'console', label: '노드 SSH', icon: TerminalSquare, navKey: '/node-ssh', component: NodeSshPage },
+  { id: 'node-ssh', category: 'console', label: 'SSH', icon: TerminalSquare, navKey: '/node-ssh', component: NodeSshPage, keepAcrossClusters: true },
 ];
 
 export const DEFAULT_HUB_VIEW = 'overview';

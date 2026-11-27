@@ -1936,8 +1936,8 @@ export interface Assignee {
   email?: string;
   ip?: string;
   seatLocation?: string;
-  primaryRole?: string;
-  secondaryRole?: string;
+  /** 담당 업무 — 예전 정/부 담당역할 두 칸을 하나로 합친 필드. */
+  duty?: string;
   // 로그인 계정 필드 — admin 으로 조회할 때만 채워진다(비-admin 응답에는 없음).
   id?: string;
   username?: string;
@@ -1948,7 +1948,14 @@ export interface Assignee {
 }
 
 /** 본인이 직접 수정할 수 있는 담당자 필드 (이름/사번은 admin 전용이라 제외). */
-export type SelfAssigneePatch = Pick<Assignee, 'email' | 'ip' | 'seatLocation' | 'primaryRole' | 'secondaryRole'>;
+export type SelfAssigneePatch = Pick<Assignee, 'email' | 'ip' | 'seatLocation' | 'duty'>;
+
+/** GET /ui-settings/assignees/me — 본인 행 + 필수 항목(이메일/IP/좌석) 등록 여부. */
+export interface MyAssigneeResponse {
+  data: Assignee;
+  profileComplete: boolean;
+  requiredFields: ('email' | 'ip' | 'seatLocation')[];
+}
 
 // Management Server
 export interface ManagementServer {
@@ -4122,6 +4129,28 @@ export interface K8sResourceRow {
   ageSeconds?: number | null;
 }
 export interface K8sColumnDef { key: string; label: string }
+/** Namespaces 목록의 ResourceQuota 사용/한도 — `GET /k8s/{id}/namespace-quotas`. */
+export interface K8sQuotaUsageCell {
+  used: string;
+  hard: string;
+  /** used / hard (0~1+). hard 가 0 이면 null */
+  ratio: number | null;
+  /** 이 값을 정한 ResourceQuota 이름(같은 자원을 여러 quota 가 걸면 사용률이 가장 높은 것) */
+  quota: string;
+}
+export interface K8sNamespaceQuotaRow {
+  namespace: string;
+  quotaCount: number;
+  cells: Record<string, K8sQuotaUsageCell>;
+  maxRatio: number | null;
+}
+export interface K8sNamespaceQuotaResponse {
+  resources: K8sColumnDef[];
+  items: K8sNamespaceQuotaRow[];
+  truncated: boolean;
+  cache?: string | null;
+  cacheAgeSeconds?: number | null;
+}
 export interface K8sResourceListResponse {
   kind: string;
   columns?: K8sColumnDef[];
@@ -7301,6 +7330,31 @@ export interface CommonServiceStatusMap {
   services: Record<string, { count: number; level: 'ok' | 'warning' | 'critical'; reasons: string[] }>;
 }
 
+// ── SSH 터미널 즐겨찾기 명령(서버 저장, 사용자별) ─────────────────────────────
+export type SshFavoriteRunMode = 'insert' | 'run';
+export interface SshFavorite {
+  id: string;
+  name: string;
+  description?: string | null;
+  command: string;
+  /** insert = 입력만, run = 입력 후 Enter */
+  runMode: SshFavoriteRunMode;
+  sortOrder: number;
+  /** 기본 명령에서 온 행이면 프리셋 키, 내가 만든 명령이면 null */
+  presetKey?: string | null;
+  /** 기본 명령인데 기본값과 다르면 true */
+  modified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SshFavoriteCreate {
+  name: string;
+  description?: string | null;
+  command: string;
+  runMode: SshFavoriteRunMode;
+}
+export type SshFavoriteUpdate = Partial<SshFavoriteCreate>;
+
 // ── 가입 신청 + 관리자 승인 (/auth/signup*) ───────────────────────────────
 export type SignupStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'withdrawn';
 
@@ -7508,4 +7562,89 @@ export interface CiliumDatapathManifest {
   apiBaseUrlFromSettings: boolean;
   tokenConfigured: boolean;
   sysAdmin: boolean;
+}
+
+// ── 알람 등록 요청 (/alarm-requests) ─────────────────────────────────────────
+export type AlarmRequestStatus = 'requested' | 'reviewing' | 'approved' | 'applied' | 'rejected';
+export type AlarmSeverity = 'critical' | 'warning' | 'info';
+export type AlarmRequestActionKind = 'reviewing' | 'approved' | 'rejected' | 'applied';
+
+/** 카탈로그 기본 임계치 한 행 — JSON 키 `for` 는 그대로 쓴다. */
+export interface AlarmCatalogThreshold {
+  severity: AlarmSeverity;
+  expr: string;
+  for: string;
+}
+
+export interface AlarmCatalogItem {
+  id: number;
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  thresholds: AlarmCatalogThreshold[];
+  enabled: boolean;
+  updatedBy?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface AlarmCatalogItemInput {
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  thresholds: AlarmCatalogThreshold[];
+  enabled: boolean;
+}
+
+/** 요청 임계치 한 행 — 기본(카탈로그 값) / 수정(요청 값). */
+export interface AlarmRequestThreshold {
+  severity: AlarmSeverity;
+  baseExpr: string;
+  baseFor: string;
+  newExpr: string;
+  newFor: string;
+}
+
+export interface AlarmRequestHistoryEntry {
+  at: string;
+  by: string;
+  action: 'created' | 'updated' | AlarmRequestActionKind;
+  comment?: string | null;
+}
+
+export interface AlarmRequest {
+  id: number;
+  code: string;
+  status: AlarmRequestStatus;
+  service: string;
+  metricName: string;
+  meaning?: string | null;
+  catalogItemId?: number | null;
+  thresholds: AlarmRequestThreshold[];
+  clusters: { id: string; name: string; hidden: boolean }[];
+  note?: string | null;
+  requestedBy: string;
+  requesterName?: string | null;
+  reviewComment?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  appliedAt?: string | null;
+  history: AlarmRequestHistoryEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlarmRequestInput {
+  service: string;
+  metricName: string;
+  meaning: string;
+  catalogItemId?: number | null;
+  thresholds: AlarmRequestThreshold[];
+  clusterIds: string[];
+  note?: string | null;
+}
+
+export interface AlarmRequestMeta {
+  services: string[];
+  statuses: { key: AlarmRequestStatus; label: string }[];
+  severities: { key: AlarmSeverity; label: string }[];
 }

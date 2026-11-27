@@ -9,6 +9,8 @@ interface HubTabsProps {
   /** 접근 제어를 통과한 뷰만. */
   views: readonly HubView[];
   active: HubView;
+  /** 2행 세그먼트 바로 옆 자리 — 화면이 포털로 컨트롤을 꽂는다(`K8sHubEmbed.toolbarSlot`). */
+  slotRef?: (el: HTMLDivElement | null) => void;
 }
 
 /**
@@ -18,7 +20,7 @@ interface HubTabsProps {
  * `[` `]` 단축키로 이전/다음 화면(`useHubTabShortcuts`).
  * 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바, 자원 관리의 sticky 탭바와 겹치지 않게).
  */
-export function HubTabs({ clusterId, views, active }: HubTabsProps) {
+export function HubTabs({ clusterId, views, active, slotRef }: HubTabsProps) {
   const navigate = useNavigate();
   // 열린 터미널 세션이 있는 뷰(k9s·노드 SSH)는 탭을 떠나기 전에 확인한다(D-246) — 클릭·단축키 모두 여기를 지난다.
   const switchGuard = useClusterSwitchGuardStore((s) => s.guard);
@@ -54,6 +56,7 @@ export function HubTabs({ clusterId, views, active }: HubTabsProps) {
           onChange={go}
         />
       )}
+      {slotRef && <div ref={slotRef} className="contents" />}
       <span className="text-xs text-muted-foreground hidden md:inline" title="입력창 밖에서 [ 는 이전 화면, ] 는 다음 화면으로 이동합니다">
         <kbd className="font-mono">[</kbd> <kbd className="font-mono">]</kbd> 화면 이동
       </span>

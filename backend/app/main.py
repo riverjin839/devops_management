@@ -50,6 +50,7 @@ from app.routers import (
     work_guide_router,
     ops_note_router,
     voc_router,
+    alarm_requests_router,
     reactions_router,
     mindmap_router,
     management_server_router,
@@ -63,6 +64,7 @@ from app.routers import (
     versions_router,
     bulk_exec_router,
     saved_scripts_router,
+    ssh_favorites_router,
     scripts_router,
     etcdctl_router,
     cilium_trace_router,
@@ -1426,15 +1428,30 @@ def _run_migrations():
         _safe_add_column("users", "seat_location", "VARCHAR(64)")
         _safe_add_column("users", "primary_role", "VARCHAR(64)")
         _safe_add_column("users", "secondary_role", "VARCHAR(64)")
+        # 정/부 담당역할 → "담당 업무"(duty) 하나로 통합. 옛 두 값을 ", " 로 이어 1회 백필한다
+        # (duty 가 비어 있는 행만 — 멱등). 옛 컬럼은 남겨 두되 코드에서는 더 이상 쓰지 않는다.
+        _safe_add_column("users", "duty", "VARCHAR(255)")
+        _safe_exec(
+            "UPDATE users SET duty = NULLIF(CONCAT_WS(', ', "
+            "NULLIF(TRIM(primary_role), ''), NULLIF(TRIM(secondary_role), '')), '') "
+            "WHERE duty IS NULL AND (COALESCE(TRIM(primary_role), '') <> '' "
+            "OR COALESCE(TRIM(secondary_role), '') <> '')",
+            label="users.primary_role/secondary_role → duty 통합",
+        )
         _safe_exec(
             "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_employee_id ON users (employee_id) "
             "WHERE employee_id IS NOT NULL",
             label="users.employee_id unique index",
         )
-        # 강제 변경 정책 폐기 — 과거 시드/리셋으로 True 였던 사용자를 모두 해제.
+        # 첫 로그인 비밀번호 변경 — 사번으로 자동 발급된 뒤 한 번도 비밀번호를 바꾸지 않은 계정
+        # (username = 사번, password_changed_at 없음)은 아직 초기 비밀번호(=사번)이므로 변경 대상으로 표시한다.
+        # 예전엔 강제 변경 정책을 폐기하면서 매 부팅 플래그를 FALSE 로 되돌렸지만, 첫 로그인 변경을 다시
+        # 도입하면서 그 초기화는 없앴다. 비밀번호를 바꾸면 password_changed_at 이 채워져 다시 걸리지 않는다(멱등).
         _safe_exec(
-            "UPDATE users SET must_change_password = FALSE WHERE must_change_password = TRUE",
-            label="users.must_change_password → FALSE (강제 변경 정책 해제)",
+            "UPDATE users SET must_change_password = TRUE "
+            "WHERE must_change_password = FALSE AND password_changed_at IS NULL "
+            "AND hashed_password IS NOT NULL AND employee_id IS NOT NULL AND username = employee_id",
+            label="users.must_change_password ← 초기 비밀번호(=사번) 계정",
         )
 
     # audit_logs: create_all 이 테이블 자체는 만들지만 보조 인덱스만 명시.
@@ -2098,6 +2115,17 @@ def _seed_node_param_watch_rules():
         db.close()
 
 
+def _seed_alarm_catalog():
+    """알람 등록 요청 화면의 서비스별 알람 카탈로그 — 비어 있을 때만(지운 항목은 되살리지 않는다)."""
+    from app.services.alarm_requests import seed_catalog
+
+    db = SessionLocal()
+    try:
+        seed_catalog(db)
+    finally:
+        db.close()
+
+
 def _seed_service_config_catalog():
     """서비스 구성 설정 목록·의존 규칙 — 없는 것만 추가(운영자 수정 보존)."""
     from app.services.service_config.catalog_seed import seed_catalog, seed_rules
@@ -2563,6 +2591,8 @@ def _seed_initial_admin():
             hashed_password=hash_password(settings.initial_admin_password),
             role="admin",
             display_name="Administrator",
+            # 설정 파일의 초기 비밀번호 — 첫 로그인 "내 정보 등록" 팝업에서 바꾸게 한다.
+            must_change_password=True,
         )
         db.add(admin)
         db.commit()
@@ -2696,6 +2726,7 @@ async def lifespan(app: FastAPI):
             ("seed_lake_service_types", _seed_default_lake_service_types),
             ("seed_service_categories", _seed_default_service_categories),
             ("seed_dc_inventory_defaults", _seed_dc_inventory_defaults),
+            ("seed_alarm_catalog", _seed_alarm_catalog),
             ("merge_service_catalog_into_pep_types", _merge_service_catalog_into_pep_types),
             ("seed_observability_catalog", _seed_observability_catalog),
             # 행 단위 버전 이관 — 전역 sentinel 이 없어 몇 번을 다시 돌아도 개인 설정을
@@ -2743,7 +2774,7 @@ install_logging()  # 앱 로그 줄마다 [req=요청ID] — services/request_co
 app = FastAPI(
     title=settings.app_name,
     description="DevOps K8s Daily Monitoring Dashboard API",
-    version="1.110.1",
+    version="1.114.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -2865,6 +2896,7 @@ app.include_router(workflows_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(work_guide_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(ops_note_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(voc_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(alarm_requests_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(reactions_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(mindmap_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(management_server_router, prefix="/api/v1", dependencies=_auth)
@@ -2877,6 +2909,7 @@ app.include_router(trends_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(versions_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(bulk_exec_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(saved_scripts_router, prefix="/api/v1", dependencies=_auth)
+app.include_router(ssh_favorites_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(scripts_router, prefix="/api/v1", dependencies=_auth)
 app.include_router(etcdctl_router, prefix="/api/v1", dependencies=_cluster_scoped)
 app.include_router(cilium_trace_router, prefix="/api/v1", dependencies=_cluster_scoped)
@@ -2978,7 +3011,7 @@ app.include_router(cluster_access_grants_router, prefix="/api/v1", dependencies=
 def root():
     return {
         "name": settings.app_name,
-        "version": "1.110.1",
+        "version": "1.114.0",
         "status": "running"
     }
 

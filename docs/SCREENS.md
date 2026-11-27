@@ -70,7 +70,7 @@ Jira Excel 가져오기)·문서 관리 그룹 전체·즐겨찾기·Your Island
 이 안내 문구가 있다(상세 `DESIGN_SYSTEM.md` "접근 제어가 아니다").
 로고(홈 버튼)는 유일한 예외로 opt-in 대상이 아니다 — 사용자가 전부 제거해도 "/" 로 돌아올
 방법이 하나는 남아 있어야 하므로 항상 클릭 가능하다. 앱을 직접 고른 적 없는 계정은 **조직 기본
-앱 구성**(admin, Settings → 화면 UI 설정 → "기본 앱 구성", 내장 기본값은 `/tasks-mgmt` 하나)을
+앱 구성**(admin, Settings → 화면 UI 설정 → "기본 앱 구성", 내장 기본값은 사이드바 `/k8s` 하나)을
 따르고, 하나라도 추가·제거하면 그때의 목록으로 고정된다 — `AddAppDialog` 하단 "기본값으로 초기화"로
 다시 기본값을 따른다. 토글은 목록 전체가 아니라 추가/제거 델타만 보내 서버가 행 잠금 아래에서
 합친다(여러 기기·탭 동시 편집 안전). 옛 레이아웃으로 저장된 계정은 `backend/app/main.py`
@@ -123,6 +123,11 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 ## 홈 / 인증 / 시스템
 
 ### 홈 (`/`)
+
+> **[2026-11-26] Main UI 일단 비우기** — 지금 `/` 는 `frontend/src/pages/HomePage.tsx` 가 모든 사용자에게 빈 상태
+> 안내(「메인 화면 준비 중」 + 「K8s 클러스터 열기」 버튼, `common/EmptyState`)만 그린다. 로그인 후 자동 이동은 없다.
+> 아래 설명은 예전 홈(업무 현황/플랫폼 현황 탭)으로, 코드는 `frontend/src/pages/HomeDashboard.tsx`(`HomeDashboard`,
+> 어느 라우트에도 연결 안 됨)에 남아 있다 — 다시 채울 때 참고. 배치잡은 `/batch-jobs` 가 `BatchJobsPage` 를 직접 연다.
 
 - **파일**: `frontend/src/pages/HomePage.tsx` (+ `components/dashboard/MemberTodayTodos.tsx`, `WorkCalendar.tsx`, `WeeklyStatusTimeline.tsx`, `DayScheduleBoard.tsx`, `components/platform-status/{PlatformStatusMatrix,CheckMatrixCellDetailModal,CheckMatrixItemFormModal,CheckMatrixSettingsModal,CheckMatrixHelpPanel,CheckMatrixRunbookPanel,CheckMatrixRunLog,CheckMatrixRunLogPanel}.tsx`, `pages/BatchJobsPage.tsx`(플랫폼 현황 탭의 배치잡 서브탭으로 임베드 — 아래 Batch Jobs 섹션 참고)). 사용자명/날짜/업무 도메인 네비/알람 종은 홈 전용이 아니라 전역 `components/layout/AppTopBar.tsx` 로 이동했다(아래 참고 — 알림 종은 §알림 `/notifications`).
 - **목적 / UX**: 로그인 후 가장 먼저 보는 랜딩 화면. 라벨 있는 **세그먼트 탭**(`업무 현황`/`플랫폼 현황`)이 화면 최상단이고, 이걸로 홈 본문에서 뭘 볼지 고른다. 예전엔 이 선택이 "홈 모드"라는 이름으로 **사이드바 네비게이션 전체를 게이팅**했지만(R-4 5차 D-054 — work 모드에서 클러스터·서버·네트워크 등 36개 화면이 레일에서 통째로 사라짐), 지금은 순수 홈 화면 로컬 상태다 — 사이드바·상단바 노출 범위와 무관하다. **[2026-09-17, Main UI 간소화]** 탭 위에 있던 KPI 스트립(나의 아일랜드 진입 필 + 내 할일/미해결 이슈/위험 클러스터/점검 실패/다음 일정 5종 필)을 통째로 제거했다 — 사용자 요청("정보를 줄이고 중요한 부분을 부각"). 위험 신호는 `플랫폼 현황` 탭 라벨의 배지(아래) 하나로 압축됐고, 아일랜드 진입은 상단바 opt-in 항목("나의 아일랜드")으로만 남는다(§Your Island 참고). KPI 필이 제공하던 개별 카운트(내 할일/미해결 이슈 등)는 각 목적지 화면(`/todo-today`, `/tasks-mgmt`)에서 직접 확인한다.
@@ -285,7 +290,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - `연동 (ServiceNow)` 탭(`ServiceNowIntegrationPanel`): Base URL·테이블명·필드 매핑/우선순위 매핑(JSON, 실제 인스턴스 스펙 확인 전까지 표준 Table API 가정값을 코드 수정 없이 조정)·연동 활성화·TLS 검증 + 연결 테스트. 1차 구현은 전용 인증 UI가 없어 현재 로그인 사용자의 Jira/SSO 세션을 그대로 재사용한다는 안내만 표시한다(전용 인증은 추후 개선). 업무 목록/상세의 "ServiceNow ITSM 등록" 버튼(`ServiceNowRegisterDialog.tsx`, Jira 연동 업무만 대상)이 이 설정을 사용한다.
   - `클러스터` 탭: 상태 요약 카드 4개(전체/Healthy/Warning/Critical) + 클러스터 리스트(아이콘 picker, 연결확인/Kubeconfig 보기/수정/삭제 버튼, 아이콘 일괄 생성 버튼) + `AddClusterModal`/`EditClusterModal`(페이지 내부 정의)/`KubeconfigEditModal`.
   - `관리서버` 탭: Jump Host/Bastion/관리서버 목록 + ping/수정/삭제 + `ManagementServerModal`(페이지 내부 정의).
-  - `시스템 담당자` 탭(`AssigneeManager`, 서브탭 없음): 명부 필드(사번/이름/이메일/IP/좌석/정·부담당역할, 열 리사이즈 가능, CSV/마크다운 내보내기, 사번 등록 시 로그인 계정 자동 생성·해제)와 계정 필드(로그인 아이디=사번, 역할 select, 비밀번호 재설정, 삭제)가 한 표에 함께 있다. 사번 없는 순수 명부 행("로그인 없음" 표시)도 같은 표에서 관리. 명부와 무관한 로그인 전용 계정(예: 2번째 admin)은 "관리자 계정 추가" 버튼(별도 모달)으로 만든다. 본인 행은 역할 변경·삭제 버튼이 비활성화된다(자기 강등·자기 삭제 이중 차단).
+  - `시스템 담당자` 탭(`AssigneeManager`, 서브탭 없음): 명부 필드(사번/이름/이메일/IP/좌석/담당 업무(예전 정·부담당역할을 한 칸으로 통합), 열 리사이즈 가능, CSV/마크다운 내보내기, 사번 등록 시 로그인 계정 자동 생성·해제)와 계정 필드(로그인 아이디=사번, 역할 select, 비밀번호 재설정, 삭제)가 한 표에 함께 있다. 사번 없는 순수 명부 행("로그인 없음" 표시)도 같은 표에서 관리. 명부와 무관한 로그인 전용 계정(예: 2번째 admin)은 "관리자 계정 추가" 버튼(별도 모달)으로 만든다. 본인 행은 역할 변경·삭제 버튼이 비활성화된다(자기 강등·자기 삭제 이중 차단).
   - `화면 UI 설정` 탭: **실행 로그 표시**(`LogDisplaySetting`, 2026-11-23 — 새 창(우측 상단, 기본)/화면 안, localStorage `pep.runlog.displayMode`, DESIGN_SYSTEM §12.9.1), 홈 화면 설정(좌측 상단 홈 아이콘 picker, **기본 홈 탭**(업무 현황/플랫폼 현황 — `home_prefs.defaultHomeTab`, 로그인 기기와 무관하게 서버에 저장), 스케줄 배경색 흰색/크림), **테마 갤러리**(`ThemeGallery`, D-072 — 10종을 카드로 나열해 미리보기(배경/보조/강조 색 미니 칩) + 클릭 즉시 적용, 사이드바 사용자 메뉴의 테마 목록과 같은 `useThemeStore` 선택을 공유 — 고른 테마·강조색은 서버 `home_prefs.theme`/`accent` 에 저장돼 다른 PC·브라우저에서도 따라온다, `hooks/useThemeSync`), **화면 밀도**(`DensitySettings`, 2026-11-04 — 촘촘하게 12/14px · **기본 13/14.5px** · 크게 14/16px. `<html data-density>` 가 `text-xs`/`text-sm` 전체를 바꾸고, 선택값은 localStorage `k8s:density` 로 저장돼 `local_prefs` 동기화로 다른 기기에도 따라온다), `NavMenuManager`, `DefaultAppsManager`(사이드바·상단바 **조직 기본 앱 구성** — 개인화 안 한 계정에 적용, `GET/PUT /ui-settings/home-prefs-defaults`, 변경 감사 기록), `PageStyleManager`, `TerminalAppearanceSettings`.
   - `스키마 점검` 탭: `SchemaHealthPanel` — 모델(`Base.metadata`)과 실제 DB 를 비교해 드리프트(missing_table / missing_column / not_null_drift / orphan_not_null_column — 모델에 없는 DB 전용 컬럼이 NOT NULL+기본값 없음이라 모든 저장이 실패하는 경우)를 표로 보여주고, **안전한 것만**(컬럼 추가 nullable · 레거시 NOT NULL 해제) 복구한다. `실행 계획 보기`(dry-run)로 실행될 SQL 을 먼저 확인할 수 있다. Alembic 없이 `create_all` 로 운영하는 구조상 오래된 DB 가 모델과 어긋나 특정 기능만 500 이 나는 문제를 서버 로그 없이 화면에서 진단·복구하기 위한 탭.
   - `접근 제어` 탭(`FeatureAccessManager`): **화면별 노출**(단순 on/off) + **세부 역할 제한(고급, WBS 전용)** 두 섹션, 단일 저장 버튼(같은 draft 를 공유해 서로 덮어쓰지 않음). "화면별 노출"은 `ScreenCatalogList`(공용 — Your Island 화면추가 피커와 그룹/검색 렌더링을 공유)로 NAV_MAP 전체 화면(자기 자신·admin 전용 화면 제외)을 그룹별로 나열하고, 각 줄 체크박스로 `feature_access[path].enabled=false` 를 토글한다. admin 은 항상 접근 가능하고 기본값은 열림. 하나를 끄면 **사이드바 메뉴 숨김 + Your Island 화면추가 목록 제외 + 이미 담긴 Island 패널 접근 차단(잠금 안내) + 직접 URL 접근 차단(홈으로 리다이렉트)** 이 동시에 적용된다 — `useNavCatalog` 의 `featureAllowed`, `IslandPanelHost`, `App.tsx` 의 `RouteAccessGate` 가 전부 같은 `canAccessFeature(feature_access, path, user)` 판정을 공유하기 때문. `feature_access` 맵의 키는 라우트 경로 자체(예: `/wbs`)라 화면별 개별 매핑이 필요 없다. 서버도 같은 규칙을 강제한다 — `backend/app/auth/feature_access.py` 의 `FEATURE_API_PATTERNS` 에 등록된 **화면 전용 API** 는 인증 라우터 공통 의존성(`enforce_feature_access`)이 403 으로 막는다(여러 화면이 공유하는 API 는 등록하지 않는다). 새 화면 전용 API 를 만들면 이 표에도 추가한다.
@@ -332,6 +337,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 > **레일 클러스터 목록(2026-11-23)**: 사이드바 레일의 K8s 클러스터 아이콘에 마우스를 올리거나 클릭하면 바로 이동하지 않고 오른쪽 flyout 에 **접근 권한이 있는 클러스터 목록**이 뜬다(`components/layout/K8sClusterFlyoutBody.tsx`, `Sidebar.tsx` 의 `k8sFlyoutAnchor`). 목록은 `useClusters()`(서버 `ClusterScope` 로 이미 거른 `GET /clusters`) — 운영 수준(`operationLevel`)별 색 섹션(머리글 = Settings 운영레벨 약칭 + 개수, `levelSectionClasses` → `--chart-*`, 섹션 순서 = 운영레벨 목록 순서, 미지정은 맨 뒤 "기타")으로 묶고, 행은 본문 글꼴 14px 이름 + 리전 · 버전 · 노드 수, 상태는 `ClusterCheckIcon`, 사용자 지정 읽기 권한(`useMyClusterAccess` = `read`)은 "읽기" 배지, 7개 이상이면 검색창. 폭 320px(`FlyoutShell wide`). 항목은 `/k8s/{id}/{현재 뷰}` 로 이동(허브 밖이면 기본 뷰), 하단에 "전체 클러스터 보기"(`/k8s`). (2026-11-26 — 「비정상 N개만 보기」 토글·「클러스터 등록」 항목 제거.)
 
 > **클러스터 레일 제거 · 터미널·노드 라벨 흡수(2026-11-23, D-243)**: 사이드바 레일 "K8s 클러스터" flyout 에 클러스터 목록이 생기면서 허브 안 클러스터 레일(`ClusterSidebar`)과 목록이 두 군데 보이던 것을 정리했다 — 허브 레일을 없애고 h1 옆 **「클러스터 전환」**(`HubClusterSwitcher`, 같은 `K8sClusterFlyoutBody` 를 버튼 아래로 연다)을 두었다. 레일에만 있던 "비정상 N개만 보기"는 목록 상단 토글(`menuitemcheckbox`)로 옮겼다가 2026-11-26 에 걷어냈고 ↑/↓ 이동은 flyout 메뉴 키보드가 대신한다. 콘솔 ▸ "터미널" 실행 카드(`HubTerminalsView`, 삭제)는 **k9s**·**노드 SSH** 두 뷰가 됐다(터미널은 화면 위에 뜨는 창이라 탭 안에서 동작, 옛 `terminals` 뷰 URL 은 `k9s` 로). 노드 라벨의 "전체 클러스터" 모드는 허브 뷰의 범위 토글(`?scope=all`)로 옮겼다. 그래서 `/node-labels`·`/k9s(/:id)`·`/node-ssh(/:id)` 도 허브 뷰로 redirect 되고 메뉴·팔레트·즐겨찾기에서 빠진다(`HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES`). 새 창(`/k9s/popup`·`/node-ssh/popup`)만 단독. 허브 안에서 클러스터를 바꾸면 뷰가 다시 마운트돼 터미널 세션이 닫히므로, k9s·노드 SSH 뷰는 세션이 살아 있으면(연결 중 포함) 「클러스터 전환」·사이드바 flyout 에서 다른 클러스터를 고를 때 「세션 끊고 전환」 확인 창을 먼저 띄운다(D-244 — 화면이 `stores/clusterSwitchGuardStore.ts` `useClusterSwitchGuard` 로 가드를 등록하고 `K8sClusterFlyoutBody` 링크가 이동 전에 부른다). 허브 탭 이동(클릭·`[` `]` 단축키 — `HubTabs` `go`)도 같은 가드를 거쳐 「화면 이동 · 세션 끊고 이동」 확인을 띄운다(D-246, 가드는 `{clusterId, path}` 를 받는다). 브라우저 뒤로가기·주소 직접 입력은 대상이 아니다. 단축키 판정은 닫힌 `SidePane`(aria-hidden) 을 열린 대화상자로 세지 않는다.
+> **클러스터 레일 제거 · 터미널·노드 라벨 흡수(2026-11-23, D-243)**: 사이드바 레일 "K8s 클러스터" flyout 에 클러스터 목록이 생기면서 허브 안 클러스터 레일(`ClusterSidebar`)과 목록이 두 군데 보이던 것을 정리했다 — 허브 레일을 없애고 h1 옆 **「클러스터 전환」**(`HubClusterSwitcher`, 같은 `K8sClusterFlyoutBody` 를 버튼 아래로 연다)을 두었다. 레일에만 있던 "비정상 N개만 보기"는 목록 상단 토글(`menuitemcheckbox`)로 옮겼고 ↑/↓ 이동은 flyout 메뉴 키보드가 대신한다. 콘솔 ▸ "터미널" 실행 카드(`HubTerminalsView`, 삭제)는 **k9s**·**노드 SSH**(2026-11-24 이름 **SSH**) 두 뷰가 됐다(터미널은 화면 위에 뜨는 창이라 탭 안에서 동작, 옛 `terminals` 뷰 URL 은 `k9s` 로). 노드 라벨의 "전체 클러스터" 모드는 허브 뷰의 범위 토글(`?scope=all`)로 옮겼다. 그래서 `/node-labels`·`/k9s(/:id)`·`/node-ssh(/:id)` 도 허브 뷰로 redirect 되고 메뉴·팔레트·즐겨찾기에서 빠진다(`HUB_ABSORBED_PATHS`·`RETIRED_PATH_ALIASES`). 새 창(`/k9s/popup`·`/node-ssh/popup`)만 단독. 허브 안에서 클러스터를 바꾸면 뷰가 다시 마운트돼 터미널 세션이 닫히므로, k9s·노드 SSH 뷰는 세션이 살아 있으면(연결 중 포함) 「클러스터 전환」·사이드바 flyout 에서 다른 클러스터를 고를 때 「세션 끊고 전환」 확인 창을 먼저 띄운다(D-244 — 화면이 `stores/clusterSwitchGuardStore.ts` `useClusterSwitchGuard` 로 가드를 등록하고 `K8sClusterFlyoutBody` 링크가 이동 전에 부른다). 허브 탭 이동(클릭·`[` `]` 단축키 — `HubTabs` `go`)도 같은 가드를 거쳐 「화면 이동 · 세션 끊고 이동」 확인을 띄운다(D-246, 가드는 `{clusterId, path}` 를 받는다). 브라우저 뒤로가기·주소 직접 입력은 대상이 아니다. **SSH 뷰는 예외**(2026-11-24) — 클러스터를 바꿔도 다시 마운트하지 않아(`keepAcrossClusters`) 세션이 유지되므로 클러스터 전환은 확인 없이 바로 바뀌고, 탭 이동만 「화면 이동 · 열린 세션 끊고 이동」 확인을 띄운다. 단축키 판정은 닫힌 `SidePane`(aria-hidden) 을 열린 대화상자로 세지 않는다.
 
 > **단축키(2026-11-04)**: `[` 이전 / `]` 다음 화면 — `useHubTabShortcuts`. 입력 요소 포커스·모달 열림·수정키 조합에서는 무시, 양 끝에서 순환하지 않는다.
 
@@ -339,10 +345,10 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: (2026-10-22, D-240) 클러스터 하나를 고르고 보는 K8s 화면 9개(클러스터 상세·K8s 상세 관리·K8s 자원 관리·클러스터 추이·관측 지표·실시간 이벤트·파드 로그·AI 장애 분석·점검 결과 리뷰)가 사이드바 4그룹에 흩어져 있어 화면마다 클러스터를 다시 고르던 것을, **클러스터 레일 하나 + 카테고리 탭** 한 화면으로 모았다. 클러스터는 URL(`:clusterId`)이 들고 있어 뷰를 바꿔도 유지되고, 레일에서 클러스터를 바꾸면 뷰·쿼리는 그대로 클러스터만 바뀐다. 2단계(2026-10-23)로 구성(K8s 접근 권한·노드 라벨·노드 이미지·서비스 구성)·콘솔(etcdctl·커널 파라미터(2026-11-24 삭제 — 서비스 구성 LINUX(OS)로 대체)·터미널 실행 카드)을, 3단계로 진단(파드 병목·Cilium BPF 추적·패킷 흐름)을 더하고 메뉴에 남아 있던 옛 화면을 정리했다 — 사이드바·커맨드 팔레트·즐겨찾기에는 이제 허브 하나만 보인다.
 - **UI 구성**:
   - `PageHeader`(h1 = 클러스터명 + `StatusBadge` + 「클러스터 전환」, 설명 = "K8s 클러스터 · 뷰 이름"). 클러스터 레일은 없다(D-243) — 클러스터는 사이드바 "K8s 클러스터" flyout 또는 「클러스터 전환」으로 고른다. 클러스터 목록 조회 실패는 본문 `ErrorState`(다시 시도).
-  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 점검: 점검 항목·결과 리뷰·OS 파라미터 감시, 진단: 파드 병목·Cilium·Cilium 데이터패스·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·서비스 구성, 콘솔: etcdctl·k9s·노드 SSH). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
+  - `HubTabs` — 1행 카테고리(개요 / 리소스 / 자원 / 관측 / 로그 / 점검 / 진단 / 구성 / 콘솔, `SegTabs mode="tabs"`), 2행은 그 카테고리에 뷰가 둘 이상일 때만(관측: 추이·지표·이벤트, 로그: 파드 로그·AI 분석, 점검: 점검 항목·결과 리뷰·OS 파라미터 감시, 진단: 파드 병목·Cilium·Cilium 데이터패스·패킷 흐름, 구성: 접근 권한·노드 라벨·노드 이미지·서비스 구성, 콘솔: etcdctl·k9s·SSH). 뷰 전환은 **path** 이동(`/k8s/:clusterId/<view>`)이라 뒤로가기가 이전 뷰로 돌아온다. 쿼리는 넘기지 않는다(뷰마다 `?tab=`·`?view=` 같은 자기 키를 쓴다). 허브 헤더·탭바는 sticky 가 아니다(K8s 상세 관리의 2차 사이드바·자원 관리의 sticky 탭바와 겹치지 않게).
   - 서브뷰는 **기존 페이지 컴포넌트를 그대로 마운트**한다(`.island-embed` 래퍼 + `K8sHubContext.Provider`). 컨텍스트가 있으면 페이지 쪽 `ClusterSidebar` 는 null, `PageShell` 은 `div`·패딩 없음, `PageHeader` 는 h2·`back` 숨김, `useClusterRouteParam` 은 허브의 clusterId/selectCluster 를 돌려준다 — 그래서 흡수된 화면의 코드는 거의 그대로다(지식 허브 `/docs`·홈 배치잡 서브탭과 같은 "페이지를 탭 안에 마운트" 패턴). 옛 `LogViewTabs`(파드 로그 ↔ AI 분석 전환)는 2행 탭이 대체해 3단계에서 지웠다.
   - 뷰 id: `overview`(클러스터 상세) · `checks`(점검 항목 — 2026-11-23 개요에서 이동, D-242) · `manage` · `allocation` · `trends` · `metrics` · `events` · `logs` · `incident` · `review` · `rbac` · `node-labels` · `node-images` · `etcdctl` · `k9s` · `node-ssh`(D-243, 옛 `terminals` → `k9s`) · `bottleneck` · `cilium` · `packet-flow`. 모르는 view → overview 로 replace. 클러스터 미지정(`/k8s`) → 첫 클러스터로 replace, 클러스터가 없으면 `SelectClusterEmptyState`.
-  - **콘솔 ▸ k9s · 노드 SSH**(D-243) — 단독 화면이던 `K9sPage`·`NodeSshPage` 를 그대로 마운트한다(클러스터는 `useClusterRouteParam` 으로 허브 값). 터미널은 화면 위 창(`SshTerminalWindow`)·새 창 handoff 그대로. 접근 제어는 뷰별 navKey(`/k9s`·`/node-ssh`).
+  - **콘솔 ▸ k9s · SSH**(D-243) — 단독 화면이던 `K9sPage`·`NodeSshPage` 를 그대로 마운트한다(클러스터는 `useClusterRouteParam` 으로 허브 값). k9s 터미널은 화면 위 창(`SshTerminalWindow`), SSH 는 화면 안 분할 칸(`embedded`, 2026-11-24). 접근 제어는 뷰별 navKey(`/k9s`·`/node-ssh`). **허브 툴바 자리**: `HubTabs` 2행 세그먼트 옆 `slotRef` → `K8sHubEmbed.toolbarSlot` — 뷰가 포털로 컨트롤을 꽂는다(SSH 대상 노드 선택). **`HubView.keepAcrossClusters`**: 참이면 클러스터를 바꿔도 뷰를 다시 마운트하지 않는다(SSH).
   - **노드 라벨 범위 토글**(D-243) — 허브 노드 라벨 뷰 툴바의 「이 클러스터 / 전체 클러스터 N」(`SegTabs`, `?scope=all`). 옛 단독 화면 `/node-labels` 는 이 뷰로 redirect.
   - **접근 제어**: 허브 URL 은 `RouteAccessGate` 의 longest-prefix 가 `/k8s` 만 보므로, 뷰마다 흡수한 옛 경로(`HubView.navKey`, 예 `/k8s-manage`)로 `featureAllowed` 를 직접 판정한다 — 꺼진 뷰는 탭에서 빠지고 직접 URL 은 Lock `EmptyState`(아일랜드 패널 호스트와 같은 안내).
 - **Frontend**: `useClusters`, `useNavCatalog`(`featureAllowed`·`getLabel`), `useParams`/`useNavigate`/`useLocation`. 서브뷰의 훅·API 는 각 화면 섹션 참고(허브 전용 API 없음).
@@ -369,6 +375,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
   - 두 번째 sticky 사이드바 — Lens 식 카테고리 내비(`NAV` 상수, `kindAvailability` 응답으로 존재하는 kind만 노출). `LeafMode`(`kind|overview|events|helm|crd|nsdash`)로 분기. **리프가 2개 이상인 대분류는 헤더를 눌러 접기/펼치기** 가능 — 상태는 `localStorage`(`pep:k8s:navCollapsed`)에 저장돼 다음 방문에도 유지되고, 현재 선택된 리프가 속한 대분류는 저장된 상태와 무관하게 항상 펼쳐 보인다.
   - 리소스별 패널: `NodesPanel`(cordon/drain 포함 노드 전용 컬럼), `PodsPanel`(터미널 진입), 그 외 kind는 공통 `ResourceTablePanel`(Virtuoso 가상 스크롤, 네임스페이스 멀티셀렉트, 컬럼 토글, 검색). 두 컴포넌트 모두 `hideNsSelector?` prop 지원 — 네임스페이스가 상위(대시보드)에서 이미 고정된 곳에 임베드할 때 내장 NS 선택기를 숨긴다.
   - `NamespaceDashboardPanel`(**대시보드** 리프) — `NamespaceMultiSelect`(`singleSelect` 모드, 종류별 탐색 화면과 동일한 "전체 네임스페이스" 버튼 + 검색 드롭다운)로 네임스페이스 1개 선택 → 툴바의 **네임스페이스 상세·YAML**(같은 `DetailDrawer`, 라벨·어노테이션 확인) + 엑셀 스타일 **리소스 인벤토리** 표(종류/구분(Workload·Config·Network·Storage·Access Control·Custom Resources·Helm 색 점)/개수/정상/경고/위험/비고, `caps[kind].namespaced` + `avail[kind].available`(API 미지원만 숨김 — 클러스터 전체 기준 `present` 는 쓰지 않아 0개 종류도 표시)로 표시 대상 필터, 종류별 `k8sResourcesApi.list`/`richPods` 병렬 조회로 개수·상태 산출 — 상태 개념이 없는 종류(ConfigMap 등)는 `—`) → 행 클릭 시 상세 목록으로 바로 이동(**탭 드릴인형**: 카테고리 탭 + 종류 필 로우 + 선택한 종류 패널이 먼저 나오고 인벤토리 표는 그 아래 / **전체 나열형**: 인벤토리 표가 위, 4개 카테고리 전부를 세로로 펼쳐 종류별 패널을 다 쌓은 목록이 아래, 상단 토글로 두 레이아웃 전환). 실제 리소스 테이블은 두 모드 다 같은 `ResourceTablePanel`/`PodsPanel` 인스턴스(`KindPanel` 래퍼로 NS 고정)를 쓰므로 스케일/재시작/삭제/YAML 편집·Pod 터미널이 종류별 탐색과 동일하게 동작. PV/StorageClass 등 cluster-scoped 종류는 제외. 고정 종류 외 카테고리: **Access Control** 은 ServiceAccount·Role·RoleBinding + 이 NS 를 subject 로 묶는 ClusterRoleBinding · 다른 NS 의 RoleBinding(두 표 모두 행 앞 화살표로 참조 Role/ClusterRole 권한 규칙 표를 펼침 — `RoleRulesView`, `*` 강조·유효 범위 안내·"권한 모두 펼치기") (둘 다 `NsBindingsPanel` `scope=cluster|external`, 쿼리 정의 `nsBindingQueries.ts` — subject 판정은 `namespace` 가 이 NS 이거나 그룹 `system:serviceaccounts:<ns>`), **Custom Resources** 는 이 NS 에 오브젝트가 있는 namespaced CRD 종류별 표(`NsCrdObjectsPanel`, 확인 못 한 CRD 수 안내), **Helm** 은 이 NS 릴리스(`HelmPanel namespace`), **Events** 는 `EventsStream fixedNamespace`(서버에서 이 NS 만 watch — 탭 드릴인형은 Events 탭을 열 때만 연결). 전체 나열형은 0개 종류의 빈 패널을 쌓지 않는다.
+  - **Namespaces → 목록 Quota 열(2026-11-26)** — 공통 `ResourceTablePanel` 이 `kind === 'namespaces'` 일 때 `GET /k8s/{id}/namespace-quotas`(전 NS ResourceQuota 1회 LIST → NS 별 요약, 목록 캐시 경유, 쿼리 키 `k8s-mng-ns-quotas`)를 함께 불러 CPU 요청·메모리 요청·CPU 한도·메모리 한도·Pods 열(`quota:<자원>` 키, `ColumnToggle` 로 숨김)을 붙인다. 셀은 `NsQuotaCell`(사용 / 한도 + 사용률 막대 `role="meter"`, 80%↑ 경고·100%↑ 위험, 정상 중립색, 툴팁에 quota 이름). 같은 자원을 여러 quota 가 걸면 사용률 최대인 것. 카드 툴바 「사용률 높은 순」 토글, 새로고침은 quota 도 캐시 건너뜀. quota 조회 실패는 푸터에 사유만 — 목록은 그대로.
   - `OverviewPanel`(노드/네임스페이스 통계), `HelmPanel`(릴리스 목록 + values 보기), `CrdPanel`(CRD 목록 → 오브젝트 드릴다운), `EventsStream`(events 탭 — SSE `event: end` 는 종료 사유 `role="status"`, `event: error`·429 사유는 `role="alert"` 로 표시하고 `: ping` 은 무시).
   - `DetailDrawer` — 우측 슬라이드 패널(요약/YAML/이벤트 탭 — 이벤트 탭은 열려 있고 브라우저 탭이 보일 때만 30s 갱신), `RoleGate(['admin','operator'])`로 편집·쓰기 UI 게이팅, viewer는 읽기 전용 배지. 대시보드에서도 페이지 최상단의 같은 `DetailDrawer`/`PodTerminal`/`ConfirmDialog`를 콜백으로 그대로 재사용.
   - `PodTerminal` 모달(WebSocket exec).
@@ -486,24 +493,27 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
-### 노드 SSH 터미널 (`/node-ssh`, `/node-ssh/:clusterId`)
+### SSH — 멀티 분할 터미널 (`/node-ssh`, `/node-ssh/:clusterId`)
 
-> **허브 뷰로(2026-11-23, D-243)**: K8s 클러스터 허브 ▸ 콘솔 ▸ **노드 SSH**(`/k8s/:clusterId/node-ssh`)로 마운트된다. `/node-ssh(/:clusterId)` 는 그 뷰로 redirect, 클러스터는 `useClusterRouteParam('/node-ssh')`(허브 값). 새 창(`/node-ssh/popup`)은 단독.
+> **허브 뷰로(2026-11-23, D-243)**: K8s 클러스터 허브 ▸ 콘솔 ▸ **SSH**(`/k8s/:clusterId/node-ssh`)로 마운트된다. `/node-ssh(/:clusterId)` 는 그 뷰로 redirect, 클러스터는 `useClusterRouteParam('/node-ssh')`(허브 값). 새 창(`/node-ssh/popup`)은 단독.
+>
+> **멀티 분할·화면 안 콘솔(2026-11-24)**: 이름을 "노드 SSH 터미널" → **SSH** 로 줄였다. 연결하면 플로팅 창이 아니라 **화면 안 분할 칸**에 터미널이 열리고, 여러 노드(다른 K8S 클러스터 노드 포함)를 한 번에 연결한다. 칸은 **Ⅰ → Ⅳ → Ⅱ → Ⅲ 사분면**(수학 사분면: Ⅰ 우상·Ⅱ 좌상·Ⅲ 좌하·Ⅳ 우하) 순서로 채우고 4개가 넘으면 다음 쪽(최대 16세션 · 4쪽). 허브에서 클러스터를 바꿔도 뷰를 다시 마운트하지 않아(`HubView.keepAcrossClusters`) 세션이 유지된다.
 
-- **파일**: `frontend/src/pages/NodeSshPage.tsx` + `frontend/src/pages/NodeSshPopupPage.tsx`(별도 창) + `frontend/src/components/k8s/{NodeSshTerminal,SshTerminalWindow}.tsx` + `components/common/{ClusterSidebar,EmptyState}`, `components/ui/MacCard`.
-- **목적 / UX**: 클러스터의 **개별 노드 하나에 SSH 로 붙어 로그인 셸을 그대로** 웹 터미널로 쓴다. k9s 콘솔이 control-plane 의 k9s TUI 만 띄우는 것과 달리 범용 셸이라 `journalctl`·`top`·`vi` 같은 인터랙티브 명령까지 동작한다(tty + resize). 여러 노드에 같은 명령을 돌리는 용도는 `/bulk-exec`, 리소스 TUI 탐색은 `/k9s` 로 안내한다.
+- **파일**: `frontend/src/pages/NodeSshPage.tsx` + `components/node-ssh/{NodeMultiSelect,SshFavoritesMenu,SshFavoritesDialog,quadrants,sshTarget,favoriteDanger}` + `components/k8s/{NodeSshTerminal,SshTerminalWindow}.tsx`(`embedded` 모드) + `hooks/useSshFavorites.ts` + `frontend/src/pages/NodeSshPopupPage.tsx`(별도 창).
+- **목적 / UX**: 노드 여러 대에 SSH 로그인 셸을 열어 한 화면에서 나란히 쓴다(tty + resize — `journalctl`·`top`·`vi` 동작). 자주 쓰는 명령은 터미널 창의 **즐겨찾기**로 누른다. 같은 명령을 여러 노드에 비대화형으로 돌려 결과를 비교하려면 `/bulk-exec`.
 - **UI 구성**:
-  - `ClusterSidebar` — `iconOnly` 단일 선택. 클러스터를 고르면 `/node-ssh/:clusterId` 로 이동하고 대상/자격증명이 초기화된다.
-  - **접속 폼**(연결 전): `타겟 노드` MacCard(이름/IP 검색 + 노드 리스트 — Ready 점·InternalIP·master 배지, 클릭 선택 · 수동 host override(클러스터 밖 서버도 가능) · 사용자 · 포트), `인증·실행` MacCard(비밀번호/Private Key 토글 · **접속 후 실행** 명령(선택) · 연결 / 새 창으로 열기 / **테스트** 버튼 + 연결 테스트 결과 배지).
-  - **터미널**(연결 후): `NodeSshTerminal` → 공용 `SshTerminalWindow`(xterm.js). 드래그 이동 플로팅 창(헤더가 드래그 핸들, CSS `resize` 로 크기 조절 — ResizeObserver 가 자동 리핏), 헤더에 재연결/새 창으로 빼기/전체화면/종료 + 복사/붙여넣기 단축키 안내. 색·글꼴은 Settings → 터미널 Appearance 의 활성 프로파일(`useXtermTheme`)을 따르고, **드래그 선택 후 Ctrl+C 복사 · Ctrl+V 붙여넣기**가 동작한다(선택이 없으면 Ctrl+C 는 SIGINT — `lib/terminalClipboard.ts`).
-  - **별도 창(팝업)**: `/node-ssh/popup` — `App.tsx` 가 `AppShell` 바깥으로 분기해 `NodeSshPopupPage` 를 전체창으로 렌더. 접속정보는 URL 대신 저장소 없는 `postMessage` 왕복 handoff(`lib/terminalPopout.ts` → `lib/nodeSshPopout.ts`, 자격증명은 어디에도 저장되지 않는다).
-- **Frontend**: `useClusters`, `bulkExecApi.nodeList`(노드 목록 — mc/bulk-exec 와 동일 엔드포인트 재사용), `nodeSshApi.test`(연결 테스트), `k8sStreamUrls.nodeSsh(token, clusterId)`(WS URL), `useTerminalEnvSync`(클러스터 운영등급 → 터미널 프로파일). 자격증명은 서버에 저장하지 않고 세션에서만 사용.
-- **Backend**: 라우터 `backend/app/routers/node_ssh.py`(prefix `/node-ssh`) — WebSocket `GET /node-ssh/session`(전역 `_auth` 미적용, 핸들러가 query token 을 직접 검증 — admin/operator 만), REST `POST /node-ssh/test`(`require_operator`, `ssh_runner.test_connection`). 세션은 공용 `services/ssh_pty.bridge_pty` 가 `ssh_runner.connect_client` → paramiko `invoke_shell`(PTY) 로 열고 stdout/stdin/resize 를 브리지한다(k9s 콘솔과 동일 코드 경로). 노드 목록은 `GET /api/v1/clusters/{id}/node-list`(`bulk_exec.py`) 재사용. 감사 로그 `node.ssh.open`/`node.ssh.close`. `PEP_NODE_SSH_ENABLED=false` 로 비활성화. 전용 DB 모델 없음(휘발성 세션).
+  - **허브 2행 「SSH」 탭 바로 옆 툴바**(허브 `toolbarSlot` 에 포털 — 허브 밖(아일랜드)에선 화면 위에 그대로): `대상 노드` 리스트박스(`NodeMultiSelect` — 클러스터별 묶음·검색·「전체 클러스터 / 현재 클러스터만」, 펼친 클러스터만 `bulkExecApi.nodeList` 조회, 컨트롤 플레인·준비 안 됨 표시, 열린 세션은 칸 번호 표시, 실행 권한 없는 클러스터 노드는 비활성, **호스트 직접 입력** 추가) · 사용자 · 비밀번호 · 「인증·포트·접속 후 실행」 팝오버(비밀번호/개인키, 포트, 접속 후 실행, **연결 테스트** — 첫 대상) · **연결 (N개 새로)**(고른 노드 중 아직 안 열린 노드마다 칸을 연다).
+  - **세션 바**: `세션 N/16 · 연결됨 M`, 동시 보내기 켜짐 배지, 쪽 넘김(‹ 1 / 2 ›), 보기 `4분할 / 1칸`. 아래 `RunLogPanel`(「로그 보기」 토글 `useLogPref('node-ssh-connect')`) — 노드별 연결 단계·종료 사유·재연결·즐겨찾기 보내기가 `[노드 연결]` 태그로 쌓인다.
+  - **분할 칸**(2×2 격자): 세션 1개면 칸 전체, 2개부터 4분할 고정(빈 칸은 「Ⅱ 비어 있음」). 다른 쪽 세션은 마운트한 채 숨겨 연결을 유지한다. 칸 헤더(`SshTerminalWindow embedded`)에 칸 표기(`Ⅰ`/`2쪽 Ⅳ`) · 클러스터 칩 · user@host · 상태 · 남은 시간 · **★ 즐겨찾기 ▾** · 재연결 · 새 창으로 빼기 · 이 칸만 크게(⤢) · 종료, 그 아래 즐겨찾기 칩 바(앞 5개). 누른 칸이 입력 대상(강조 테두리).
+  - **즐겨찾기**: 클릭 = 명령마다 저장된 동작(입력만 / 입력 후 실행), Ctrl/⌘+클릭 = 입력만. 변경 명령(셸 allowlist 밖 — 손대지 않은 기본 명령은 조회로 봄)을 바로 실행하면 danger 확인. 메뉴의 「지금 보이는 모든 분할 창에 동시에 보내기」를 켜면 보이는 열린 창 전부에 보낸다. 「추가·편집…」 → `SshFavoritesDialog`(왼쪽 목록 순서 ↑/↓ · 기본/기본·수정됨/내 명령 표시, 오른쪽 이름·설명·명령·누르면(입력만/바로 실행) · 조회/변경 배지, 삭제·변경 취소·저장, 「기본값 복원」).
+  - **별도 창(팝업)**: 칸 헤더의 새 창으로 빼기 → `/node-ssh/popup`(`NodeSshPopupPage`, 저장소 없는 `postMessage` handoff — `lib/nodeSshPopout.ts`). 옮기면 그 칸은 닫힌다.
+- **Frontend**: `useClusters`, `useQueries(['bulk-exec','nodes',id])`(펼친 클러스터), `nodeSshApi.test`, `k8sStreamUrls.nodeSsh(token, clusterId)`(노드의 클러스터로 감사), `useSshFavorites`/`useSshFavoriteMutations`(`sshFavoritesApi`), `useCanOperate(null)` + `useMyClusterAccess`(클러스터별 operate), `useOperationLevels`(보호 레벨 확인), `useTerminalEnvSync`, `useRunLog`. 자격증명은 세션 메모리에만(재연결용) — 저장하지 않는다.
+- **Backend**: 라우터 `backend/app/routers/node_ssh.py`(prefix `/node-ssh`) — WebSocket `GET /node-ssh/session`(핸들러가 query token 직접 검증 — admin/operator, 접속 host 소속 클러스터 operate), REST `POST /node-ssh/test`(`require_operator`). 세션은 `services/ssh_pty.bridge_pty`(k9s 와 같은 경로). 감사 `node.ssh.open`/`node.ssh.close`. `PEP_NODE_SSH_ENABLED=false` 로 비활성화. 즐겨찾기는 `backend/app/routers/ssh_favorites.py`(prefix `/ssh-favorites` — `GET` 목록(처음이면 기본 명령 시드) · `POST` · `PUT /{id}` · `DELETE /{id}`(기본 명령은 숨김) · `PUT /order` · `POST /reset`, 본인 것만) + `models/ssh_favorite.py`(`SshFavoriteCommand`, 테이블 `ssh_favorite_commands`) + `services/ssh_favorites.py`(`PRESETS` = 옛 커널 파라미터 콘솔 조회 프리셋 11개).
 - **핵심 기능**:
-  - 노드 리스트에서 클릭 한 번으로 개별 노드 로그인 셸 접속(비밀번호/Private Key).
-  - 터미널을 열기 전 연결/자격증명만 확인하는 **연결 테스트**(ok/인증 실패/연결 실패/타임아웃 배지).
-  - 접속 후 실행 명령(예: `sudo -i`, `journalctl -u kubelet -f`) 지정, 별도 브라우저 창으로 빼기, 1시간 세션 상한.
-- **13차 감사(2026-10-20)**: 열린 세션을 끊거나 클러스터를 바꿀 때 확인, 새로고침·탭 닫기 `beforeunload`, 1시간 상한 남은 시간 표시 + 5분 전 경고(연장 없음). 새 창 handoff 는 저장소 없는 `postMessage` 왕복(실패 시 "다시 열기"). 연결 거부 안내: 4401 세션 만료 / 4402 권한 없음 / 4413 테넌트. **보호 운영레벨**(Settings ▸ 운영레벨 "보호", 기본 운영·DR) 클러스터는 연결 전 확인 창(대상·계정·인증·읽기 전용 여부). 대상·계정·인증 정보를 바꾸면 이전 연결 테스트 결과를 지운다.
+  - 여러 노드(여러 클러스터·직접 입력 호스트) 동시 연결, 화면 안 4분할(Ⅰ→Ⅳ→Ⅱ→Ⅲ) + 쪽 넘김, 칸 크게 보기.
+  - 서버에 저장되는 즐겨찾기 명령(추가·편집·삭제·순서·기본값 복원), 입력만/바로 실행, 여러 칸 동시 보내기.
+  - 연결 테스트, 접속 후 실행 명령, 별도 창으로 빼기, 1시간 세션 상한, 노드별 실시간 연결 로그.
+- **13차 감사(2026-10-20)**: 열린 세션을 끊거나 재연결할 때 확인, 새로고침·탭 닫기 `beforeunload`, 1시간 상한 남은 시간 표시 + 5분 전 경고(연장 없음). 연결 거부 안내: 4401 세션 만료 / 4402 권한 없음 / 4413 테넌트. **보호 운영레벨** 클러스터 노드가 섞여 있으면 연결 전 확인 창(대상·계정 목록).
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
 
@@ -608,6 +618,24 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **15차 감사(2026-10-22, D-238 — D-190 잔여)**: 알림 규칙 탭(`AlertNotifyRulesPanel`)의 필드 오류·"저장하지 않은 변경"·도움말 글자를 표 밖 `text-[11px]` 에서 `text-xs` 로 맞췄다.
 - **요청사항 (수정 요청)**:
   - _(여기에 개선/수정 요청을 직접 적어주세요)_
+
+### 알람 등록 요청 (`/alarm-requests`)
+
+- **파일**: `frontend/src/pages/AlarmRequestsPage.tsx` (+ `components/alarm-requests/{AlarmRequestForm,AlarmRequestDetail,ThresholdTable,AlarmCatalogDialog}`).
+- **목적 / UX**: 서비스 담당자(로그인 사용자 누구나)가 운영 알람 추가·임계치 변경을 양식으로 요청하고, 관리자(operator 이상)가 검토·승인·반려·반영 완료로 처리한다. 사이드바 「관측」 그룹.
+- **UI 구성**:
+  - `PageShell hub` + `PageHeader`(액션: 알람 카탈로그 · 새 요청). 본문 2열 — 좌 요청 목록 / 우 요청서(새 요청·수정) 또는 선택한 요청 상세. 선택은 `?id=` (알림 링크가 이 주소로 연다).
+  - 요청 목록 — 상태 `SegTabs`(전체/요청됨/검토 중/승인/반영 완료/반려) · 서비스 · 내 요청만 · 검색. 열: 번호(AR-0001) · 상태 · 서비스 · 알람 항목(+의미) · 임계치 변경(신규 알람 / N개 심각도 변경 / 기본값 유지) · 적용 클러스터 · 요청자 · 요청일.
+  - 요청서 — 요청자(로그인 사용자 고정) · 서비스 명 · metric 명(알람 항목 — 카탈로그 datalist, 고르면 의미·기본 임계치 채움, 새 이름이면 신규 알람) · 알람 의미 · **임계치 표**(심각도별 행, 열 `기본 임계치 [expr | for]` · `수정 임계치 [expr | for]`, 기본과 다른 수정 칸 강조, 기존 알람의 기본 칸은 읽기 전용) · 적용 클러스터(칩 다중 선택 + 검색·전체 선택·선택 해제) · 비고.
+  - 상세 — 요청서 읽기 보기 + 검토 의견 + 처리 이력. 요청자: requested 동안 수정·요청 취소(확인), 반려되면 「복사해서 다시 요청」. 관리자: 검토 시작·승인·반려(사유 필수)·반영 완료 처리(확인 — 클러스터에 명령을 보내지 않는다는 안내). viewer 에게는 처리 버튼을 숨기지 않고 비활성 + 사유(`useCanOperate`).
+  - 알람 카탈로그 다이얼로그 — 서비스별 알람 항목·의미·기본 임계치·사용 여부 편집(operator 이상, viewer 는 보기만).
+- **Frontend**: `hooks/useAlarmRequests.ts`(`useAlarmRequestMeta`·`useAlarmRequests`(60초 refetch, 필터는 화면에서)·`useAlarmCatalog`·`useSaveAlarmRequest`·`useCancelAlarmRequest`·`useActOnAlarmRequest`·`useSaveAlarmCatalogItem`·`useDeleteAlarmCatalogItem`), `services/api.ts` `alarmRequestsApi`, 클러스터 목록은 `useClusters`.
+- **Backend**: `routers/alarm_requests.py` — `GET /alarm-requests/meta`, `GET|POST /alarm-requests`, `GET|PUT|DELETE /alarm-requests/{id}`(수정·취소는 본인 또는 운영자, requested 에서만 — 그 외 409), `POST /alarm-requests/{id}/action`(`require_operator`, reviewing/approved/rejected/applied), `GET|POST /alarm-requests/catalog`, `PUT|DELETE /alarm-requests/catalog/{id}`(`require_operator`). 서비스 `services/alarm_requests.py`(상태 전이·카탈로그 시드·직렬화·알림), 모델 `models/alarm_request.py`(`alarm_requests`, `alarm_catalog_items`).
+- **핵심 기능**:
+  - 상태 전이 requested → reviewing → approved → applied, 반려는 applied 전 어느 단계에서나(사유 필수). 끝 상태는 더 처리할 수 없다.
+  - 「반영 완료」는 처리 기록이다 — 클러스터에 명령을 보내지 않는다. 반영 완료된 수정 임계치(비면 기본값)가 카탈로그 기본 임계치가 되고, 카탈로그에 없던 알람은 새 항목으로 추가된다.
+  - 적용 클러스터는 id + 이름 스냅샷으로 저장(클러스터가 지워져도 읽힘). 등록 때 볼 수 없는 클러스터가 섞이면 403, 목록에서는 볼 수 없는 클러스터 이름을 가린다.
+  - 알림 — 새 요청은 admin·operator 에게(`alarm_request`), 처리 결과는 요청자에게(`alarm_request_status`). 감사 로그 `alarm_request.*`·`alarm_catalog.*`.
 
 ### 파드 로그 (`/k8s-logs`, `/k8s-logs/:clusterId`)
 
@@ -1771,7 +1799,7 @@ hover 시 flyout 자체가 라벨을 보여주므로 이름만 뜨는 중복 툴
 - **목적 / UX**: 등록된 담당자(Assignee)별로 작업/이슈를 묶어 한눈에 보고, 특정 주(이번주/지난주)에 진행·완료된 업무만 필터링해 팀 업무 현황을 텍스트로 복사·공유할 수 있는 화면.
 - **UI 구성**:
   - 헤더: 멤버 수/전체 수, 진행중 합계 배지
-  - 필터 바: 보기범위(나만/전체 — localStorage 영속), 검색(이름/사번/이메일/역할), 멤버 필터(전체/업무있음/미완료있음), 기간 필터(전체/이번주/지난주), 텍스트 복사, 부담당자 포함 체크박스
+  - 필터 바: 보기범위(나만/전체 — localStorage 영속), 검색(이름/사번/이메일/담당 업무), 멤버 필터(전체/업무있음/미완료있음), 기간 필터(전체/이번주/지난주), 텍스트 복사, 부담당자 포함 체크박스
   - 멤버별 `MemberSection` 카드: 아바타(이니셜)+사번/이메일/역할, 작업 배지(진행/완료), 이슈 배지(미조치/완료), 펼치면 좌(작업)·우(이슈) 2단 리스트(각 최대 10건 + 더보기)
 - **Frontend**: `useAssignees`(hooks/useAssignees.ts), `useWorkItems()`(전체 목록, 클라이언트에서 담당자별로 buckets 구성), `useAuthStore`(Zustand, 본인 식별 및 정렬 최상단 배치). 서버 mutation 없음 — 순수 조회/집계/클립보드 복사(`navigator.clipboard.writeText`).
 - **Backend**: `GET /api/v1/work-items`(전체) — `work_items.py`. 담당자 마스터 데이터는 별도 assignees 엔드포인트(`useAssignees` 훅, 담당자 관리 라우터) 사용. 모델: `WorkItem`(primary/secondary assignee 콤마 구분 문자열 파싱).

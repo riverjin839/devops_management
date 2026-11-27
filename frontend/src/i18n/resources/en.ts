@@ -31,7 +31,7 @@ export const en: TranslationResource = {
       members: 'Work by Member',
       clusterManage: 'Cluster Management',
       bulkExec: 'Bulk Node Exec',
-      nodeSsh: 'Node SSH Terminal',
+      nodeSsh: 'SSH',
       etcdctl: 'etcdctl Console',
       batchJobs: 'Batch Jobs',
       mc: 'mc Client',
@@ -51,6 +51,7 @@ export const en: TranslationResource = {
       k8sEvents: 'K8s Live Events',
       observability: 'Observability',
       alerts: 'Alert Inbox',
+      alarmRequests: 'Alarm Requests',
       incidentAnalysis: 'K8s Logs (Analysis · Live)',
       packetFlow: 'Packet Flow Analysis',
       ciliumTrace: 'Cilium BPF Trace',
@@ -201,6 +202,11 @@ export const en: TranslationResource = {
     },
   },
   home: {
+    empty: {
+      title: 'Main screen coming soon',
+      description: 'Open a screen from the apps on the left. Add more apps with the + button in the sidebar.',
+      openK8s: 'Open K8s clusters',
+    },
     viewAria: 'Platform view',
     rangeAria: 'Progress range',
     title: 'Home',
