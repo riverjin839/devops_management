@@ -1509,8 +1509,8 @@ export const alarmRequestsApi = {
   update: (id: number, data: import('@/types').AlarmRequestInput) =>
     api.put<import('@/types').AlarmRequest>(`/alarm-requests/${id}`, data),
   cancel: (id: number) => api.delete(`/alarm-requests/${id}`),
-  act: (id: number, data: { action: import('@/types').AlarmRequestActionKind; comment?: string }) =>
-    api.post<import('@/types').AlarmRequest>(`/alarm-requests/${id}/action`, data),
+  setStatus: (id: number, data: { status: import('@/types').AlarmRequestStatus; comment?: string }) =>
+    api.post<import('@/types').AlarmRequest>(`/alarm-requests/${id}/status`, data),
   catalog: (params?: { service?: string; includeDisabled?: boolean }) =>
     api.get<import('@/types').AlarmCatalogItem[]>('/alarm-requests/catalog', {
       params: { service: params?.service, include_disabled: params?.includeDisabled || undefined },
@@ -1520,6 +1520,12 @@ export const alarmRequestsApi = {
   updateCatalog: (id: number, data: import('@/types').AlarmCatalogItemInput) =>
     api.put<import('@/types').AlarmCatalogItem>(`/alarm-requests/catalog/${id}`, data),
   deleteCatalog: (id: number) => api.delete(`/alarm-requests/catalog/${id}`),
+  applySettings: () => api.get<import('@/types').AlarmApplySettings>('/alarm-requests/apply-settings'),
+  saveApplySettings: (data: import('@/types').AlarmApplySettings) =>
+    api.put<import('@/types').AlarmApplySettings>('/alarm-requests/apply-settings', data),
+  rulePreview: (id: number) => api.get<import('@/types').AlarmRulePreview[]>(`/alarm-requests/${id}/rule-preview`),
+  /** SSE — streamLogged 로 연다(실시간 실행 로그). */
+  applyRulesStreamUrl: (id: number) => `/api/v1/alarm-requests/${id}/apply-rules/stream`,
 };
 
 // Mind Map API

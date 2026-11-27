@@ -57,9 +57,9 @@ class AlarmRequestIn(BaseModel):
     note: Optional[str] = Field(None, max_length=4000)
 
 
-class AlarmRequestAction(BaseModel):
-    """관리자 처리 — reviewing(검토 시작) / approved / rejected / applied(반영 완료)."""
-    action: str = Field(..., pattern="^(reviewing|approved|rejected|applied)$")
+class AlarmRequestStatusIn(BaseModel):
+    """상태 항목 변경 — in_progress(진행) / done(완료) / rejected(반려, 사유 필수)."""
+    status: str = Field(..., pattern="^(in_progress|done|rejected)$")
     comment: Optional[str] = Field(None, max_length=2000)
 
 
@@ -87,6 +87,7 @@ class AlarmRequestOut(BaseModel):
     reviewed_at: Optional[datetime] = None
     applied_at: Optional[datetime] = None
     history: list[dict]
+    apply_runs: list[dict] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -100,3 +101,32 @@ class AlarmRequestMeta(BaseModel):
     services: list[str]
     statuses: list[dict]
     severities: list[dict]
+
+
+class LabelPair(BaseModel):
+    """라벨 한 쌍 — 키를 JSON 객체 키로 두면 프론트의 camelCase 변환이 라벨 키를 바꿔 버려 목록으로 주고받는다."""
+    key: str = Field(..., min_length=1, max_length=253)
+    value: str = Field(default="", max_length=63)
+
+
+class ClusterOverride(BaseModel):
+    cluster_id: str
+    namespace: Optional[str] = None
+    rule_labels: list[LabelPair] = Field(default_factory=list)
+
+
+class AlarmApplySettings(BaseModel):
+    namespace: str = Field(..., min_length=1, max_length=63)
+    rule_labels: list[LabelPair] = Field(default_factory=list)
+    name_prefix: str = Field(..., min_length=1, max_length=40)
+    alert_labels: list[LabelPair] = Field(default_factory=list)
+    mark_applied_on_success: bool = True
+    cluster_overrides: list[ClusterOverride] = Field(default_factory=list, max_length=200)
+
+
+class RulePreviewItem(BaseModel):
+    cluster_id: str
+    cluster_name: str
+    namespace: str
+    name: str
+    yaml: str

@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { alarmRequestsApi } from '@/services/api';
-import type { AlarmCatalogItemInput, AlarmRequestActionKind, AlarmRequestInput } from '@/types';
+import type { AlarmApplySettings, AlarmCatalogItemInput, AlarmRequestInput, AlarmRequestStatus } from '@/types';
 
 export const alarmRequestKeys = {
   all: ['alarm-requests'] as const,
   meta: ['alarm-requests', 'meta'] as const,
   list: ['alarm-requests', 'list'] as const,
   catalog: (includeDisabled: boolean) => ['alarm-requests', 'catalog', includeDisabled] as const,
+  applySettings: ['alarm-requests', 'apply-settings'] as const,
+  preview: (id: number) => ['alarm-requests', 'rule-preview', id] as const,
 };
 
 export function useAlarmRequestMeta() {
@@ -54,11 +56,12 @@ export function useCancelAlarmRequest() {
   return useMutation({ mutationFn: (id: number) => alarmRequestsApi.cancel(id), onSuccess: invalidate });
 }
 
-export function useActOnAlarmRequest() {
+/** 상태 항목(진행·완료·반려) 변경 — operator 이상. */
+export function useSetAlarmRequestStatus() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async ({ id, action, comment }: { id: number; action: AlarmRequestActionKind; comment?: string }) =>
-      (await alarmRequestsApi.act(id, { action, comment })).data,
+    mutationFn: async ({ id, status, comment }: { id: number; status: AlarmRequestStatus; comment?: string }) =>
+      (await alarmRequestsApi.setStatus(id, { status, comment })).data,
     onSuccess: invalidate,
   });
 }
@@ -75,4 +78,31 @@ export function useSaveAlarmCatalogItem() {
 export function useDeleteAlarmCatalogItem() {
   const invalidate = useInvalidate();
   return useMutation({ mutationFn: (id: number) => alarmRequestsApi.deleteCatalog(id), onSuccess: invalidate });
+}
+
+export function useAlarmApplySettings(enabled = true) {
+  return useQuery({
+    queryKey: alarmRequestKeys.applySettings,
+    queryFn: async () => (await alarmRequestsApi.applySettings()).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveAlarmApplySettings() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: async (data: AlarmApplySettings) => (await alarmRequestsApi.saveApplySettings(data)).data,
+    onSuccess: invalidate,
+  });
+}
+
+/** 적용하면 만들어질 PrometheusRule YAML — 클러스터에 아무것도 보내지 않는다. */
+export function useAlarmRulePreview(id: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: alarmRequestKeys.preview(id ?? 0),
+    queryFn: async () => (await alarmRequestsApi.rulePreview(id as number)).data,
+    enabled: enabled && id != null,
+    staleTime: 0,
+  });
 }

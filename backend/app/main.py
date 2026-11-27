@@ -508,6 +508,16 @@ def _run_migrations():
         _safe_add_column("tenants", "llm_routing", "JSONB")
         # 멀티테넌시 5단계 — 테넌트별 백그라운드 실행 동시성 상한 (NULL = 제한 없음)
         _safe_add_column("tenants", "max_concurrent_runs", "INTEGER")
+        # 알람 등록 요청 — PrometheusRule 자동 적용 실행 기록
+        _safe_add_column("alarm_requests", "apply_runs", "JSONB")
+        # 알람 등록 요청 — 승인 흐름(requested/reviewing/approved/applied) → 상태 항목 하나(in_progress/done/rejected)
+        _safe_exec(
+            "UPDATE alarm_requests SET status = CASE status WHEN 'applied' THEN 'done' ELSE 'in_progress' END "
+            "WHERE status IN ('requested', 'reviewing', 'approved', 'applied')",
+            label="alarm_requests.status → in_progress/done",
+        )
+        _safe_exec("ALTER TABLE alarm_requests ALTER COLUMN status SET DEFAULT 'in_progress'",
+                   label="alarm_requests.status default")
     for _t in TENANT_SCOPED_TABLES:
         if _t in _existing_tables:
             _safe_add_column(_t, "tenant_id", "UUID REFERENCES tenants(id) ON DELETE RESTRICT")

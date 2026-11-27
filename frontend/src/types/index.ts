@@ -7565,9 +7565,9 @@ export interface CiliumDatapathManifest {
 }
 
 // ── 알람 등록 요청 (/alarm-requests) ─────────────────────────────────────────
-export type AlarmRequestStatus = 'requested' | 'reviewing' | 'approved' | 'applied' | 'rejected';
+/** 승인 절차 없이 처리 담당이 바꾸는 상태 항목 하나 — 진행 / 완료 / 반려. */
+export type AlarmRequestStatus = 'in_progress' | 'done' | 'rejected';
 export type AlarmSeverity = 'critical' | 'warning' | 'info';
-export type AlarmRequestActionKind = 'reviewing' | 'approved' | 'rejected' | 'applied';
 
 /** 카탈로그 기본 임계치 한 행 — JSON 키 `for` 는 그대로 쓴다. */
 export interface AlarmCatalogThreshold {
@@ -7607,7 +7607,7 @@ export interface AlarmRequestThreshold {
 export interface AlarmRequestHistoryEntry {
   at: string;
   by: string;
-  action: 'created' | 'updated' | AlarmRequestActionKind;
+  action: 'created' | 'updated' | 'rule_applied' | 'rule_apply_failed' | AlarmRequestStatus;
   comment?: string | null;
 }
 
@@ -7629,8 +7629,55 @@ export interface AlarmRequest {
   reviewedAt?: string | null;
   appliedAt?: string | null;
   history: AlarmRequestHistoryEntry[];
+  /** PrometheusRule 자동 적용 실행 기록(최신이 앞). */
+  applyRuns: AlarmApplyRun[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AlarmApplyClusterResult {
+  clusterId: string;
+  clusterName: string;
+  namespace?: string;
+  name?: string;
+  status: 'created' | 'updated' | 'failed';
+  message: string;
+}
+
+/** 저장된 실행 1건 — log 는 [ts, level, message] (cmd 줄은 관리자에게만 온다). */
+export interface AlarmApplyRun {
+  at: string;
+  by: string;
+  ok: boolean;
+  results: AlarmApplyClusterResult[];
+  log: [string, string, string][];
+}
+
+export interface AlarmApplyResult {
+  ok: boolean;
+  summary: string;
+  results: AlarmApplyClusterResult[];
+  status: AlarmRequestStatus;
+}
+
+/** 라벨 한 쌍 — 키가 객체 키가 아니라 값이라 camelCase 변환을 타지 않는다. */
+export interface AlarmLabelPair { key: string; value: string }
+
+export interface AlarmApplySettings {
+  namespace: string;
+  ruleLabels: AlarmLabelPair[];
+  namePrefix: string;
+  alertLabels: AlarmLabelPair[];
+  markAppliedOnSuccess: boolean;
+  clusterOverrides: { clusterId: string; namespace?: string | null; ruleLabels: AlarmLabelPair[] }[];
+}
+
+export interface AlarmRulePreview {
+  clusterId: string;
+  clusterName: string;
+  namespace: string;
+  name: string;
+  yaml: string;
 }
 
 export interface AlarmRequestInput {

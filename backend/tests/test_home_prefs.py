@@ -201,7 +201,7 @@ def test_concurrent_style_deltas_do_not_overwrite_each_other(db, me, cleanup, or
     home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps_add=["/a"]), db=db, user=me)
     home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps_add=["/b"]), db=db, user=me)
     home_prefs_router.update_home_prefs(payload=HomePrefsUpdate(installed_apps_add=["/a"]), db=db, user=me)
-    assert home_prefs_router.get_home_prefs(db=db, user=me).installed_apps == ["/tasks-mgmt", "/a", "/b"]
+    assert home_prefs_router.get_home_prefs(db=db, user=me).installed_apps == ["/k8s", "/a", "/b"]
 
 
 def test_reset_returns_to_org_default(db, me, cleanup, org_defaults):
@@ -211,7 +211,7 @@ def test_reset_returns_to_org_default(db, me, cleanup, org_defaults):
         payload=HomePrefsUpdate(installed_apps_reset=True), db=db, user=me,
     )
     assert updated.installed_apps_customized is False
-    assert updated.installed_apps == ["/tasks-mgmt"]
+    assert updated.installed_apps == ["/k8s"]
     assert updated.locale == "en"
 
 
@@ -224,11 +224,11 @@ def test_org_default_update_is_admin_audited(db, cleanup, org_defaults):
     admin = User(id=f"u-admin-{uuid.uuid4().hex[:8]}", username=f"admin-{uuid.uuid4().hex[:8]}", role="admin")
     cleanup.append(admin.id)
     res = ui_settings.update_home_prefs_defaults(
-        payload=HomePrefsDefaults(installed_apps=["/tasks-mgmt", "/bulk-exec", "/bulk-exec"]),
+        payload=HomePrefsDefaults(installed_apps=["/k8s", "/bulk-exec", "/bulk-exec"]),
         request=None, db=db, actor=admin,
     )
-    assert res.installed_apps == ["/tasks-mgmt", "/bulk-exec"]
-    assert ui_settings.get_home_prefs_defaults(db=db, _=admin).installed_apps == ["/tasks-mgmt", "/bulk-exec"]
+    assert res.installed_apps == ["/k8s", "/bulk-exec"]
+    assert ui_settings.get_home_prefs_defaults(db=db, _=admin).installed_apps == ["/k8s", "/bulk-exec"]
     log = (
         db.query(AuditLog)
         .filter(AuditLog.action == "settings.home_prefs_defaults.update", AuditLog.actor_username == admin.username)

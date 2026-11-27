@@ -15,7 +15,7 @@ const toInput = (c: AlarmCatalogItem): AlarmCatalogItemInput => ({
 
 /**
  * 알람 카탈로그 편집(운영자 이상) — 서비스별 알람 항목·의미·기본 임계치.
- * 요청서의 「기본 임계치」가 여기서 온다. 요청이 반영 완료되면 그 수정 임계치로 자동 갱신된다.
+ * 요청서의 「기본 임계치」가 여기서 온다. 요청이 완료되면 그 수정 임계치로 자동 갱신된다.
  */
 export function AlarmCatalogDialog({ open, onClose, services }: { open: boolean; onClose: () => void; services: string[] }) {
   const toast = useToast();
